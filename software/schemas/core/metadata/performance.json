@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-performance.json",
+  "title": "Qollective Performance Meta Schema",
+  "description": "Validation schema for performance metrics including database operations, caching, memory usage, and external service calls",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "db_query_time": {
+      "type": "number",
+      "minimum": 0,
+      "multipleOf": 0.001,
+      "description": "Total database query time in milliseconds",
+      "examples": [45.123, 156.7, 0.025]
+    },
+    "db_query_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "Total number of database queries executed",
+      "examples": [3, 15, 0]
+    },
+    "cache_hit_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Cache hit ratio (0.0 to 1.0)",
+      "examples": [0.85, 0.23, 1.0]
+    },
+    "cache_operations": {
+      "type": "object",
+      "description": "Cache operation statistics",
+      "properties": {
+        "hits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Number of cache hits"
+        },
+        "misses": {
+          "type": "integer", 
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Number of cache misses"
+        },
+        "sets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Number of cache sets"
+        },
+        "deletes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Number of cache deletions"
+        },
+        "evictions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Number of cache evictions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory_allocated": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1099511627776,
+      "description": "Memory allocated in bytes for this request",
+      "examples": [1048576, 524288, 2097152]
+    },
+    "memory_peak": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1099511627776,
+      "description": "Peak memory usage in bytes during request processing"
+    },
+    "cpu_usage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "CPU usage percentage (0.0 to 1.0) during request processing",
+      "examples": [0.15, 0.75, 0.02]
+    },
+    "cpu_time": {
+      "type": "number",
+      "minimum": 0,
+      "description": "CPU time consumed in milliseconds",
+      "examples": [12.5, 156.3, 0.8]
+    },
+    "network_latency": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 300000,
+      "description": "Network latency in milliseconds for external calls",
+      "examples": [12.5, 89.3, 245.1]
+    },
+    "external_calls": {
+      "type": "array",
+      "description": "Performance data for external service calls",
+      "items": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "description": "External service name",
+            "pattern": "^[a-z][a-z0-9_-]*[a-z0-9]$",
+            "maxLength": 100
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Endpoint called",
+            "maxLength": 500
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+            "description": "HTTP method used"
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 300000,
+            "description": "Call duration in milliseconds"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "error", "timeout", "cancelled"],
+            "description": "Call result status"
+          },
+          "response_size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Response size in bytes"
+          },
+          "retry_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "Number of retry attempts"
+          }
+        },
+        "required": ["service", "duration", "status"],
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "gc_collections": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "Number of garbage collection cycles during request",
+      "examples": [0, 2, 5]
+    },
+    "gc_time": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "Time spent in garbage collection in milliseconds"
+    },
+    "thread_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "Number of threads used for request processing"
+    },
+    "io_operations": {
+      "type": "object",
+      "description": "File and network I/O operation statistics",
+      "properties": {
+        "disk_reads": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of disk read operations"
+        },
+        "disk_writes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of disk write operations"
+        },
+        "network_reads": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of network read operations"
+        },
+        "network_writes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of network write operations"
+        },
+        "bytes_read": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total bytes read from disk and network"
+        },
+        "bytes_written": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total bytes written to disk and network"
+        }
+      },
+      "additionalProperties": false
+    },
+    "queue_operations": {
+      "type": "object",
+      "description": "Message queue operation performance",
+      "properties": {
+        "messages_sent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of messages sent to queues"
+        },
+        "messages_received": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of messages received from queues"
+        },
+        "queue_wait_time": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time waiting for queue operations in milliseconds"
+        }
+      },
+      "additionalProperties": false
+    },
+    "connection_pool": {
+      "type": "object",
+      "description": "Connection pool performance metrics",
+      "properties": {
+        "active_connections": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Number of active connections"
+        },
+        "idle_connections": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Number of idle connections"
+        },
+        "pool_wait_time": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time waiting for available connection in milliseconds"
+        },
+        "connection_errors": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of connection errors encountered"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "db_query_time": 45.123,
+      "db_query_count": 3,
+      "cache_hit_ratio": 0.85,
+      "cache_operations": {
+        "hits": 17,
+        "misses": 3,
+        "sets": 2
+      },
+      "memory_allocated": 1048576,
+      "cpu_usage": 0.15,
+      "external_calls": [
+        {
+          "service": "payment_service",
+          "endpoint": "/api/v1/payments",
+          "method": "POST",
+          "duration": 156.7,
+          "status": "success",
+          "response_size": 2048
+        }
+      ],
+      "gc_collections": 1,
+      "thread_count": 4
+    },
+    {
+      "db_query_time": 0,
+      "db_query_count": 0,
+      "cache_hit_ratio": 1.0,
+      "memory_allocated": 524288,
+      "cpu_usage": 0.02,
+      "gc_collections": 0,
+      "thread_count": 1
+    }
+  ]
+}

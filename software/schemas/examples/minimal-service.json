@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Minimal Service Example",
+  "description": "A minimal service definition using Qollective",
+  "type": "object",
+  "qollective": {
+    "version": "1.0.0",
+    "envelope": {
+      "enabled": true
+    },
+    "generation": {
+      "targets": ["rust-rest"],
+      "outputDir": "./generated"
+    }
+  },
+  "properties": {
+    "HealthCheck": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["healthy", "unhealthy"]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["status", "timestamp"]
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/properties/HealthCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

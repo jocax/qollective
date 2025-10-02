@@ -1,0 +1,160 @@
+sequenceDiagram
+    participant U as User/<br/>Frontend
+    participant S as SSE Endpoint<br/>(Auth + Stream)
+    participant N as NATS Server<br/>(Subject Routing)
+    participant A as Auth Service<br/>(JSON-RPC over NATS)
+    participant M as MCP Agent<br/>(NATS Subscriber)
+    participant D as Database Service<br/>(NATS Request/Reply)
+    participant E as Notification Service<br/>(NATS Publisher)
+
+    Note over U,E: NATS/SSE User Registration with 2FA Flow - Secure Envelope Pattern
+
+    rect rgb(40, 45, 60)
+        Note over U,S: SSE Connection Setup with JWT Authentication
+        U->>+S: GET /sse/user/usr-456<br/>Authorization: Bearer jwt-token
+        Note right of U: Headers:<br/>Authorization: Bearer eyJ0eXAi...<br/>Accept: text/event-stream
+
+        S->>S: Validate JWT Token<br/>Extract user context
+        Note over S: JWT Claims:<br/>{"user_id":"usr-456",<br/>"org_id":"org-123",<br/>"permissions":["user:register",<br/>"user:verify","events:read"],<br/>"auth_level":"Authenticated"}
+
+        S->>+N: NATS Subscribe<br/>events.user.usr-456
+        Note right of S: NATS Subject Pattern:<br/>events.user.usr-456<br/>notify.user.usr-456<br/>(User-specific isolation)
+
+        N-->>-S: Subscription Confirmed
+        S-->>U: SSE Connection Established<br/>event: connected
+        Note left of S: SSE Event:<br/>event: connected<br/>data: {"status":"connected",<br/>"user_id":"usr-456"}
+    end
+
+    rect rgb(60, 40, 40)
+        Note over U,E: User Registration via JSON-RPC over NATS
+        U->>+S: POST /api/register<br/>Authorization: Bearer jwt-token
+        Note right of U: SecureNatsEnvelope:<br/>{"meta":{<br/>"message_id":"msg-001",<br/>"user_id":"usr-456",<br/>"session_id":"session-abc",<br/>"permissions":["user:register"],<br/>"auth_level":"Authenticated"<br/>},<br/>"data":{<br/>"email":"user@example.com",<br/>"password":"***"<br/>}}
+
+        S->>S: Validate JWT & Permissions<br/>Check user:register permission
+
+        S->>+N: NATS Request<br/>rpc.user_register
+        Note right of S: JSON-RPC over NATS:<br/>Subject: rpc.user_register<br/>{"jsonrpc":"2.0",<br/>"method":"user.register",<br/>"params":{SecureNatsEnvelope},<br/>"id":1}
+
+        N->>+A: Route to Auth Service<br/>(NATS subscriber on rpc.user_register)
+        A->>A: Validate Envelope Security<br/>Check user permissions
+
+        A->>+N: NATS Request<br/>rpc.db_user_create
+        Note right of A: Database Request:<br/>Subject: rpc.db_user_create<br/>SecureNatsEnvelope with<br/>UserCreateRequest payload
+
+        N->>+D: Route to Database Service
+        D->>D: Create User Record<br/>usr-456 in database
+        D-->>-N: NATS Reply<br/>User Created Successfully
+        Note left of D: Database Response:<br/>SecureNatsEnvelope:<br/>{"data":{"user_id":"usr-456",<br/>"created_at":"2025-07-17T10:30:00Z"}}
+
+        N-->>-A: Database Response
+
+        A->>+N: NATS Publish<br/>events.user.usr-456
+        Note right of A: Event Publication:<br/>Subject: events.user.usr-456<br/>SecureNatsEnvelope:<br/>{"meta":{"event_type":"user.registered"},<br/>"data":{"user_id":"usr-456",<br/>"requires_2fa":true}}
+
+        N->>S: Event Delivered<br/>(Active SSE subscription)
+        S-->>U: SSE Event: user.registered
+        Note left of S: SSE Event:<br/>event: user.registered<br/>data: {"user_id":"usr-456",<br/>"requires_2fa":true,<br/>"next_step":"verify_email"}
+
+        N-->>-A: Event Published
+        A-->>-N: JSON-RPC Response<br/>Registration Success
+        N-->>-S: Registration Complete
+        S-->>-U: HTTP 200 OK<br/>Registration Successful
+    end
+
+    rect rgb(45, 65, 50)
+        Note over A,E: 2FA Code Generation via NATS Pub/Sub
+        A->>+N: NATS Publish<br/>notify.email.usr-456
+        Note right of A: Notification Request:<br/>Subject: notify.email.usr-456<br/>SecureNatsEnvelope:<br/>{"meta":{"user_id":"usr-456",<br/>"event_type":"2fa_required"},<br/>"data":{"template":"2fa_code",<br/>"params":{"code":"123456",<br/>"expires_in":300}}}
+
+        N->>+E: Route to Notification Service<br/>(NATS subscriber on notify.email.>)
+        E->>E: Send 2FA Email<br/>Code: 123456
+
+        E->>+N: NATS Publish<br/>events.user.usr-456
+        Note right of E: Notification Event:<br/>Subject: events.user.usr-456<br/>SecureNatsEnvelope:<br/>{"meta":{"event_type":"2fa.code_sent"},<br/>"data":{"notification_id":"notif-789",<br/>"delivery_time":"2025-07-17T10:30:05Z"}}
+
+        N->>S: Event Delivered<br/>(SSE subscription)
+        S-->>U: SSE Event: 2fa.code_sent
+        Note left of S: SSE Event:<br/>event: 2fa.code_sent<br/>data: {"message":"2FA code sent",<br/>"expires_in":300}
+
+        N-->>-E: Event Published
+        E-->>-N: Notification Sent
+        N-->>-A: Notification Complete
+    end
+
+    rect rgb(60, 40, 60)
+        Note over M,A: MCP Agent Monitoring via NATS
+        M->>+N: NATS Subscribe<br/>events.user.> and events.auth.>
+        Note right of M: MCP Monitoring Subjects:<br/>events.user.><br/>events.auth.><br/>rpc.audit_get_events
+
+        N-->>-M: Subscriptions Active
+
+        M->>+N: NATS Request<br/>rpc.audit_get_events
+        Note right of M: Audit Request:<br/>Subject: rpc.audit_get_events<br/>JSON-RPC: {"method":"audit.get_user_events",<br/>"params":{"user_id":"usr-456",<br/>"event_types":["registration","2fa"]}}
+
+        N->>+A: Route to Auth Service
+        A->>A: Validate MCP Permissions<br/>Check audit:read permission
+        A-->>-N: Audit Response
+        Note left of A: Audit Data:<br/>{"events":[<br/>{"type":"user.registered",<br/>"timestamp":"2025-07-17T10:30:00Z"},<br/>{"type":"2fa.code_sent",<br/>"timestamp":"2025-07-17T10:30:05Z"}<br/>]}
+
+        N-->>-M: Event History Retrieved
+    end
+
+    rect rgb(40, 40, 70)
+        Note over U,E: 2FA Verification via JSON-RPC over NATS
+        U->>+S: POST /api/verify-2fa<br/>Authorization: Bearer jwt-token
+        Note right of U: 2FA Verification:<br/>SecureNatsEnvelope:<br/>{"meta":{"user_id":"usr-456",<br/>"auth_level":"Authenticated"},<br/>"data":{"code":"123456"}}
+
+        S->>S: Validate JWT & User Access<br/>Ensure usr-456 can verify own 2FA
+
+        S->>+N: NATS Request<br/>rpc.user_verify_2fa
+        Note right of S: JSON-RPC Request:<br/>Subject: rpc.user_verify_2fa<br/>{"jsonrpc":"2.0",<br/>"method":"user.verify_2fa",<br/>"params":{SecureNatsEnvelope}}
+
+        N->>+A: Route to Auth Service
+        A->>A: Validate 2FA Code<br/>Check code: 123456
+
+        A->>+N: NATS Request<br/>rpc.db_user_activate
+        Note right of A: User Activation:<br/>Subject: rpc.db_user_activate<br/>SecureNatsEnvelope with<br/>UserActivateRequest
+
+        N->>+D: Route to Database Service
+        D->>D: Update User Status<br/>Set status: active
+        D-->>-N: User Activated
+        N-->>-A: Activation Complete
+
+        A->>+N: NATS Publish<br/>events.user.usr-456
+        Note right of A: Verification Event:<br/>Subject: events.user.usr-456<br/>{"meta":{"event_type":"user.verified"},<br/>"data":{"user_id":"usr-456",<br/>"access_token":"jwt.new.token",<br/>"status":"verified"}}
+
+        N->>S: Event Delivered<br/>(SSE subscription)
+        S-->>U: SSE Event: user.verified
+        Note left of S: SSE Event:<br/>event: user.verified<br/>data: {"status":"verified",<br/>"access_token":"jwt.new.token",<br/>"registration_complete":true}
+
+        N-->>-A: Event Published
+        A-->>-N: JSON-RPC Response<br/>Verification Success
+        N-->>-S: 2FA Verified
+        S-->>-U: HTTP 200 OK<br/>Login Complete
+    end
+
+    rect rgb(80, 40, 40)
+        Note over U,A: Error Scenario - Invalid 2FA Code with NATS
+        U->>+S: POST /api/verify-2fa<br/>Invalid Code: "wrong"
+        Note right of U: Invalid Request:<br/>SecureNatsEnvelope:<br/>{"data":{"code":"wrong"}}
+
+        S->>+N: NATS Request<br/>rpc.user_verify_2fa
+        N->>+A: Route to Auth Service
+        A->>A: Validate 2FA Code<br/>Code "wrong" is invalid
+
+        A->>+N: NATS Publish<br/>events.user.usr-456
+        Note right of A: Error Event:<br/>Subject: events.user.usr-456<br/>{"meta":{"event_type":"2fa.failed"},<br/>"data":{"error":"INVALID_2FA_CODE",<br/>"attempts_remaining":2}}
+
+        N->>S: Error Event Delivered
+        S-->>U: SSE Event: 2fa.failed
+        Note left of S: SSE Error Event:<br/>event: 2fa.failed<br/>data: {"error":"Invalid code",<br/>"attempts_remaining":2}
+
+        N-->>-A: Error Event Published
+        A-->>-N: JSON-RPC Error Response
+        Note left of A: JSON-RPC Error:<br/>{"jsonrpc":"2.0",<br/>"error":{"code":"INVALID_2FA_CODE",<br/>"message":"Invalid verification code",<br/>"data":{"attempts_remaining":2}}}
+
+        N-->>-S: Error Response
+        S-->>-U: HTTP 400 Bad Request<br/>Invalid 2FA Code
+    end
+
+    Note over U,E: Real-time SSE events provide immediate feedback<br/>NATS subject isolation ensures user data security<br/>JSON-RPC over NATS enables standard RPC patterns

@@ -1,0 +1,41 @@
+# ABOUTME: Space exploration servers crate for Qollective Framework demo
+# ABOUTME: Contains REST, WebSocket, and MCP server implementations with TLS support
+
+[package]
+name = "space-servers"
+version.workspace = true
+edition.workspace = true
+description = "Space exploration server implementations for Qollective Framework demo"
+
+[[bin]]
+name = "space-servers"
+path = "src/main.rs"
+
+[[bin]]
+name = "rest-server"
+path = "src/bin/rest_server.rs"
+
+[[bin]]
+name = "websocket-server"
+path = "src/bin/websocket_server.rs"
+
+[[bin]]
+name = "mcp-server"
+path = "src/bin/mcp_server.rs"
+
+[dependencies]
+qollective.workspace = true
+space-shared = { path = "../space-shared" }
+
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+
+# TLS support
+rustls = "0.23"
+tokio-rustls = "0.26"
+rustls-pemfile = "2.1"

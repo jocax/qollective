@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-debug.json",
+  "title": "Qollective Debug Meta Schema",
+  "description": "Validation schema for debug information including SQL queries, memory usage, profiling data, and development diagnostics",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "trace_enabled": {
+      "type": "boolean",
+      "description": "Whether detailed tracing was enabled for this request",
+      "examples": [true, false]
+    },
+    "sql_queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "query": { 
+            "type": "string",
+            "description": "SQL query statement (sanitized of sensitive data)",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "duration": { 
+            "type": "number", 
+            "minimum": 0,
+            "maximum": 300000,
+            "description": "Query execution time in milliseconds"
+          },
+          "rows_affected": { 
+            "type": "integer", 
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Number of rows affected by the query"
+          },
+          "database": {
+            "type": "string",
+            "description": "Database name or identifier",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+            "maxLength": 100
+          },
+          "connection_id": {
+            "type": "string",
+            "description": "Database connection identifier",
+            "maxLength": 100
+          },
+          "query_type": {
+            "type": "string",
+            "enum": ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "CALL"],
+            "description": "Type of SQL query"
+          },
+          "execution_plan": {
+            "type": "string",
+            "description": "Query execution plan (if available)",
+            "maxLength": 5000
+          },
+          "parameters": {
+            "type": "array",
+            "description": "Query parameters (sanitized)",
+            "items": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "maxItems": 50
+          }
+        },
+        "required": ["query", "duration"],
+        "additionalProperties": false
+      },
+      "description": "SQL queries executed during request processing",
+      "maxItems": 100
+    },
+    "memory_usage": {
+      "type": "object",
+      "description": "Memory usage metrics during request processing",
+      "properties": {
+        "heap_used": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Heap memory used in bytes"
+        },
+        "heap_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Total heap memory in bytes"
+        },
+        "heap_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Heap memory limit in bytes"
+        },
+        "external": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "External memory usage in bytes"
+        },
+        "rss": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Resident set size in bytes"
+        },
+        "peak": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776,
+          "description": "Peak memory usage during request"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stack_trace": {
+      "type": "string",
+      "description": "Stack trace information for debugging (errors only)",
+      "maxLength": 50000,
+      "examples": ["at user.create (user.service.js:45:12)\n  at POST /api/users (router.js:23:5)"]
+    },
+    "environment_vars": {
+      "type": "object",
+      "additionalProperties": { 
+        "type": "string",
+        "maxLength": 1000
+      },
+      "description": "Relevant environment variables (never include secrets)",
+      "maxProperties": 20,
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Z0-9_]*$",
+        "maxLength": 100
+      }
+    },
+    "request_headers": {
+      "type": "object",
+      "additionalProperties": { 
+        "type": "string",
+        "maxLength": 1000
+      },
+      "description": "HTTP request headers for debugging (sanitized of auth tokens)",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+        "maxLength": 100
+      }
+    },
+    "response_headers": {
+      "type": "object",
+      "additionalProperties": { 
+        "type": "string",
+        "maxLength": 1000
+      },
+      "description": "HTTP response headers for debugging",
+      "maxProperties": 50
+    },
+    "log_level": {
+      "type": "string",
+      "enum": ["trace", "debug", "info", "warn", "error"],
+      "description": "Log level used for this request",
+      "examples": ["debug", "info"]
+    },
+    "profiling_data": {
+      "type": "object",
+      "description": "Performance profiling data for this request",
+      "properties": {
+        "cpu_time": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3600000,
+          "description": "CPU time used in milliseconds"
+        },
+        "wall_time": {
+          "type": "number", 
+          "minimum": 0,
+          "maximum": 3600000,
+          "description": "Wall clock time in milliseconds"
+        },
+        "allocations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000,
+          "description": "Number of memory allocations"
+        },
+        "deallocations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000,
+          "description": "Number of memory deallocations"
+        },
+        "function_calls": {
+          "type": "array",
+          "description": "Function call profiling data",
+          "items": {
+            "type": "object",
+            "properties": {
+              "function_name": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "Function or method name"
+              },
+              "call_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000,
+                "description": "Number of times function was called"
+              },
+              "total_time": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Total time spent in function (milliseconds)"
+              },
+              "self_time": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Self time spent in function (milliseconds)"
+              }
+            },
+            "required": ["function_name", "call_count", "total_time"],
+            "additionalProperties": false
+          },
+          "maxItems": 1000
+        }
+      },
+      "additionalProperties": false
+    },
+    "exception_details": {
+      "type": "object",
+      "description": "Detailed exception information for debugging",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Exception type or class name",
+          "maxLength": 200
+        },
+        "message": {
+          "type": "string",
+          "description": "Exception message",
+          "maxLength": 2000
+        },
+        "stack_trace": {
+          "type": "string",
+          "description": "Full stack trace",
+          "maxLength": 50000
+        },
+        "cause": {
+          "type": "string",
+          "description": "Root cause exception",
+          "maxLength": 2000
+        },
+        "context": {
+          "type": "object",
+          "description": "Additional context when exception occurred",
+          "additionalProperties": {
+            "oneOf": [
+              {"type": "string", "maxLength": 1000},
+              {"type": "number"},
+              {"type": "boolean"}
+            ]
+          },
+          "maxProperties": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "breakpoints": {
+      "type": "array",
+      "description": "Debug breakpoints hit during execution",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Source file name",
+            "maxLength": 500
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "Line number"
+          },
+          "function": {
+            "type": "string",
+            "description": "Function name",
+            "maxLength": 200
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When breakpoint was hit"
+          },
+          "variables": {
+            "type": "object",
+            "description": "Variable values at breakpoint",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "maxProperties": 50
+          }
+        },
+        "required": ["file", "line", "timestamp"],
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "test_mode": {
+      "type": "boolean",
+      "description": "Whether this request was made in test mode",
+      "examples": [true, false]
+    },
+    "debug_session_id": {
+      "type": "string",
+      "description": "Debug session identifier for correlating debug information",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "maxLength": 100
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "trace_enabled": true,
+      "sql_queries": [
+        {
+          "query": "SELECT id, name, email FROM users WHERE id = ?",
+          "duration": 12.5,
+          "rows_affected": 1,
+          "database": "user_db",
+          "query_type": "SELECT",
+          "parameters": ["12345"]
+        },
+        {
+          "query": "UPDATE users SET last_login = NOW() WHERE id = ?",
+          "duration": 3.2,
+          "rows_affected": 1,
+          "database": "user_db",
+          "query_type": "UPDATE",
+          "parameters": ["12345"]
+        }
+      ],
+      "memory_usage": {
+        "heap_used": 1048576,
+        "heap_total": 2097152,
+        "external": 524288,
+        "peak": 1572864
+      },
+      "log_level": "debug",
+      "profiling_data": {
+        "cpu_time": 15.7,
+        "wall_time": 125.3,
+        "allocations": 45,
+        "function_calls": [
+          {
+            "function_name": "user.service.findById",
+            "call_count": 1,
+            "total_time": 12.5,
+            "self_time": 2.1
+          }
+        ]
+      },
+      "environment_vars": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug"
+      }
+    },
+    {
+      "trace_enabled": false,
+      "exception_details": {
+        "type": "ValidationError",
+        "message": "Invalid email format",
+        "context": {
+          "field": "email",
+          "value": "invalid-email",
+          "user_id": "12345"
+        }
+      },
+      "log_level": "error"
+    }
+  ]
+}

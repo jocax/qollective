@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-security.json",
+  "title": "Qollective Security Meta Schema",
+  "description": "Validation schema for security context meta including user authentication, authorization, and session information",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Current authenticated user identifier",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-zA-Z0-9@._|-]+$",
+      "examples": ["user_12345", "auth0|507f1f77bcf86cd799439011", "admin@example.com"]
+    },
+    "session_id": {
+      "type": "string",
+      "description": "User session identifier for this authentication session",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["sess_1NXWnCWxLdhI2RMIxaXYL7vtS3c", "session-abc123def456"]
+    },
+    "auth_method": {
+      "type": "string",
+      "enum": ["oauth2", "jwt", "api_key", "basic", "saml", "oidc", "none"],
+      "description": "Authentication method used for this request",
+      "examples": ["oauth2", "jwt", "api_key"]
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$",
+        "description": "Permission in format 'resource:action'"
+      },
+      "description": "User permissions for this request in format 'resource:action'",
+      "uniqueItems": true,
+      "maxItems": 100,
+      "examples": [["user:read", "user:write", "admin:manage"], ["product:read"]]
+    },
+    "ip_address": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "ipv4",
+          "description": "IPv4 address"
+        },
+        {
+          "type": "string",
+          "format": "ipv6",
+          "description": "IPv6 address"
+        }
+      ],
+      "description": "Client IP address (IPv4 or IPv6)",
+      "examples": ["192.168.1.100", "10.0.0.1", "2001:db8::1"]
+    },
+    "user_agent": {
+      "type": "string",
+      "description": "Client user agent string",
+      "maxLength": 1000,
+      "examples": ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "PostmanRuntime/7.28.4"]
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Multi-tenant identifier for tenant isolation",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "minLength": 1,
+      "maxLength": 100,
+      "examples": ["tenant-123", "acme-corp", "org-456"]
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "description": "Role name (lowercase, alphanumeric, underscores)"
+      },
+      "description": "User roles assigned for this session",
+      "uniqueItems": true,
+      "maxItems": 50,
+      "examples": [["admin", "user"], ["read_only", "billing_admin"]]
+    },
+    "token_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the authentication token expires",
+      "examples": ["2024-06-07T14:23:15.456Z"]
+    },
+    "security_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Security classification level for this request",
+      "examples": ["medium", "high"]
+    },
+    "mfa_verified": {
+      "type": "boolean",
+      "description": "Whether multi-factor authentication was verified for this session",
+      "examples": [true, false]
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Unique device identifier for device-based security",
+      "maxLength": 255,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["device_abc123", "mobile-iphone-xyz789"]
+    },
+    "geo_location": {
+      "type": "object",
+      "description": "Geographic location information for security analysis",
+      "properties": {
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2 country code"
+        },
+        "region": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Region or state"
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "City name"
+        },
+        "coordinates": {
+          "type": "object",
+          "properties": {
+            "latitude": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "longitude": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          "required": ["latitude", "longitude"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Calculated security risk score for this request (0-100)",
+      "examples": [5.2, 25.7, 89.1]
+    },
+    "compliance_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["gdpr", "hipaa", "pci_dss", "sox", "fips", "iso27001"]
+      },
+      "description": "Compliance frameworks applicable to this request",
+      "uniqueItems": true,
+      "examples": [["gdpr", "hipaa"], ["pci_dss"]]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "user_id": "user_12345",
+      "session_id": "sess_1NXWnCWxLdhI2RMIxaXYL7vtS3c",
+      "auth_method": "jwt",
+      "permissions": ["user:read", "user:write"],
+      "ip_address": "192.168.1.100",
+      "tenant_id": "tenant-123",
+      "roles": ["admin", "user"],
+      "token_expires_at": "2024-06-07T14:23:15.456Z",
+      "security_level": "medium",
+      "mfa_verified": true,
+      "compliance_flags": ["gdpr"]
+    },
+    {
+      "user_id": "api_service_payment",
+      "auth_method": "api_key",
+      "permissions": ["payment:process", "transaction:read"],
+      "security_level": "high",
+      "compliance_flags": ["pci_dss"]
+    }
+  ]
+}

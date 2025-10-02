@@ -1,0 +1,14 @@
+graph LR
+    subgraph "Port Allocation"
+        P8080[":8080<br/>holodeck-storybook<br/>WebSocket + REST"]
+        P8443[":8443<br/>holodeck-designer<br/>MCP Server"]
+        P8444[":8444<br/>holodeck-validator<br/>MCP Server"]
+        P8445[":8445<br/>holodeck-environment<br/>MCP Server"]
+        P8446[":8446<br/>holodeck-safety<br/>MCP Server"]
+        P8447[":8447<br/>holodeck-coordinator<br/>MCP Client Hub"]
+        P8448[":8448<br/>holodeck-character<br/>MCP Server"]
+        P4222[":4222<br/>NATS Server<br/>Message Bus"]
+    end
+    
+    classDef port fill:#2c3e50,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    class P8080,P8443,P8444,P8445,P8446,P8447,P8448,P4222 port

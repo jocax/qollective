@@ -1,0 +1,24 @@
+# local work file
+/work*
+**/work.*
+**/work_*.*
+# Concept
+/concept/capstone/work/
+
+# IDEA
+.idea
+
+# AI
+.claude/
+.agent-os/
+.mcp.json
+CLAUDE.md
+
+# RUST
+**/target/**
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Enc
+.env

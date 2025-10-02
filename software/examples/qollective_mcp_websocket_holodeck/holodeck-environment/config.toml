@@ -1,0 +1,30 @@
+# Holodeck Environment Service Configuration
+
+[service]
+name = "holodeck-environment"
+version = "0.1.0"
+
+[llm]
+# Primary LLM provider: "openai", "ollama", "anthropic", "perplexity"
+provider = "openai"
+
+# Model name to use
+model = "gpt-4o-mini"
+
+# Optional: Custom API key (overrides .env file)
+# api_key = "your_custom_key_here"
+
+# Optional: Custom endpoint URL (for Ollama or custom providers)
+# endpoint_url = "http://localhost:11434"
+
+# Response parameters optimized for 3D environment generation
+temperature = 0.7
+max_tokens = 3500
+timeout_seconds = 30
+
+[environment_ai]
+# Environment-specific AI settings
+response_time_target_ms = 500
+environment_cache_hours = 1
+physics_simulation_quality = "high"
+safety_validation_level = "strict"

@@ -1,0 +1,99 @@
+sequenceDiagram
+    participant U as User/<br/>Frontend
+    participant R as REST API<br/>Gateway
+    participant A as Auth Service<br/>(JSON-RPC)
+    participant N as Notification Service<br/>(WebSocket)
+    participant M as MCP Agent<br/>(Schema Discovery)
+    participant D as Database Service<br/>(A2A)
+
+    Note over U,D: User Registration with 2FA Flow - Envelope Pattern
+
+    rect rgb(40, 45, 60)
+        Note over M,A: MCP Schema Discovery Phase
+        M->>+A: JSON-RPC 2.0<br/>Method: schema.list
+        Note right of M: Request:<br/>{"jsonrpc":"2.0",<br/>"method":"schema.list",<br/>"id":1}
+        A-->>-M: Schema List Response
+        Note left of A: Response:<br/>{"jsonrpc":"2.0",<br/>"result":[{<br/>"name":"user.register",<br/>"version":"1.0"<br/>}],"id":1}
+
+        M->>+A: JSON-RPC 2.0<br/>Method: schema.get
+        Note right of M: Request:<br/>{"jsonrpc":"2.0",<br/>"method":"schema.get",<br/>"params":"user.register:request",<br/>"id":2}
+        A-->>-M: JSON Schema Definition
+        Note left of A: Response:<br/>{"jsonrpc":"2.0",<br/>"result":{<br/>"type":"object",<br/>"properties":{<br/>"email","password"<br/>}},"id":2}
+    end
+
+    rect rgb(60, 40, 40)
+        Note over U,D: User Registration Request Phase
+        U->>+R: HTTPS POST<br/>/register
+        Note right of U: Envelope UserRegisterRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-001",<br/>"service":"frontend",<br/>"trace_id":"trace-123"<br/>},<br/>"data":{<br/>"email":"user@example.com",<br/>"password":"***"<br/>}}
+
+        R->>+A: JSON-RPC 2.0<br/>Method: user.register
+        Note right of R: JSON-RPC Request:<br/>{"jsonrpc":"2.0",<br/>"method":"user.register",<br/>"params":{<br/>"meta":{<br/>"message_id":"msg-002",<br/>"service":"api-gateway",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-001"<br/>},<br/>"data":{<br/>"email":"user@example.com",<br/>"password":"***"<br/>}<br/>},"id":3}
+
+        A->>+D: A2A Protocol<br/>Database Call
+        Note right of A: Envelope UserCreateRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-003",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-002"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"email":"user@example.com",<br/>"password_hash":"$2b$..."<br/>}}
+
+        D-->>-A: A2A Response<br/>User Created
+        Note left of D: Envelope UserCreateResponse<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-004",<br/>"service":"database",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-003"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"created_at":"2025-07-17T10:30:00Z"<br/>},<br/>"error":null}
+
+        A-->>-R: JSON-RPC Response<br/>Registration Success
+        Note left of A: JSON-RPC Response:<br/>{"jsonrpc":"2.0",<br/>"result":{<br/>"meta":{<br/>"message_id":"msg-005",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-002"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"requires_2fa":true<br/>}<br/>},"id":3}
+
+        R-->>-U: HTTPS 200 OK<br/>Registration Complete
+        Note left of R: Envelope UserRegisterResponse<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-006",<br/>"service":"api-gateway",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-001"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"requires_2fa":true,<br/>"next_step":"verify_email"<br/>}}
+    end
+
+    rect rgb(45, 65, 50)
+        Note over A,N: 2FA Code Generation and Notification Phase
+        A->>+N: WebSocket Message<br/>Notification Request
+        Note right of A: Envelope NotificationRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-007",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"event_type":"user.2fa_required"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"notification_type":"email",<br/>"template":"2fa_code",<br/>"params":{<br/>"code":"123456",<br/>"expires_in":300<br/>}<br/>}}
+
+        N-->>-A: WebSocket Ack<br/>Notification Sent
+        Note left of N: Envelope NotificationResponse<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-008",<br/>"service":"notification",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-007"<br/>},<br/>"data":{<br/>"notification_id":"notif-789",<br/>"status":"sent",<br/>"delivery_time":"2025-07-17T10:30:05Z"<br/>}}
+    end
+
+    rect rgb(60, 40, 60)
+        Note over M,A: MCP Monitoring and Validation Phase
+        M->>+A: JSON-RPC 2.0<br/>Method: audit.get_user_events
+        Note right of M: JSON-RPC Request:<br/>{"jsonrpc":"2.0",<br/>"method":"audit.get_user_events",<br/>"params":{<br/>"meta":{<br/>"message_id":"msg-009",<br/>"service":"mcp-agent",<br/>"trace_id":"trace-123"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"event_types":["registration","2fa"]<br/>}<br/>},"id":4}
+
+        A-->>-M: Audit Response<br/>Event History
+        Note left of A: JSON-RPC Response:<br/>{"jsonrpc":"2.0",<br/>"result":{<br/>"meta":{<br/>"message_id":"msg-010",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-009"<br/>},<br/>"data":{<br/>"events":[<br/>{"type":"user.registered",<br/>"timestamp":"2025-07-17T10:30:00Z"},<br/>{"type":"2fa.code_sent",<br/>"timestamp":"2025-07-17T10:30:05Z"}<br/>]<br/>}<br/>},"id":4}
+    end
+
+    rect rgb(40, 40, 70)
+        Note over U,D: 2FA Code Verification Phase
+        U->>+R: HTTPS POST<br/>/verify-2fa
+        Note right of U: Envelope TwoFactorVerifyRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-011",<br/>"service":"frontend",<br/>"trace_id":"trace-123"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"code":"123456"<br/>}}
+
+        R->>+A: JSON-RPC 2.0<br/>Method: user.verify_2fa
+        Note right of R: JSON-RPC Request:<br/>{"jsonrpc":"2.0",<br/>"method":"user.verify_2fa",<br/>"params":{<br/>"meta":{<br/>"message_id":"msg-012",<br/>"service":"api-gateway",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-011"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"code":"123456"<br/>}<br/>},"id":5}
+
+        A->>+D: A2A Protocol<br/>User Activation
+        Note right of A: Envelope UserActivateRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-013",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-012"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"verified_at":"2025-07-17T10:35:00Z",<br/>"status":"active"<br/>}}
+
+        D-->>-A: A2A Response<br/>User Activated
+        Note left of D: Envelope UserActivateResponse<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-014",<br/>"service":"database",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-013"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"status":"active",<br/>"updated_at":"2025-07-17T10:35:00Z"<br/>}}
+
+        A-->>-R: JSON-RPC Response<br/>Verification Success
+        Note left of A: JSON-RPC Response:<br/>{"jsonrpc":"2.0",<br/>"result":{<br/>"meta":{<br/>"message_id":"msg-015",<br/>"service":"auth-service",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-012"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"access_token":"jwt.token.here",<br/>"status":"verified"<br/>}<br/>},"id":5}
+
+        R-->>-U: HTTPS 200 OK<br/>Login Complete
+        Note left of R: Envelope TwoFactorVerifyResponse<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-016",<br/>"service":"api-gateway",<br/>"trace_id":"trace-123",<br/>"correlation_id":"msg-011"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"access_token":"jwt.token.here",<br/>"registration_complete":true<br/>}}
+    end
+
+    rect rgb(80, 40, 40)
+        Note over U,A: Error Scenario - Invalid 2FA Code
+        U->>+R: HTTPS POST<br/>/verify-2fa (invalid code)
+        Note right of U: Envelope TwoFactorVerifyRequest<br/>Payload:<br/>{"meta":{<br/>"message_id":"msg-017",<br/>"service":"frontend",<br/>"trace_id":"trace-124"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"code":"wrong"<br/>}}
+
+        R->>+A: JSON-RPC 2.0<br/>Method: user.verify_2fa
+        Note right of R: JSON-RPC Request:<br/>{"jsonrpc":"2.0",<br/>"method":"user.verify_2fa",<br/>"params":{<br/>"meta":{<br/>"message_id":"msg-018",<br/>"service":"api-gateway",<br/>"trace_id":"trace-124",<br/>"correlation_id":"msg-017"<br/>},<br/>"data":{<br/>"user_id":"usr-456",<br/>"code":"wrong"<br/>}<br/>},"id":6}
+
+        A-->>-R: JSON-RPC Error<br/>Invalid Code
+        Note left of A: JSON-RPC Error Response:<br/>{"jsonrpc":"2.0",<br/>"result":{<br/>"meta":{<br/>"message_id":"msg-019",<br/>"service":"auth-service",<br/>"trace_id":"trace-124",<br/>"correlation_id":"msg-018"<br/>},<br/>"data":null,<br/>"error":{<br/>"code":"INVALID_2FA_CODE",<br/>"message":"The provided 2FA code<br/>is invalid or expired",<br/>"details":{<br/>"attempts_remaining":2,<br/>"expires_at":"2025-07-17T10:35:00Z"<br/>}<br/>}<br/>},"id":6}
+
+        R-->>-U: HTTPS 400<br/>Bad Request
+        Note left of R: Envelope TwoFactorVerifyResponse<br/>Error Payload:<br/>{"meta":{<br/>"message_id":"msg-020",<br/>"service":"api-gateway",<br/>"trace_id":"trace-124",<br/>"correlation_id":"msg-017"<br/>},<br/>"data":null,<br/>"error":{<br/>"code":"INVALID_2FA_CODE",<br/>"message":"Invalid verification code",<br/>"details":{<br/>"attempts_remaining":2<br/>}<br/>}}
+    end
+
+    Note over U,D: All communications preserve trace_id for end-to-end observability<br/>Envelope pattern provides consistent structure across all protocols

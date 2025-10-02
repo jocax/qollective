@@ -1,0 +1,51 @@
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor': '#bb86fc', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#bb86fc', 'lineColor': '#bb86fc', 'secondaryColor': '#03dac6', 'tertiaryColor': '#cf6679', 'background': '#121212', 'mainBkg': '#1e1e1e', 'secondBkg': '#2d2d2d', 'textColor': '#ffffff'}}}%%
+sequenceDiagram
+    participant U as User
+    participant AS as A2A Server
+    participant AC as A2A Client
+    participant RA as Remote Agent
+
+    Note over U,RA: A2A Protocol Flow with JSON-RPC 2.0
+
+%% Agent Discovery
+    U->>AS: Discover available agents
+    AS->>AC: HTTP GET /.well-known/agent.json
+    Note over AC: JSON-RPC not used for discovery
+    AC-->>AS: Agent Card (JSON metadata)
+    AS-->>U: Available agents list
+
+%% Task Initiation
+    U->>AS: "Plan a trip to Tokyo"
+    AS->>AC: HTTP POST /rpc<br/>JSON-RPC Request
+    Note over AS,AC: {"jsonrpc":"2.0","id":1,"method":"tasks/send",<br/>"params":{"message":{"role":"user","parts":[{"type":"text","text":"Plan trip"}]}}}
+
+    AC->>RA: Process task internally
+    Note over AC,RA: Internal agent processing<br/>(not JSON-RPC)
+
+    RA-->>AC: Task processing started
+    AC-->>AS: JSON-RPC Response
+    Note over AC,AS: {"jsonrpc":"2.0","id":1,"result":{"task":{"id":"task-123","status":"working"}}}
+    AS-->>U: Task created confirmation
+
+%% Streaming Updates
+    AS->>AC: HTTP GET /events?task_ids=task-123
+    Note over AS,AC: SSE connection established
+
+    loop Task Progress Updates
+        AC->>AS: SSE Event
+        Note over AC,AS: data: {"jsonrpc":"2.0","method":"tasks/update",<br/>"params":{"id":"task-123","status":"working","progress":25}}
+        AS->>U: Progress update (25%)
+    end
+
+%% Task Completion
+    AC->>AS: SSE Event (Final)
+    Note over AC,AS: data: {"jsonrpc":"2.0","method":"tasks/complete",<br/>"params":{"id":"task-123","artifacts":[{"name":"itinerary","content":"..."}]}}
+    AS->>U: Trip itinerary completed
+
+%% Task Retrieval
+    U->>AS: Get final result
+    AS->>AC: HTTP POST /rpc<br/>JSON-RPC Request
+    Note over AS,AC: {"jsonrpc":"2.0","id":2,"method":"tasks/get","params":{"id":"task-123"}}
+    AC-->>AS: JSON-RPC Response
+    Note over AC,AS: {"jsonrpc":"2.0","id":2,"result":{"task":{"id":"task-123","status":"completed","artifacts":[...]}}}
+    AS-->>U: Complete trip plan

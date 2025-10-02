@@ -1,0 +1,15 @@
+# Cargo configuration for Qollective project
+
+[env]
+# Set environment variables for development
+RUST_LOG = "debug"
+RUST_BACKTRACE = "1"
+
+[build]
+# Optimization settings
+rustflags = ["-C", "target-cpu=native"]
+
+[alias]
+# Test aliases that include single-threading by default
+test-st = "test -- --test-threads=1"
+test-single = "test -- --test-threads=1"

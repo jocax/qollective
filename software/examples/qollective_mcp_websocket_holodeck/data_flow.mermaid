@@ -1,0 +1,44 @@
+sequenceDiagram
+    participant HD as holodeck-desktop
+    participant HC as holodeck-coordinator
+    participant HS as holodeck-storybook
+    participant HDE as holodeck-designer
+    participant HV as holodeck-validator
+    participant HE as holodeck-environment
+    participant HSA as holodeck-safety
+    participant HCH as holodeck-character
+    participant OPENAI as OpenAI GPT-4
+
+    Note over HD,OPENAI: Holodeck Story Generation Flow
+
+    HD->>HC: Start Holodeck Session<br/>(MCP: tools/call "session.start")
+    HC->>HS: Create Story Book<br/>(REST: POST /storybooks)
+    HS-->>HC: Story Book Created<br/>(200 OK + WebSocket event)
+    
+    HC->>HDE: Generate Story Template<br/>(MCP: tools/call "story.generate")
+    HDE->>OPENAI: LLM Story Generation<br/>(rig-core Agent)
+    OPENAI-->>HDE: Generated Story Content
+    HDE-->>HC: Story Template<br/>(MCP Response)
+    
+    HC->>HV: Validate Story<br/>(MCP: tools/call "story.validate")
+    HV-->>HC: Validation Result<br/>(MCP Response)
+    
+    alt Story Valid
+        HC->>HE: Generate Environment<br/>(MCP: tools/call "environment.create")
+        HE->>OPENAI: LLM Environment Generation<br/>(rig-core Agent)
+        OPENAI-->>HE: Environment Description
+        HE-->>HC: Environment Created<br/>(MCP Response)
+        
+        HC->>HCH: Initialize Characters<br/>(MCP: tools/call "characters.initialize")
+        HCH->>OPENAI: Character Personality Setup<br/>(rig-core Agent)
+        OPENAI-->>HCH: Character Responses Ready
+        HCH-->>HC: Characters Ready<br/>(MCP Response)
+        
+        HC->>HSA: Perform Safety Check<br/>(MCP: tools/call "safety.check")
+        HSA-->>HC: Safety Approved<br/>(MCP Response)
+        
+        HC-->>HD: Holodeck Ready<br/>(MCP Response + Real-time update)
+        HD-->>HS: Subscribe to Updates<br/>(WebSocket connection)
+    else Story Invalid
+        HC-->>HD: Story Generation Failed<br/>(MCP Error Response)
+    end

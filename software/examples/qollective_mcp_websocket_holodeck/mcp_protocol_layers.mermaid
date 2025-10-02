@@ -1,0 +1,38 @@
+graph TB
+    subgraph "MCP Protocol Layers"
+        subgraph "Application Layer"
+            APP[Holodeck Business Logic<br/>Story, Characters, Environment]
+        end
+        
+        subgraph "MCP Service Layer"
+            MCP_SRV[MCP Service Implementation<br/>rmcp::Service trait<br/>Tool definitions & execution]
+        end
+        
+        subgraph "Qollective Envelope Layer" 
+            ENV[Envelope Wrapping<br/>Metadata injection<br/>Transport abstraction]
+        end
+        
+        subgraph "Transport Layer"
+            WS[WebSocket]
+            HTTP[HTTP/REST]
+            GRPC[gRPC]
+            NATS_T[NATS]
+        end
+    end
+    
+    APP -->|Business Operations| MCP_SRV
+    MCP_SRV -->|MCP Messages| ENV
+    ENV -->|Protocol Selection| WS
+    ENV -->|Protocol Selection| HTTP
+    ENV -->|Protocol Selection| GRPC
+    ENV -->|Protocol Selection| NATS_T
+    
+    classDef layer1 fill:#3498db,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    classDef layer2 fill:#e74c3c,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    classDef layer3 fill:#f39c12,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    classDef layer4 fill:#27ae60,stroke:#ffffff,stroke-width:2px,color:#ffffff
+    
+    class APP layer1
+    class MCP_SRV layer2
+    class ENV layer3
+    class WS,HTTP,GRPC,NATS_T layer4

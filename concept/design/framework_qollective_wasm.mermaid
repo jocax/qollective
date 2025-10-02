@@ -1,0 +1,115 @@
+%%{init: {'theme':'dark', 'themeVariables': {'primaryColor': '#ff6b6b', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#ff6b6b', 'lineColor': '#ffffff', 'sectionBkgColor': '#1a1a1a', 'altSectionBkgColor': '#2d2d2d', 'gridColor': '#404040', 'secondaryColor': '#4ecdc4', 'tertiaryColor': '#45b7d1', 'noteTextColor': '#ffffff', 'noteBkgColor': '#2d2d2d', 'noteBorderColor': '#4ecdc4'}}}%%
+
+sequenceDiagram
+    participant User as User
+    participant Browser as Browser/UI
+    participant WASM as WASM Client
+    participant HTTPS as HTTPS Server
+    participant NATS as NATS Gateway
+    participant Registry as A2A Registry
+    participant Agent as A2A Agent
+    participant MCPClient as MCP Client
+    participant MCPAdapter as Envelope Adapter
+    participant MCPServer as MCP Server
+
+    Note over Browser, MCPServer: Envelope<T> { meta: Meta, data: T, error: Option<QollectiveError> }
+
+    rect rgb(40, 40, 60)
+        Note over User, MCPServer: REST Flow - Envelope<User>
+        User->>Browser: Login Request
+        Browser->>WASM: login(username, password)
+        Note over WASM: Auto-populate meta:<br/>• timestamp • requestId<br/>• version • auth token
+        WASM->>HTTPS: POST /auth/login (mTLS)
+        Note over WASM, HTTPS: Envelope<LoginRequest><br/>{"meta": {"timestamp": "...", "requestId": "uuid", "tenant": "abc123"}, <br/>"data": {"username": "user", "password": "pass"}}
+        HTTPS->>WASM: 200 OK
+        WASM->>Browser: Typed User object
+        Browser->>User: Login Successful
+    end
+
+    rect rgb(60, 40, 40)
+        Note over User, MCPServer: Agent + MCP Flow - Envelope propagation
+        User->>Browser: "Get user data from database"
+        Browser->>WASM: sendMessage("Get user data")
+        Note over WASM: Auto-populate meta:<br/>• sessionId • agentId<br/>• tenant • requestId
+        WASM->>NATS: Envelope<JsonRpcRequest>
+        Note over WASM, NATS: Envelope<JsonRpcRequest><br/>{"meta": {"requestId": "uuid-123", "tenant": "abc123", "sessionId": "sess-456"}, <br/>"data": {"jsonrpc": "2.0", "method": "getUserData", "params": {...}}}
+        NATS->>Registry: Route using meta.agentId
+        Registry->>Agent: Forward Envelope
+
+        Note over Agent: Extract Context from Envelope<br/>Context { meta: Meta { tenant: "abc123", requestId: "uuid-123", ... } }
+        Agent->>MCPClient: Context + Tool Request
+        MCPClient->>MCPAdapter: Envelope<ToolCall>
+        Note over MCPAdapter: Check meta.errorPolicy:<br/>"errors_allowed" vs "errors_not_allowed"
+        MCPAdapter->>MCPServer: Standard JSON-RPC Tool Call
+        Note over MCPAdapter, MCPServer: {"jsonrpc": "2.0", "method": "database_query", <br/>"params": {"tenant": "abc123", "query": "SELECT..."}}
+
+        MCPServer->>MCPAdapter: Tool Response/Error
+        alt Error handling based on envelope meta
+            MCPAdapter->>MCPClient: QollectiveError (if errors_not_allowed)
+            MCPClient->>Agent: Stop processing, return error
+        else
+            MCPAdapter->>MCPClient: Success + partial error context
+            MCPClient->>Agent: Continue coordination
+        end
+
+        Agent->>Registry: Envelope<JsonRpcResponse>
+        Registry->>NATS: Route Response
+        NATS->>WASM: Envelope with tenant-filtered data
+        WASM->>Browser: Typed Response
+        Browser->>User: Display user data
+    end
+
+    rect rgb(40, 60, 40)
+        Note over User, MCPServer: Multi-MCP Coordination with requestId
+        User->>Browser: "Process order and send email"
+        Browser->>WASM: sendMessage("Process order")
+        WASM->>NATS: Envelope<JsonRpcRequest>
+        NATS->>Agent: Envelope with requestId: "coord-789"
+
+        par Multiple MCP Operations
+            Agent->>MCPClient: Context + OrderTool
+            MCPClient->>MCPAdapter: Envelope<OrderTool>
+            Note over MCPAdapter: Use requestId for correlation<br/>Tenant context for DB query
+            MCPAdapter->>MCPServer: order_service.process()
+            MCPServer->>MCPAdapter: Order processed
+        and
+            Agent->>MCPClient: Context + EmailTool
+            MCPClient->>MCPAdapter: Envelope<EmailTool>
+            Note over MCPAdapter: Same requestId: "coord-789"<br/>Same tenant context
+            MCPAdapter->>MCPServer: email_service.send()
+            MCPServer->>MCPAdapter: Email sent
+        end
+
+        MCPClient->>Agent: Coordinated results
+        Agent->>NATS: Envelope<Response>
+        NATS->>WASM: Success
+        Browser->>User: "Order processed & email sent"
+    end
+
+    rect rgb(60, 40, 60)
+        Note over User, MCPServer: Error Scenarios - QollectiveError propagation
+        User->>Browser: Invalid tenant request
+        Browser->>WASM: sendMessage("Access forbidden data")
+        WASM->>NATS: Envelope with tenant: "abc123"
+        NATS->>Agent: Envelope
+        Agent->>MCPClient: Context with tenant
+        MCPClient->>MCPAdapter: Envelope<ToolCall>
+        MCPAdapter->>MCPServer: Tenant-scoped query
+        MCPServer->>MCPAdapter: Access denied error
+        Note over MCPAdapter: meta.errorPolicy = "errors_not_allowed"<br/>Convert to QollectiveError::Security
+        MCPAdapter->>MCPClient: QollectiveError::Security("Access denied")
+        MCPClient->>Agent: Stop processing
+        Agent->>NATS: Envelope<Error>
+        Note over Agent, NATS: {"meta": {...}, "data": null, <br/>"error": {"type": "Security", "message": "Access denied"}}
+        NATS->>WASM: QollectiveError
+        WASM->>Browser: Translated user error
+        Browser->>User: "Access denied"
+    end
+
+    rect rgb(40, 40, 40)
+        Note over User, MCPServer: Key Architecture Benefits
+        Note over WASM: WASM Layer:<br/>• Envelope auto-population<br/>• Type safety<br/>• Protocol abstraction
+        Note over Agent: Agent Layer:<br/>• Envelope → Context conversion<br/>• MCP orchestration<br/>• Error coordination
+        Note over MCPAdapter: Adapter Layer:<br/>• Envelope ↔ MCP protocol<br/>• Error policy enforcement<br/>• Tenant context injection
+        Note over MCPServer: MCP Layer:<br/>• Standard JSON-RPC<br/>• Tenant-aware operations<br/>• Consistent error handling
+    end

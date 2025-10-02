@@ -1,0 +1,261 @@
+[package]
+name = "qollective"
+version = "0.0.1-prealpha"
+edition = "2021"
+authors = ["Qollective Team"]
+description = "Cross-language, cross-protocol data harmonization framework"
+license = "MIT"
+repository = "https://github.com/jocax/qollective"
+keywords = ["envelope", "metadata", "context", "microservices", "tracing"]
+categories = ["web-programming", "api-bindings", "development-tools"]
+
+[lib]
+name = "qollective"
+path = "src/lib.rs"
+
+[[bin]]
+name = "test-server"
+path = "src/bin/test-server.rs"
+required-features = ["rest-server"]
+
+[[bin]]
+name = "test-client"
+path = "src/bin/test-client.rs"
+required-features = ["rest-client"]
+
+[[bin]]
+name = "demo-server"
+path = "src/bin/demo-server.rs"
+required-features = ["rest-server"]
+
+[[bin]]
+name = "demo-client"
+path = "src/bin/demo-client.rs"
+required-features = ["rest-client"]
+
+[[bin]]
+name = "jwt-validator-cli"
+path = "src/bin/jwt-validator-cli.rs"
+required-features = ["security"]
+
+[[bench]]
+name = "openapi_benchmarks"
+harness = false
+required-features = ["openapi", "config"]
+
+[features]
+default = [
+    "rest-client", "rest-server",
+    "grpc-client", "grpc-server",
+    "websocket-client", "websocket-server",
+    "protobuf",
+    "tracing", "metrics", "config", "validation", "tls",
+    "tenant-extraction", "security",
+    "nats", "mcp", "a2a-full", "jsonrpc", "openapi"
+]
+
+# Protocol support - Core transport implementations
+rest-client = ["dep:reqwest", "config", "dep:url", "dep:base64"]
+rest-server = ["dep:axum", "dep:tower", "dep:tower-http", "config", "dep:base64", "dep:url"]
+grpc-client = ["dep:tonic", "dep:tonic-prost", "dep:prost", "dep:prost-types", "dep:futures-util", "tls", "dep:tonic-rustls"]
+grpc-server = ["dep:tonic", "dep:tonic-prost", "dep:prost", "dep:prost-types", "dep:tower", "dep:tokio-stream", "dep:tonic-health", "dep:tonic-reflection", "tls", "dep:tonic-rustls"]
+nats-client = ["dep:async-nats", "dep:tokio-stream", "dep:futures"]
+nats-server = ["dep:async-nats", "dep:tokio-stream", "dep:futures"]
+websocket-client = ["dep:tokio-tungstenite", "dep:url", "dep:futures-util", "tls"]
+websocket-server = ["dep:tokio-tungstenite", "dep:futures-util", "tls", "dep:tokio-rustls"]
+
+# Protocol combinations
+rest = ["rest-client", "rest-server"]
+grpc = ["grpc-client", "grpc-server"]
+nats = ["nats-client", "nats-server"]
+websocket = ["websocket-client", "websocket-server"]
+
+# Serialization formats
+protobuf = ["dep:prost", "dep:prost-types"]
+
+# Optional features
+tracing = ["dep:tracing", "dep:tracing-opentelemetry"]
+metrics = ["dep:metrics"]
+config = ["dep:config", "dep:figment", "tracing"]
+validation = ["dep:jsonschema"]
+tls = ["dep:rustls", "dep:rustls-pemfile", "dep:webpki-roots", "dep:axum-server"]
+tenant-extraction = ["dep:jsonwebtoken", "dep:base64", "config"]
+security = ["config", "tenant-extraction"]
+openapi = ["dep:utoipa", "dep:utoipa-swagger-ui"]
+
+# JSON-RPC protocol support - Enhanced with jsonrpsee 0.25.1
+jsonrpc-client = ["dep:jsonrpsee"]
+jsonrpc-server = ["dep:jsonrpsee"]
+jsonrpc-ws = ["jsonrpc-client", "jsonrpc-server"]  # WebSocket JSON-RPC
+jsonrpc-http = ["jsonrpc-client", "jsonrpc-server"]  # HTTP JSON-RPC
+jsonrpc = ["jsonrpc-client", "jsonrpc-server"]
+
+# MCP protocol support - Enhanced with rMCP 0.3.0 features
+mcp-client = ["dep:rmcp", "dep:rmcp-macros", "dep:url", "config", "tracing"]
+mcp-server = ["dep:rmcp", "dep:rmcp-macros", "dep:url", "config", "tracing"]
+mcp-jsonrpc = ["dep:rmcp", "dep:jsonrpsee", "mcp-client", "jsonrpc-client"]  # JSON-RPC transport
+mcp-ws = ["mcp-jsonrpc", "websocket-client"]  # WebSocket MCP
+mcp = ["mcp-client", "mcp-server", "mcp-jsonrpc"]
+
+# A2A protocol support - Two implementation approaches available
+#
+# ARCHITECTURE OVERVIEW:
+# Qollective supports two distinct A2A (Agent-to-Agent) communication approaches:
+#
+# 1. A2A Standard (HTTP) - Uses external a2a-rs crate with HTTP transport
+#    - For interoperability with external A2A systems that expect HTTP endpoints
+#    - Requires HTTP server endpoints for agent communication
+#    - Example: HttpClient::new("http://agent:8080")
+#
+# 2. A2A NATS - Direct NATS subject-based communication (no HTTP needed)
+#    - For high-performance message-oriented architectures like Enterprise examples
+#    - Agents communicate via NATS subjects like "enterprise.bridge.challenge"
+#    - Optimized for internal agent coordination
+#
+a2a-client = ["dep:a2a-rs"]
+a2a-server = ["dep:a2a-rs"]
+a2a-standard = ["dep:a2a-rs"]  # Standard HTTP implementation - requires HTTP endpoints
+a2a-nats = ["a2a-client", "nats-client"]  # NATS-based A2A - direct subject communication
+a2a = ["a2a-client", "a2a-server"]  # Core A2A without HTTP transport requirement (NATS-only)
+a2a-full = ["a2a-client", "a2a-server", "a2a-standard"]  # Full A2A with HTTP transport option
+
+# WASM client support (excludes tokio-based features that don't work in WASM)
+wasm-client = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "dep:console_error_panic_hook", "dep:serde-wasm-bindgen", "dep:wasm-bindgen-futures"]
+wasm-rest = ["wasm-client", "rest-client"]  # WASM-compatible REST client
+wasm-jsonrpc = ["wasm-client", "jsonrpc-client", "dep:jsonrpsee"]  # WASM JSON-RPC support
+wasm-mcp = ["wasm-client", "mcp-client", "wasm-jsonrpc"]  # WASM MCP support
+wasm-a2a = ["wasm-client", "a2a-client"]  # WASM A2A support (HTTP only)
+wasm-enhanced = ["wasm-client", "wasm-rest", "wasm-jsonrpc", "wasm-mcp", "wasm-a2a"]  # Full WASM support
+
+# Transport combinations for different deployment scenarios
+hybrid-transport = ["rest", "grpc", "nats", "websocket", "jsonrpc", "mcp", "a2a-full"]  # All native transports
+browser-transport = ["wasm-enhanced"]  # Browser-compatible transports only
+server-transport = ["rest-server", "grpc-server", "nats-server", "websocket-server", "jsonrpc-server", "mcp-server", "a2a-server"]  # Server-only transports
+client-transport = ["rest-client", "grpc-client", "nats-client", "websocket-client", "jsonrpc-client", "mcp-client", "a2a-client"]  # Client-only transports
+
+# Full feature set for convenience
+full = [
+    "rest", "grpc", "websocket", "nats",
+    "jsonrpc", "mcp", "a2a-full",
+    "protobuf",
+    "tracing", "metrics", "config", "validation", "tls",
+    "tenant-extraction", "security", "openapi",
+    "wasm-enhanced"
+]
+
+# Development and testing feature sets
+dev = ["full", "hybrid-transport"]  # Full development environment
+test = ["full", "config", "validation"]  # Testing environment
+minimal = ["rest-client", "jsonrpc-client"]  # Minimal client-only setup
+
+[dependencies]
+# Core dependencies (always included)
+serde = { version = "1.0", features = ["derive"] }
+thiserror = { version = "2.0" }
+uuid = { version = "1", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+urlencoding = { version = "2.1" }
+
+# OpenAPI documentation generation - Optional feature
+utoipa = { version = "5.4", features = ["chrono", "uuid"], optional = true }
+utoipa-swagger-ui = { version = "9.0", features = ["axum"], optional = true }
+
+# Async runtime (core dependency - required for all protocols)
+tokio = { version = "1", features = ["full"] }
+
+# Field masking dependencies
+glob = { version = "0.3" }
+sha2 = { version = "0.10" }
+
+# REST dependencies
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], optional = true }
+axum = { version = "0.8", optional = true }
+tower = { version = "0.5", optional = true }
+tower-http = { version = "0.6", features = ["cors", "compression-gzip", "trace"], optional = true }
+
+# gRPC dependencies
+tonic = { version = "0.14", features = ["transport", "tls-native-roots"], optional = true }
+tonic-prost = { version = "0.14", optional = true }
+# NOTE: prost version pinned to 0.13 to match tonic 0.13 requirements
+prost = { version = "0.14", optional = true }
+prost-types = { version = "0.14", optional = true }
+futures-util = { version = "0.3", optional = true }
+
+# NATS dependencies
+async-nats = { version = "0.42", optional = true }
+
+# WebSocket dependencies
+tokio-tungstenite = { version = "0.27", optional = true, features = ["rustls-tls-webpki-roots"] }
+url = { version = "2.5", optional = true }
+
+# JSON-RPC dependencies - Enhanced JSON-RPC 2.0 support
+jsonrpsee = { version = "0.25.1", features = ["server", "client", "ws-client", "http-client", "wasm-client", "macros"], optional = true }
+
+# MCP dependencies - Official rmcp SDK with 0.3.0 features
+rmcp = { version = "0.6.0", features = ["server", "client", "transport-child-process"], optional = true }
+rmcp-macros = { version = "0.6.0", optional = true }
+
+# A2A dependencies - Standard protocol implementation
+a2a-rs = { version = "0.1.0", features = ["http-client"], optional = true }
+
+# Additional async utilities
+tokio-stream = { version = "0.1", optional = true }
+futures = { version = "0.3", optional = true }
+
+# WASM dependencies - only included when wasm-client feature is enabled
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"], optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", features = ["console", "Request", "Response", "Headers", "WebSocket", "Window", "Document", "HtmlElement", "Blob"], optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+# Serialization
+serde_json = { version = "1.0" }
+
+# Colored logging dependencies
+colored = { version = "3.0" }
+env_logger = { version = "0.11" }
+
+# Observability
+tracing = { version = "0.1", optional = true }
+tracing-opentelemetry = { version = "0.31", optional = true }
+metrics = { version = "0.24", optional = true }
+
+# Configuration
+config = { version = "0.15", optional = true }
+figment = { version = "0.10", features = ["json", "yaml", "toml", "env"], optional = true }
+
+# Validation
+jsonschema = { version = "0", optional = true }
+
+# Async
+async-trait = { version = "0.1" }
+
+# JWT parsing (for tenant extraction)
+jsonwebtoken = { version = "9.3", default-features = false, optional = true }
+base64 = { version = "0.22", optional = true }
+
+# gRPC health and reflection services
+tonic-health = { version = "0.13", optional = true }
+tonic-reflection = { version = "0.13", optional = true }
+tonic-rustls = { version = "0.2", optional = true }
+
+# TLS dependencies
+rustls = { version = "0.23", features = ["ring"], optional = true }
+rustls-pemfile = { version = "2.2", optional = true }
+webpki-roots = { version = "1.0", optional = true }
+axum-server = { version = "0.7", features = ["tls-rustls"], optional = true }
+tokio-rustls = { version = "0.26", optional = true }
+rand = "0.9"
+
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[build-dependencies]
+tonic-prost-build = { version = "0.14.1"}
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

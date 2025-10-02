@@ -1,0 +1,15 @@
+{
+  "name": "qollective_wasm_space_exploration",
+  "version": "1.0.0",
+  "description": "This workspace demonstrates the Qollective Framework's WASM capabilities through a space exploration theme with a fully functional browser-based mission dashboard.",
+  "main": "test_mcp_server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

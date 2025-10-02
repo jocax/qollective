@@ -1,0 +1,29 @@
+# Holodeck Character Service Configuration
+
+[service]
+name = "holodeck-character"
+version = "0.1.0"
+
+[llm]
+# Primary LLM provider: "openai", "ollama", "anthropic", "perplexity"
+provider = "ollama"
+
+# Model name to use
+model = "gemma2:2b"
+
+# Optional: Custom API key (overrides .env file)
+# api_key = "your_custom_key_here"
+
+# Optional: Custom endpoint URL (for Ollama or custom providers)
+# endpoint_url = "http://localhost:11434"
+
+# Response parameters
+temperature = 0.7
+max_tokens = 2048
+timeout_seconds = 30
+
+[character_ai]
+# Character-specific AI settings
+response_time_target_ms = 500
+conversation_memory_turns = 10
+personality_strength = 0.8

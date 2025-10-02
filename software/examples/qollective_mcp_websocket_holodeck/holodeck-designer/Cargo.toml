@@ -1,0 +1,57 @@
+# ABOUTME: MCP server for story generation using LLM integration
+# ABOUTME: Uses OpenAI API to generate holodeck story templates based on user parameters
+
+[package]
+name = "holodeck-designer"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MCP server for AI-powered holodeck story generation"
+
+[dependencies]
+# Shared types
+shared-types = { path = "../shared-types" }
+
+# Core async and serialization
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-trait.workspace = true
+
+# Qollective runtime for MCP server features
+qollective.workspace = true
+
+# MCP server functionality
+rmcp.workspace = true
+rmcp-macros.workspace = true
+
+# LLM integration for story generation
+rig-core.workspace = true
+
+# HTTP client for API calls
+reqwest.workspace = true
+
+# JSON Schema validation  
+jsonschema.workspace = true
+schemars.workspace = true
+schemars_v08.workspace = true
+
+# Configuration file parsing
+toml.workspace = true
+dotenv.workspace = true
+
+[build-dependencies]
+typify = "0.4"
+serde_json = "1.0"
+schemars_v08.workspace = true
+jsonref = "0.4"
+
+[dev-dependencies]
+tempfile = "3.20.0"

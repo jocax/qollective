@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-monitoring.json",
+  "title": "Qollective Monitoring Meta Schema",
+  "description": "Validation schema for infrastructure and operational monitoring information including server details, deployment information, and health metrics",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "server_id": {
+      "type": "string",
+      "description": "Server instance identifier for tracking requests across instances",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-._]*[a-zA-Z0-9]$",
+      "maxLength": 100,
+      "examples": ["web-server-01", "api-pod-5f8d4c7b9-xk2m7", "instance-i-1234567890abcdef0"]
+    },
+    "datacenter": {
+      "type": "string",
+      "description": "Datacenter, region, or availability zone identifier",
+      "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+      "maxLength": 50,
+      "examples": ["us-west-2", "eu-central-1a", "datacenter-ny"]
+    },
+    "region": {
+      "type": "string",
+      "description": "Geographic region identifier",
+      "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+      "maxLength": 50,
+      "examples": ["us-west", "eu-central", "ap-southeast"]
+    },
+    "availability_zone": {
+      "type": "string",
+      "description": "Availability zone within the region",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "maxLength": 20,
+      "examples": ["us-west-2a", "eu-central-1b"]
+    },
+    "build_version": {
+      "type": "string",
+      "description": "Application build version or commit hash",
+      "maxLength": 100,
+      "examples": ["v1.2.3-build.456", "commit-abc123def456", "release-2024.06.01"]
+    },
+    "git_commit": {
+      "type": "string",
+      "description": "Git commit hash",
+      "pattern": "^[a-f0-9]{7,40}$",
+      "examples": ["abc123d", "1234567890abcdef1234567890abcdef12345678"]
+    },
+    "git_branch": {
+      "type": "string",
+      "description": "Git branch name",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9/_-]*[a-zA-Z0-9]$",
+      "maxLength": 100,
+      "examples": ["main", "develop", "feature/user-auth", "release/v1.2.3"]
+    },
+    "deployment_id": {
+      "type": "string",
+      "description": "Deployment identifier for tracking releases",
+      "maxLength": 100,
+      "examples": ["deploy-20240606-143000", "blue-green-v123", "canary-release-456"]
+    },
+    "deployment_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this version was deployed",
+      "examples": ["2024-06-06T14:30:00.000Z"]
+    },
+    "instance_type": {
+      "type": "string",
+      "description": "Server instance type or configuration",
+      "maxLength": 50,
+      "examples": ["t3.medium", "c5.xlarge", "standard-4", "micro"]
+    },
+    "load_balancer": {
+      "type": "string",
+      "description": "Load balancer identifier that routed this request",
+      "maxLength": 100,
+      "examples": ["alb-web-tier", "nginx-lb-01", "cloudflare-proxy"]
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "staging", "testing", "production", "canary", "sandbox"],
+      "description": "Environment where the service is running",
+      "examples": ["production", "staging"]
+    },
+    "cluster_id": {
+      "type": "string",
+      "description": "Cluster or orchestration platform identifier",
+      "maxLength": 100,
+      "examples": ["k8s-prod-cluster", "ecs-cluster-web", "swarm-production"]
+    },
+    "namespace": {
+      "type": "string",
+      "description": "Kubernetes namespace or logical grouping",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "maxLength": 63,
+      "examples": ["default", "web-services", "payment-system"]
+    },
+    "pod_name": {
+      "type": "string",
+      "description": "Kubernetes pod name",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "maxLength": 253,
+      "examples": ["user-service-6f8d4c7b9-xk2m7", "api-deployment-abc123"]
+    },
+    "container_id": {
+      "type": "string",
+      "description": "Container identifier",
+      "pattern": "^[a-f0-9]{12,64}$",
+      "examples": ["1234567890ab", "abcdef1234567890abcdef1234567890abcdef12"]
+    },
+    "image_name": {
+      "type": "string",
+      "description": "Container image name and tag",
+      "maxLength": 200,
+      "examples": ["myapp:v1.2.3", "registry.company.com/user-service:latest"]
+    },
+    "health_status": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "unhealthy", "starting", "stopping"],
+      "description": "Current health status of the service instance",
+      "examples": ["healthy", "degraded"]
+    },
+    "uptime": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 31536000,
+      "description": "Service uptime in seconds",
+      "examples": [86400, 259200, 3600]
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the service instance started",
+      "examples": ["2024-06-05T10:00:00.000Z"]
+    },
+    "resource_limits": {
+      "type": "object",
+      "description": "Resource limits configured for this instance",
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "description": "CPU limit (e.g., '500m', '2')",
+          "pattern": "^\\d+(\\.\\d+)?[m]?$",
+          "examples": ["500m", "2", "1.5"]
+        },
+        "memory": {
+          "type": "string",
+          "description": "Memory limit (e.g., '512Mi', '2Gi')",
+          "pattern": "^\\d+(\\.\\d+)?[KMGT]?i?[Bb]?$",
+          "examples": ["512Mi", "2Gi", "1024MB"]
+        },
+        "storage": {
+          "type": "string",
+          "description": "Storage limit",
+          "pattern": "^\\d+(\\.\\d+)?[KMGT]?i?[Bb]?$",
+          "examples": ["10Gi", "500GB"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "resource_usage": {
+      "type": "object",
+      "description": "Current resource usage",
+      "properties": {
+        "cpu_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "CPU usage percentage"
+        },
+        "memory_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Memory usage percentage"
+        },
+        "disk_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Disk usage percentage"
+        },
+        "network_in": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Network bytes received"
+        },
+        "network_out": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Network bytes sent"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scaling_group": {
+      "type": "string",
+      "description": "Auto-scaling group or deployment group",
+      "maxLength": 100,
+      "examples": ["asg-web-servers", "deployment-group-api"]
+    },
+    "service_mesh": {
+      "type": "object",
+      "description": "Service mesh related information",
+      "properties": {
+        "proxy_version": {
+          "type": "string",
+          "description": "Service mesh proxy version",
+          "maxLength": 50,
+          "examples": ["envoy-1.20.1", "istio-proxy-1.14.0"]
+        },
+        "mesh_id": {
+          "type": "string",
+          "description": "Service mesh identifier",
+          "maxLength": 100
+        },
+        "sidecar_status": {
+          "type": "string",
+          "enum": ["healthy", "unhealthy", "missing"],
+          "description": "Sidecar proxy status"
+        }
+      },
+      "additionalProperties": false
+    },
+    "monitoring_config": {
+      "type": "object",
+      "description": "Monitoring and observability configuration",
+      "properties": {
+        "metrics_enabled": {
+          "type": "boolean",
+          "description": "Whether metrics collection is enabled"
+        },
+        "logging_level": {
+          "type": "string",
+          "enum": ["trace", "debug", "info", "warn", "error"],
+          "description": "Current logging level"
+        },
+        "tracing_enabled": {
+          "type": "boolean",
+          "description": "Whether distributed tracing is enabled"
+        },
+        "sampling_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Monitoring sampling rate"
+        }
+      },
+      "additionalProperties": false
+    },
+    "alerts": {
+      "type": "array",
+      "description": "Active alerts for this instance",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Alert name",
+            "maxLength": 100
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"],
+            "description": "Alert severity level"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When alert was triggered"
+          },
+          "description": {
+            "type": "string",
+            "description": "Alert description",
+            "maxLength": 500
+          }
+        },
+        "required": ["name", "severity", "timestamp"],
+        "additionalProperties": false
+      },
+      "maxItems": 20
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "server_id": "web-server-01",
+      "datacenter": "us-west-2",
+      "environment": "production",
+      "build_version": "v1.2.3-build.456",
+      "git_commit": "abc123def456",
+      "deployment_id": "deploy-20240606-143000",
+      "instance_type": "t3.medium",
+      "cluster_id": "k8s-prod-cluster",
+      "namespace": "web-services",
+      "health_status": "healthy",
+      "uptime": 86400,
+      "resource_limits": {
+        "cpu": "500m",
+        "memory": "1Gi"
+      },
+      "resource_usage": {
+        "cpu_percent": 45.2,
+        "memory_percent": 67.8,
+        "disk_percent": 23.1
+      }
+    },
+    {
+      "server_id": "api-pod-5f8d4c7b9-xk2m7",
+      "region": "eu-central",
+      "availability_zone": "eu-central-1a",
+      "environment": "staging",
+      "pod_name": "user-service-6f8d4c7b9-xk2m7",
+      "container_id": "1234567890ab",
+      "image_name": "user-service:v1.2.2",
+      "health_status": "degraded",
+      "alerts": [
+        {
+          "name": "high_memory_usage",
+          "severity": "warning",
+          "timestamp": "2024-06-06T14:20:00.000Z",
+          "description": "Memory usage above 80%"
+        }
+      ]
+    }
+  ]
+}

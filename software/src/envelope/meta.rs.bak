@@ -1,0 +1,610 @@
+// ABOUTME: Metadata structures and builders for envelope sections
+// ABOUTME: Defines the core metadata types for security, debug, performance, etc.
+
+//! Metadata structures and builders for envelope sections.
+
+#[allow(unused_imports)]
+use crate::error::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::{self, Value};
+use std::collections::HashMap;
+use uuid::Uuid;
+
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
+/// Core metadata container
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Enhanced Meta",
+    description = "Comprehensive metadata structure including all context types and extensible custom fields for enterprise applications"
+))]
+pub struct Meta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<Uuid>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<OnBehalfOfMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub security: Option<SecurityMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<DebugMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub performance: Option<PerformanceMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monitoring: Option<MonitoringMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracing: Option<TracingMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<ExtensionsMeta>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Extensible custom metadata fields for application-specific data"))]
+    pub custom_metadata: Option<HashMap<String, Value>>,
+}
+
+/// OnBehalfOf metadata for delegation context
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Delegation Context",
+    description = "Context for on-behalf-of scenarios and delegation chains in enterprise systems",
+))]
+pub struct OnBehalfOfMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Original user who granted the delegation", example = "picard@starfleet.local"))]
+    pub original_user: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Original tenant context for the delegation", example = "enterprise_starfleet"))]
+    pub original_tenant: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Type of delegation granted", example = "FULL_AUTHORITY"))]
+    pub delegation_type: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Scope and limitations of the delegation", example = ["bridge_command", "crew_orders"]))]
+    pub delegation_scope: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "When the delegation expires", example = "2025-08-23T18:00:00.000Z"))]
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Authentication method enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Authentication Method",
+    description = "Supported authentication methods for enterprise security"
+))]
+pub enum AuthMethod {
+    Unspecified,
+    OAuth2,
+    Jwt,
+    ApiKey,
+    Basic,
+    Saml,
+    Oidc,
+    None,
+}
+
+/// Security metadata section
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Security Context",
+    description = "Comprehensive security context including authentication, authorization, and session management for enterprise applications",
+))]
+pub struct SecurityMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "User identifier for authentication", example = "picard@starfleet.local"))]
+    pub user_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Session identifier for tracking user sessions", example = "bridge_session_001"))]
+    pub session_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Authentication method used for the request"))]
+    pub auth_method: Option<AuthMethod>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "openapi", schema(description = "List of permissions granted to the user", example = ["COMMAND_SHIP", "CREW_MANAGEMENT"]))]
+    pub permissions: Vec<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Client IP address for security tracking", example = "192.168.1.100"))]
+    pub ip_address: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "User agent string from the client", example = "Enterprise Bridge Console v2.0"))]
+    pub user_agent: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Tenant identifier for multi-tenant applications", example = "enterprise_starfleet"))]
+    pub tenant_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "openapi", schema(description = "User roles within the system", example = ["Captain", "Bridge Officer"]))]
+    pub roles: Vec<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(description = "Token expiration timestamp", example = "2025-08-23T11:30:45.123Z"))]
+    pub token_expires_at: Option<DateTime<Utc>>,
+}
+
+/// Log level enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+pub enum LogLevel {
+    Unspecified,
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+/// SQL query execution information
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SqlQuery {
+    pub query: String,
+    pub duration: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rows_affected: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+}
+
+/// Memory usage metrics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryUsage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_used: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_total: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external: Option<i64>,
+}
+
+/// Performance profiling data
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfilingData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_time: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wall_time: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allocations: Option<i64>,
+}
+
+/// Debug metadata section
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Debug Context",
+    description = "Development and debugging information including debug mode, profiling, and development tools support",
+    example = serde_json::json!({
+        "trace_enabled": true,
+        "log_level": "Debug",
+        "memory_usage": {
+            "heap_used": 268435456,
+            "heap_total": 536870912
+        },
+        "environment_vars": {
+            "NODE_ENV": "development",
+            "DEBUG": "true"
+        }
+    })
+))]
+pub struct DebugMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_enabled: Option<bool>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sql_queries: Vec<SqlQuery>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_usage: Option<MemoryUsage>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stack_trace: Option<String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub environment_vars: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub request_headers: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_level: Option<LogLevel>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profiling_data: Option<ProfilingData>,
+}
+
+/// Call status enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CallStatus {
+    Unspecified,
+    Success,
+    Error,
+    Timeout,
+}
+
+/// Cache operation statistics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CacheOperations {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hits: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub misses: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sets: Option<i32>,
+}
+
+/// External service call performance data
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExternalCall {
+    pub service: String,
+    pub duration: f64,
+    pub status: CallStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+}
+
+/// Performance metadata section
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Performance Context",
+    description = "Performance metrics and monitoring data for request timing and resource usage analysis",
+    example = serde_json::json!({
+        "db_query_time": 45.5,
+        "db_query_count": 3,
+        "cache_hit_ratio": 87.5,
+        "cpu_usage": 15.7,
+        "memory_allocated": 268435456,
+        "processing_time_ms": 123
+    })
+))]
+pub struct PerformanceMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub db_query_time: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub db_query_count: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_hit_ratio: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_operations: Option<CacheOperations>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_allocated: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_peak: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_usage: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_latency: Option<f64>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub external_calls: Vec<ExternalCall>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gc_collections: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gc_time: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_count: Option<i32>,
+
+    // Keep the original field for backward compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processing_time_ms: Option<u64>,
+}
+
+/// Environment enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+pub enum Environment {
+    Unspecified,
+    Development,
+    Staging,
+    Testing,
+    Production,
+    Canary,
+}
+
+/// Health status enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum HealthStatus {
+    Unspecified,
+    Healthy,
+    Degraded,
+    Unhealthy,
+}
+
+/// Monitoring metadata section
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Infrastructure Context", 
+    description = "Infrastructure and deployment information including service, environment, and networking details",
+    example = serde_json::json!({
+        "server_id": "bridge-node-01",
+        "datacenter": "starfleet-alpha-quadrant",
+        "build_version": "2.0.0",
+        "deployment_id": "enterprise-2025-08-23",
+        "environment": "Production",
+        "cluster_id": "enterprise-cluster",
+        "namespace": "starfleet-bridge"
+    })
+))]
+pub struct MonitoringMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub datacenter: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_version: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance_type: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_balancer: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<Environment>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health_status: Option<HealthStatus>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uptime: Option<f64>,
+}
+
+/// OpenTelemetry span kind enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+pub enum SpanKind {
+    Unspecified,
+    Server,
+    Client,
+    Producer,
+    Consumer,
+    Internal,
+}
+
+/// Span status code enumeration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SpanStatusCode {
+    Unspecified,
+    Ok,
+    Error,
+    Timeout,
+}
+
+/// Span status information
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpanStatus {
+    pub code: SpanStatusCode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// Trace value for tags/attributes (supports string, number, boolean)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TraceValue {
+    String(String),
+    Number(f64),
+    Boolean(bool),
+}
+
+/// Tracing metadata section
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[cfg_attr(feature = "openapi", schema(
+    title = "Tracing Context",
+    description = "OpenTelemetry-compatible distributed tracing context with trace and span information",
+    example = serde_json::json!({
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "span_id": "00f067aa0ba902b7",
+        "parent_span_id": "83887e5d7da921ba",
+        "trace_state": "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7",
+        "operation_name": "enterprise_bridge_command",
+        "span_kind": "Server"
+    })
+))]
+pub struct TracingMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_span_id: Option<String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub baggage: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampling_rate: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampled: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_state: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_name: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_kind: Option<SpanKind>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_status: Option<SpanStatus>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub tags: HashMap<String, TraceValue>,
+}
+
+/// Extensions metadata section for custom service metadata
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+pub struct ExtensionsMeta {
+    #[serde(flatten)]
+    pub sections: HashMap<String, serde_json::Value>,
+}
+
+/// Builder for metadata sections
+pub struct MetaBuilder {
+    meta: Meta,
+}
+
+impl MetaBuilder {
+    pub fn new() -> Self {
+        Self {
+            meta: Meta {
+                timestamp: None,
+                request_id: None,
+                version: None,
+                duration: None,
+                tenant: None,
+                on_behalf_of: None,
+                security: None,
+                debug: None,
+                performance: None,
+                monitoring: None,
+                tracing: None,
+                extensions: None,
+                custom_metadata: None,
+            },
+        }
+    }
+
+    pub fn build(self) -> Meta {
+        self.meta
+    }
+}
+
+impl Default for MetaBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self {
+            timestamp: None,
+            request_id: None,
+            version: None,
+            duration: None,
+            tenant: None,
+            on_behalf_of: None,
+            security: None,
+            debug: None,
+            performance: None,
+            monitoring: None,
+            tracing: None,
+            extensions: None,
+            custom_metadata: None,
+        }
+    }
+}
+
+impl Meta {
+    /// Create a response metadata preserving key fields from the original request
+    /// This follows the same pattern used by the gRPC server for consistency
+    pub fn preserve_for_response(original_meta: Option<&Meta>) -> Self {
+        if let Some(orig) = original_meta {
+            Self {
+                // Preserve these critical fields from the original request
+                request_id: orig.request_id,
+                tenant: orig.tenant.clone(),
+                version: orig.version.clone(),
+                on_behalf_of: orig.on_behalf_of.clone(),
+                security: orig.security.clone(),
+
+                // Update timestamp to response time
+                timestamp: Some(chrono::Utc::now()),
+
+                // Reset response-specific fields
+                duration: None,
+                debug: None,
+                performance: None,
+                monitoring: None,
+                tracing: None,
+                extensions: None,
+                custom_metadata: None,
+            }
+        } else {
+            // Fallback with minimal default metadata
+            Self {
+                timestamp: Some(chrono::Utc::now()),
+                version: Some("1.0".to_string()),
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Create metadata for new requests (when no original metadata exists)
+    pub fn for_new_request() -> Self {
+        Self {
+            timestamp: Some(chrono::Utc::now()),
+            request_id: Some(Uuid::now_v7()),
+            version: Some("1.0".to_string()),
+            ..Default::default()
+        }
+    }
+}
+
+/// Trait for metadata sections
+pub trait MetaSection {
+    fn is_enabled(&self) -> bool;
+    fn as_json(&self) -> Result<serde_json::Value>;
+}

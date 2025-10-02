@@ -1,0 +1,545 @@
+/* ABOUTME: Enterprise LCARS theme with comprehensive styling system */
+/* ABOUTME: Star Trek Enterprise inspired design with animations, colors, and effects */
+
+@import "tailwindcss";
+
+/* =====================================
+   ENTERPRISE LCARS COLOR SYSTEM
+   ===================================== */
+
+:root {
+  /* Primary Enterprise Colors */
+  --enterprise-blue: #1e40af;
+  --enterprise-blue-50: #eff6ff;
+  --enterprise-blue-100: #dbeafe;
+  --enterprise-blue-200: #bfdbfe;
+  --enterprise-blue-300: #93c5fd;
+  --enterprise-blue-400: #60a5fa;
+  --enterprise-blue-500: #3b82f6;
+  --enterprise-blue-600: #2563eb;
+  --enterprise-blue-700: #1d4ed8;
+  --enterprise-blue-800: #1e40af;
+  --enterprise-blue-900: #1e3a8a;
+  
+  /* Enterprise Orange (LCARS Accent) */
+  --enterprise-orange: #ff9500;
+  --enterprise-orange-50: #fff7ed;
+  --enterprise-orange-100: #ffedd5;
+  --enterprise-orange-200: #fed7aa;
+  --enterprise-orange-300: #fdba74;
+  --enterprise-orange-400: #fb923c;
+  --enterprise-orange-500: #f97316;
+  --enterprise-orange-600: #ea580c;
+  --enterprise-orange-700: #c2410c;
+  --enterprise-orange-800: #9a3412;
+  --enterprise-orange-900: #7c2d12;
+  --enterprise-orange-dark: #cc7a00;
+  --enterprise-orange-light: #ffab33;
+  
+  /* Enterprise Red (Alert/Error) */
+  --enterprise-red: #dc2626;
+  --enterprise-red-50: #fef2f2;
+  --enterprise-red-100: #fee2e2;
+  --enterprise-red-200: #fecaca;
+  --enterprise-red-300: #fca5a5;
+  --enterprise-red-400: #f87171;
+  --enterprise-red-500: #ef4444;
+  --enterprise-red-600: #dc2626;
+  --enterprise-red-700: #b91c1c;
+  --enterprise-red-800: #991b1b;
+  --enterprise-red-900: #7f1d1d;
+  --enterprise-red-light: #ef4444;
+  
+  /* Enterprise Green (Success/Active) */
+  --enterprise-green: #16a34a;
+  --enterprise-green-50: #f0fdf4;
+  --enterprise-green-100: #dcfce7;
+  --enterprise-green-200: #bbf7d0;
+  --enterprise-green-300: #86efac;
+  --enterprise-green-400: #4ade80;
+  --enterprise-green-500: #22c55e;
+  --enterprise-green-600: #16a34a;
+  --enterprise-green-700: #15803d;
+  --enterprise-green-800: #166534;
+  --enterprise-green-900: #14532d;
+  --enterprise-green-light: #22c55e;
+  
+  /* Enterprise Yellow (Warning/Caution) */
+  --enterprise-yellow: #eab308;
+  --enterprise-yellow-50: #fefce8;
+  --enterprise-yellow-100: #fef3c7;
+  --enterprise-yellow-200: #fde68a;
+  --enterprise-yellow-300: #fcd34d;
+  --enterprise-yellow-400: #fbbf24;
+  --enterprise-yellow-500: #f59e0b;
+  --enterprise-yellow-600: #d97706;
+  --enterprise-yellow-700: #b45309;
+  --enterprise-yellow-800: #92400e;
+  --enterprise-yellow-900: #78350f;
+  --enterprise-yellow-light: #fcd34d;
+  
+  /* Enterprise Gray (Neutral/Inactive) */
+  --enterprise-gray: #6b7280;
+  --enterprise-gray-50: #f9fafb;
+  --enterprise-gray-100: #f3f4f6;
+  --enterprise-gray-200: #e5e7eb;
+  --enterprise-gray-300: #d1d5db;
+  --enterprise-gray-400: #9ca3af;
+  --enterprise-gray-500: #6b7280;
+  --enterprise-gray-600: #4b5563;
+  --enterprise-gray-700: #374151;
+  --enterprise-gray-800: #1f2937;
+  --enterprise-gray-900: #111827;
+  --enterprise-gray-light: #9ca3af;
+  
+  /* Enterprise Black */
+  --enterprise-black: #000000;
+  --enterprise-white: #ffffff;
+}
+
+/* =====================================
+   ENTERPRISE ANIMATIONS
+   ===================================== */
+
+@keyframes enterprise-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 149, 0, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(255, 149, 0, 0.8), 0 0 30px rgba(255, 149, 0, 0.6); }
+}
+
+@keyframes enterprise-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes enterprise-scan {
+  0% { transform: translateX(-100%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes enterprise-panel-enter {
+  0% { 
+    opacity: 0; 
+    transform: translateY(20px) scale(0.95);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes enterprise-border-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes enterprise-data-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-20px); }
+}
+
+@keyframes enterprise-alert-flash {
+  0%, 100% { background-color: var(--enterprise-red-50); border-color: var(--enterprise-red-200); }
+  50% { background-color: var(--enterprise-red-100); border-color: var(--enterprise-red-400); }
+}
+
+/* =====================================
+   ENTERPRISE COMPONENT CLASSES
+   ===================================== */
+
+.enterprise-panel {
+  @apply relative bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200;
+  background: linear-gradient(135deg, var(--enterprise-blue-50) 0%, var(--enterprise-blue-100) 100%);
+  border-color: var(--enterprise-blue-200);
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.1);
+}
+
+.enterprise-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, 
+    var(--enterprise-orange) 0%, 
+    var(--enterprise-orange-light) 50%, 
+    var(--enterprise-blue) 100%);
+  animation: enterprise-border-flow 3s ease-in-out infinite;
+  background-size: 200% 200%;
+}
+
+.enterprise-panel-header {
+  @apply border-b border-blue-200 pb-4 mb-4;
+  border-color: var(--enterprise-blue-200);
+}
+
+.enterprise-panel-content {
+  @apply space-y-4;
+}
+
+.enterprise-button-primary {
+  @apply bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700;
+  @apply text-white font-bold py-2 px-4 transition-all duration-200;
+  @apply border-2 border-orange-400 hover:border-orange-500;
+  @apply shadow-lg hover:shadow-xl;
+  background: linear-gradient(135deg, var(--enterprise-orange) 0%, var(--enterprise-orange-dark) 100%);
+  border-color: var(--enterprise-orange-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'Orbitron', 'Monaco', 'Courier New', monospace;
+}
+
+.enterprise-button-primary:hover {
+  background: linear-gradient(135deg, var(--enterprise-orange-dark) 0%, var(--enterprise-orange) 100%);
+  animation: enterprise-glow 1s ease-in-out infinite alternate;
+}
+
+.enterprise-button-secondary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white;
+  @apply border-2 border-blue-500 hover:border-blue-400;
+  @apply transition-all duration-200;
+  background-color: var(--enterprise-blue-600);
+  border-color: var(--enterprise-blue-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'Orbitron', 'Monaco', 'Courier New', monospace;
+}
+
+.enterprise-input {
+  @apply bg-blue-50 border-2 border-blue-200 text-blue-800;
+  @apply focus:ring-2 focus:ring-orange-500 focus:border-orange-500;
+  @apply font-mono transition-all duration-200;
+  background-color: var(--enterprise-blue-50);
+  border-color: var(--enterprise-blue-200);
+  color: var(--enterprise-blue-800);
+}
+
+.enterprise-input::placeholder {
+  color: var(--enterprise-blue-400);
+  text-transform: uppercase;
+  font-size: 0.875rem;
+}
+
+/* =====================================
+   LCARS SPECIFIC ELEMENTS
+   ===================================== */
+
+.lcars-corner {
+  position: relative;
+}
+
+.lcars-corner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-left: 3px solid var(--enterprise-orange);
+  border-top: 3px solid var(--enterprise-orange);
+}
+
+.lcars-corner::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border-right: 3px solid var(--enterprise-blue);
+  border-bottom: 3px solid var(--enterprise-blue);
+}
+
+.lcars-data-display {
+  @apply font-mono text-sm bg-black text-green-400 p-4 border-2 border-gray-600;
+  background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
+  border-color: var(--enterprise-gray-600);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.lcars-status-bar {
+  @apply flex items-center space-x-4 p-3 bg-gray-800 text-white font-mono text-sm;
+  background: linear-gradient(90deg, var(--enterprise-gray-800) 0%, var(--enterprise-gray-700) 100%);
+  border-top: 2px solid var(--enterprise-blue);
+}
+
+.lcars-alert {
+  animation: enterprise-alert-flash 1s ease-in-out infinite;
+}
+
+/* =====================================
+   ANIMATION UTILITIES
+   ===================================== */
+
+.animate-glow {
+  animation: enterprise-glow 2s ease-in-out infinite alternate;
+}
+
+.animate-pulse-slow {
+  animation: enterprise-pulse 3s ease-in-out infinite;
+}
+
+.animate-panel-enter {
+  animation: enterprise-panel-enter 0.5s ease-out;
+}
+
+.animate-scan {
+  animation: enterprise-scan 2s linear infinite;
+}
+
+.animate-data-scroll {
+  animation: enterprise-data-scroll 10s linear infinite;
+}
+
+.animate-border-flow {
+  animation: enterprise-border-flow 3s ease-in-out infinite;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================
+   GRADIENT UTILITIES
+   ===================================== */
+
+.bg-gradient-gold {
+  background: linear-gradient(90deg, 
+    var(--enterprise-orange) 0%, 
+    var(--enterprise-orange-light) 50%, 
+    var(--enterprise-yellow) 100%);
+  box-shadow: 0 0 8px rgba(255, 149, 0, 0.3);
+}
+
+.bg-gradient-enterprise {
+  background: linear-gradient(135deg, 
+    var(--enterprise-blue) 0%, 
+    var(--enterprise-orange) 100%);
+}
+
+/* =====================================
+   SHADOW UTILITIES
+   ===================================== */
+
+.shadow-enterprise {
+  box-shadow: 
+    0 4px 12px rgba(30, 64, 175, 0.15),
+    0 2px 4px rgba(30, 64, 175, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.shadow-enterprise-lg {
+  box-shadow: 
+    0 8px 25px rgba(30, 64, 175, 0.2),
+    0 4px 10px rgba(30, 64, 175, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.shadow-enterprise-glow {
+  box-shadow: 
+    0 0 20px rgba(255, 149, 0, 0.3),
+    0 0 40px rgba(255, 149, 0, 0.1),
+    0 4px 12px rgba(30, 64, 175, 0.15);
+}
+
+/* =====================================
+   LOADING SPINNER
+   ===================================== */
+
+.loading-spinner {
+  @apply inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full;
+  animation: spin 1s linear infinite;
+  border-color: var(--enterprise-white);
+  border-top-color: transparent;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* =====================================
+   RESPONSIVE ENTERPRISE LAYOUT
+   ===================================== */
+
+.enterprise-dashboard {
+  @apply min-h-screen bg-gradient-to-br;
+  background: linear-gradient(135deg, 
+    var(--enterprise-blue-900) 0%, 
+    var(--enterprise-gray-800) 50%, 
+    var(--enterprise-black) 100%);
+}
+
+.enterprise-lane {
+  @apply h-full overflow-hidden;
+  border-right: 2px solid var(--enterprise-blue-200);
+}
+
+.enterprise-lane:last-child {
+  border-right: none;
+}
+
+/* =====================================
+   DARK MODE SUPPORT
+   ===================================== */
+
+.dark .enterprise-panel {
+  background: linear-gradient(135deg, var(--enterprise-gray-800) 0%, var(--enterprise-gray-700) 100%);
+  border-color: var(--enterprise-gray-600);
+  color: var(--enterprise-white);
+}
+
+.dark .enterprise-input {
+  background-color: var(--enterprise-gray-700);
+  border-color: var(--enterprise-gray-600);
+  color: var(--enterprise-white);
+}
+
+.dark .enterprise-input::placeholder {
+  color: var(--enterprise-gray-400);
+}
+
+/* Dark mode dashboard and layout */
+.dark .enterprise-dashboard {
+  background: linear-gradient(135deg, 
+    var(--enterprise-black) 0%, 
+    var(--enterprise-gray-900) 30%, 
+    var(--enterprise-blue-900) 100%);
+}
+
+.dark .splash-screen {
+  background: linear-gradient(135deg, 
+    var(--enterprise-black) 0%, 
+    var(--enterprise-gray-900) 50%, 
+    var(--enterprise-blue-900) 100%);
+}
+
+/* Dark mode text colors */
+.dark .enterprise-title {
+  color: var(--enterprise-blue-200);
+  text-shadow: 0 0 10px rgba(147, 197, 253, 0.3);
+}
+
+.dark .enterprise-subtitle {
+  color: var(--enterprise-gray-300);
+}
+
+.dark .enterprise-section-title {
+  color: var(--enterprise-orange-300);
+}
+
+/* Dark mode buttons */
+.dark .enterprise-button-secondary {
+  background-color: var(--enterprise-blue-700);
+  border-color: var(--enterprise-blue-600);
+  color: var(--enterprise-white);
+}
+
+.dark .enterprise-button-secondary:hover {
+  background-color: var(--enterprise-blue-600);
+  border-color: var(--enterprise-blue-500);
+}
+
+/* Dark mode status indicators */
+.dark .lcars-status-bar {
+  background: linear-gradient(90deg, var(--enterprise-gray-900) 0%, var(--enterprise-gray-800) 100%);
+  border-top-color: var(--enterprise-blue-400);
+  color: var(--enterprise-gray-100);
+}
+
+/* Dark mode data displays */
+.dark .lcars-data-display {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  border-color: var(--enterprise-gray-700);
+  color: var(--enterprise-green-400);
+}
+
+/* Dark mode enterprise footer */
+.dark .enterprise-footer {
+  color: var(--enterprise-gray-400);
+}
+
+.dark .enterprise-footer .text-enterprise-gold {
+  color: var(--enterprise-orange-300);
+}
+
+/* Dark mode background utilities */
+.dark .bg-bg-primary {
+  background: linear-gradient(135deg, 
+    var(--enterprise-black) 0%, 
+    var(--enterprise-gray-900) 100%);
+}
+
+.dark .bg-bg-secondary {
+  background-color: var(--enterprise-gray-800);
+}
+
+.dark .bg-bg-tertiary {
+  background-color: var(--enterprise-gray-700);
+}
+
+/* Dark mode text utilities */
+.dark .text-text-primary {
+  color: var(--enterprise-gray-100);
+}
+
+.dark .text-text-secondary {
+  color: var(--enterprise-gray-300);
+}
+
+.dark .text-text-muted {
+  color: var(--enterprise-gray-500);
+}
+
+/* =====================================
+   ACCESSIBILITY ENHANCEMENTS
+   ===================================== */
+
+.enterprise-focus:focus {
+  outline: 2px solid var(--enterprise-orange);
+  outline-offset: 2px;
+}
+
+.enterprise-high-contrast {
+  --enterprise-blue: #0000ff;
+  --enterprise-orange: #ff8800;
+  --enterprise-red: #ff0000;
+  --enterprise-green: #00ff00;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-glow,
+  .animate-pulse-slow,
+  .animate-panel-enter,
+  .animate-scan,
+  .animate-data-scroll,
+  .animate-border-flow {
+    animation: none;
+  }
+}
+
+/* =====================================
+   PRINT STYLES
+   ===================================== */
+
+@media print {
+  .enterprise-panel {
+    background: white !important;
+    border-color: black !important;
+    box-shadow: none !important;
+  }
+  
+  .enterprise-button-primary,
+  .enterprise-button-secondary {
+    background: white !important;
+    color: black !important;
+    border-color: black !important;
+  }
+}

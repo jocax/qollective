@@ -1,0 +1,51 @@
+# ABOUTME: Tauri V2 desktop client for holodeck interface - consumes holodeck-coordinator via MCP
+# ABOUTME: Enterprise Star Trek TNG themed UI with React frontend for holodeck experiences
+
+[package]
+name = "holodeck-desktop"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tauri V2 desktop client for Star Trek holodeck experiences"
+
+[dependencies]
+# Shared types
+shared-types = { path = "../../shared-types" }
+
+# Core async and serialization
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# Tauri desktop app
+tauri = { workspace = true, features = [] }
+tauri-plugin-shell = "2.0"
+
+# Crypto provider for TLS
+rustls = { version = "0.23", features = ["ring"] }
+
+# MCP client for coordinator communication
+rmcp.workspace = true
+
+# Qollective transport client for MCP integration
+qollective = { path = "../../../.." }
+
+# HTTP client for REST communication
+reqwest.workspace = true
+
+# WebSocket client for real-time updates
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+
+# Random number generation for retry jitter
+fastrand = "2.0"
+
+[build-dependencies]
+tauri-build.workspace = true

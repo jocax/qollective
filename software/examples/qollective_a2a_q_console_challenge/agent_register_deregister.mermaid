@@ -1,0 +1,133 @@
+%%{init: {
+  'theme': 'dark',
+  'themeVariables': {
+    'primaryColor': '#82ca9d',
+    'primaryTextColor': '#ffffff',
+    'primaryBorderColor': '#82ca9d',
+    'lineColor': '#8dd3c7',
+    'secondaryColor': '#006100',
+    'tertiaryColor': '#333333',
+    'background': '#1a1a1a',
+    'mainBkg': '#1a1a1a',
+    'secondBkg': '#2d2d2d',
+    'tertiaryBkg': '#404040'
+  }
+}}%%
+
+sequenceDiagram
+    participant LogAgent as 📱 Log Agent<br/>(Client)
+    participant A2AClient as 🔗 A2A Client<br/>(qollective-a2a-client)
+    participant NATS as ⚡ NATS Server<br/>(localhost:4443/TLS)
+    participant Enterprise as 🏢 Enterprise Server<br/>(A2A Server)
+    participant Registry as 📋 Agent Registry<br/>(In-Memory)
+    participant RegHandler as 🎯 Registration Handler
+    participant HealthMon as 💗 Health Monitor
+
+    %% Agent Registration Flow
+    rect rgb(26, 26, 26)
+        note over LogAgent, HealthMon: 🔄 Agent Registration Process
+        
+        LogAgent->>LogAgent: Initialize Log Agent<br/>📝 Name: "log-agent"<br/>🆔 ID: UUID
+        LogAgent->>A2AClient: create_a2a_client(config)<br/>🔧 NATS URLs: ["nats://localhost:4443"]<br/>🔒 TLS: enabled
+        
+        A2AClient->>NATS: Connect to NATS<br/>📡 Subject: "qollective.a2a.v1.register"<br/>🔐 Auth: TLS Client Cert
+        NATS-->>A2AClient: ✅ Connection Established
+        
+        LogAgent->>LogAgent: Prepare AgentRegistration<br/>📋 Capabilities: ["log_processing", "file_analysis"]<br/>💾 Metadata: version, build_info
+        
+        LogAgent->>A2AClient: register_agent(agent_info, metadata)
+        
+        A2AClient->>A2AClient: 📦 Create AgentRegistration envelope<br/>🏷️ Meta: request_id, timestamp
+        
+        A2AClient->>NATS: publish(subjects::AGENT_REGISTRATION,<br/>AgentRegistration)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.register"<br/>💌 Payload: AgentRegistration<br/>⏱️ Timeout: 30s
+        
+        NATS->>Enterprise: Forward registration message
+        Enterprise->>RegHandler: delegate_to_handler(AgentRegistration)
+        
+        RegHandler->>RegHandler: 🔍 Validate agent info<br/>✓ Name not empty<br/>✓ Capabilities < max limit<br/>✓ At least one capability
+        
+        RegHandler->>Registry: register_agent(agent_info, metadata)
+        Registry->>Registry: 💾 Store agent in memory<br/>🔍 Index by ID and capabilities<br/>📊 Update statistics
+        Registry-->>RegHandler: ✅ Registration successful
+        
+        RegHandler->>A2AClient: announce_agent(agent_info)
+        A2AClient->>NATS: publish(subjects::AGENT_REGISTRY_ANNOUNCE,<br/>AgentInfo)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.registry.announce"<br/>📢 Broadcast: Agent available
+        
+        RegHandler->>A2AClient: publish_registry_event_to_subject(<br/>"agent_registered", agent_id)
+        A2AClient->>NATS: publish(subjects::AGENT_REGISTRY_EVENTS,<br/>RegistryEvent)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.registry.events"<br/>🎉 Event: agent_registered
+        
+        RegHandler-->>Enterprise: ✅ RegistrationResponse(success: true)
+        Enterprise->>NATS: reply(RegistrationResponse)
+        NATS->>A2AClient: receive_response()
+        A2AClient-->>LogAgent: ✅ Registration completed
+        
+        LogAgent->>LogAgent: 📝 Log registration success<br/>🔍 Debug: agent details, capabilities<br/>📊 NATS subjects used
+    end
+
+    %% Health Monitoring
+    rect rgb(26, 26, 26)
+        note over LogAgent, HealthMon: 💗 Health Monitoring & Heartbeat
+        
+        loop Every 30 seconds
+            LogAgent->>A2AClient: send_heartbeat(agent_id)
+            A2AClient->>NATS: publish(subjects::AGENT_HEARTBEAT,<br/>Heartbeat)
+            note right of NATS: 📍 Subject: "qollective.a2a.v1.heartbeat"<br/>💓 Status: Healthy<br/>⏰ Timestamp: now()
+            
+            NATS->>Enterprise: Forward heartbeat
+            Enterprise->>HealthMon: update_health(agent_id, status)
+            HealthMon->>Registry: update_agent_health(agent_id, Healthy)
+            Registry-->>HealthMon: ✅ Health updated
+        end
+    end
+
+    %% Agent Deregistration Flow
+    rect rgb(26, 26, 26)
+        note over LogAgent, HealthMon: 🔄 Agent Deregistration Process
+        
+        LogAgent->>LogAgent: 🛑 Shutdown signal received<br/>🧹 Cleanup resources
+        
+        LogAgent->>A2AClient: deregister_agent(agent_id)
+        
+        A2AClient->>A2AClient: 📦 Create DeregistrationRequest<br/>🆔 Agent ID<br/>📝 Reason: "Graceful shutdown"
+        
+        A2AClient->>NATS: publish(subjects::AGENT_DEREGISTRATION,<br/>DeregistrationRequest)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.deregister"<br/>💌 Payload: DeregistrationRequest<br/>📝 Reason: shutdown
+        
+        NATS->>Enterprise: Forward deregistration
+        Enterprise->>RegHandler: handle_deregistration(request)
+        
+        RegHandler->>Registry: get_agent_by_id(agent_id)
+        Registry-->>RegHandler: 📋 AgentInfo (if exists)
+        
+        RegHandler->>Registry: deregister_agent(agent_id)
+        Registry->>Registry: 🗑️ Remove from memory<br/>🔍 Remove from indices<br/>📊 Update statistics
+        Registry-->>RegHandler: ✅ Deregistration successful
+        
+        RegHandler->>A2AClient: deregister_agent(agent_id)
+        A2AClient->>NATS: publish(subjects::AGENT_REGISTRY_ANNOUNCE,<br/>DeregistrationEvent)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.registry.announce"<br/>📢 Broadcast: Agent unavailable
+        
+        RegHandler->>A2AClient: publish_registry_event_to_subject(<br/>"agent_deregistered", agent_id)
+        A2AClient->>NATS: publish(subjects::AGENT_REGISTRY_EVENTS,<br/>RegistryEvent)
+        note right of NATS: 📍 Subject: "qollective.a2a.v1.registry.events"<br/>👋 Event: agent_deregistered
+        
+        RegHandler-->>Enterprise: ✅ Deregistration completed
+        Enterprise->>NATS: reply(success)
+        NATS->>A2AClient: receive_confirmation()
+        A2AClient-->>LogAgent: ✅ Deregistration completed
+        
+        LogAgent->>LogAgent: 📝 Log deregistration success<br/>🛑 Shutdown gracefully
+    end
+
+    %% NATS Configuration Details
+    rect rgb(26, 26, 26)
+        note over NATS: 🔧 NATS Configuration Details<br/>🌐 URLs: ["nats://localhost:4443"]<br/>🔒 TLS: enabled (mTLS)<br/>📜 CA: tests/certs/ca.pem<br/>🔑 Cert: tests/certs/client-cert.pem<br/>🗝️ Key: tests/certs/client-key.pem<br/>⏱️ Connection Timeout: 5s<br/>🔄 Reconnect Timeout: 2s<br/>🔁 Max Reconnects: 5<br/>📨 Max Pending: 512<br/>⏲️ Request Timeout: 30s
+    end
+
+    %% Subject Mapping
+    rect rgb(26, 26, 26)
+        note over LogAgent, HealthMon: 📍 NATS Subject Mapping<br/>🔗 Registration: "qollective.a2a.v1.register"<br/>❌ Deregistration: "qollective.a2a.v1.deregister"<br/>💓 Heartbeat: "qollective.a2a.v1.heartbeat"<br/>🔍 Discovery: "qollective.a2a.v1.discover"<br/>🎯 Capabilities: "qollective.a2a.v1.capabilities"<br/>💗 Health: "qollective.a2a.v1.health"<br/>📢 Announce: "qollective.a2a.v1.registry.announce"<br/>🎉 Events: "qollective.a2a.v1.registry.events"
+    end

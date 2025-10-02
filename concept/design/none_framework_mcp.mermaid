@@ -1,0 +1,63 @@
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor': '#bb86fc', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#bb86fc', 'lineColor': '#bb86fc', 'secondaryColor': '#03dac6', 'tertiaryColor': '#cf6679', 'background': '#121212', 'mainBkg': '#1e1e1e', 'secondBkg': '#2d2d2d', 'textColor': '#ffffff'}}}%%
+sequenceDiagram
+    participant U as User
+    participant MC as MCP Client<br/>(Claude Desktop, Cursor)
+    participant MS as MCP Server<br/>(Tool Provider)
+    participant T as External Tools<br/>(APIs, Databases)
+
+    Note over U,T: MCP Protocol Flow with JSON-RPC 2.0
+
+%% Initialization
+    U->>MC: Start application
+    Note over MC: MCP Client starts and connects to servers
+    MC->>MS: STDIO/HTTP connection
+    MC->>MS: JSON-RPC Initialize
+    Note over MC,MS: {"jsonrpc":"2.0","id":1,"method":"initialize",<br/>"params":{"protocolVersion":"2024-11-05","capabilities":{"sampling":{}}}}
+    MS-->>MC: JSON-RPC Response
+    Note over MS,MC: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05",<br/>"capabilities":{"tools":{},"resources":{}}}}
+    MC->>MS: JSON-RPC Notification
+    Note over MC,MS: {"jsonrpc":"2.0","method":"notifications/initialized"}
+
+%% Tool Discovery
+    U->>MC: "What tools are available?"
+    Note over MC: Client discovers available tools
+    MC->>MS: JSON-RPC Request
+    Note over MC,MS: {"jsonrpc":"2.0","id":2,"method":"tools/list"}
+    MS-->>MC: JSON-RPC Response
+    Note over MS,MC: {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"search_web",<br/>"description":"Search the web","inputSchema":{...}}]}}
+    MC-->>U: "Available: web search, file access, calendar, etc."
+
+%% Tool Execution Request
+    U->>MC: "Search for Tokyo weather"
+    Note over MC: LLM analyzes request and decides to use search_web tool
+
+    MC->>MS: JSON-RPC Tool Call
+    Note over MC,MS: {"jsonrpc":"2.0","id":3,"method":"tools/call",<br/>"params":{"name":"search_web","arguments":{"query":"Tokyo weather"}}}
+
+    MS->>T: Execute search API
+    T-->>MS: Search results
+    MS-->>MC: JSON-RPC Response
+    Note over MS,MC: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text",<br/>"text":"Tokyo: 22°C, partly cloudy"}]}}
+
+    Note over MC: LLM processes tool result and generates response
+    MC-->>U: "Tokyo weather is 22°C, partly cloudy"
+
+%% Resource Access
+    U->>MC: "Show me my calendar"
+    Note over MC: Client checks available resources
+    MC->>MS: JSON-RPC Request
+    Note over MC,MS: {"jsonrpc":"2.0","id":4,"method":"resources/list"}
+    MS-->>MC: JSON-RPC Response
+    Note over MS,MC: {"jsonrpc":"2.0","id":4,"result":{"resources":[{"uri":"calendar://today",<br/>"name":"Today's Calendar"}]}}
+
+    MC->>MS: JSON-RPC Request
+    Note over MC,MS: {"jsonrpc":"2.0","id":5,"method":"resources/read",<br/>"params":{"uri":"calendar://today"}}
+
+    Note over MS: MCP Server fetches actual calendar data
+    MS->>T: Google Calendar API call<br/>GET /calendar/v3/calendars/primary/events
+    T-->>MS: Calendar events JSON data
+    Note over T,MS: {"items":[{"summary":"Team meeting","start":{"dateTime":"2025-01-15T09:00:00"}},<br/>{"summary":"Client call","start":{"dateTime":"2025-01-15T11:00:00"}}]}
+
+    MS-->>MC: JSON-RPC Response
+    Note over MS,MC: {"jsonrpc":"2.0","id":5,"result":{"contents":[{"type":"text",<br/>"text":"9:00 AM - Team meeting\n11:00 AM - Client call"}]}}
+    MC-->>U: "Your calendar: Team meeting at 9 AM, Client call at 11 AM"

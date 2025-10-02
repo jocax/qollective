@@ -1,0 +1,69 @@
+# ABOUTME: WASM client crate for space exploration demo
+# ABOUTME: Browser-compatible WASM client using qollective::WasmClient for real framework integration
+
+[package]
+name = "space-wasm-client"
+version.workspace = true
+edition.workspace = true
+description = "WASM client for space exploration demo using Qollective Framework"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# qollective = { path = "../../../../", default-features = true }
+space-shared = { path = "../space-shared" }
+
+# WASM-specific dependencies
+wasm-bindgen = "0.2.95"
+wasm-bindgen-futures = "0.4.45"
+js-sys = "0.3.72"
+web-sys = { version = "0.3.72", features = [
+  "console",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "HtmlInputElement",
+  "HtmlTextAreaElement",
+  "HtmlButtonElement",
+  "Window",
+  "Location",
+  "Storage",
+  "Event",
+  "EventTarget",
+  "MessageEvent",
+  "WebSocket",
+  "BinaryType",
+  "Blob",
+  "FileReader",
+  "Response",
+  "Request",
+  "RequestInit",
+  "RequestMode",
+  "Headers",
+  "AbortController",
+  "AbortSignal",
+] }
+console_error_panic_hook = "0.1"
+wee_alloc = "0.4"
+
+# Common dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+
+# WASM-specific features for serde
+serde-wasm-bindgen = "0.6"
+
+[dependencies.getrandom]
+version = "0.2"
+features = ["js"]
+
+# Optimize for size in release builds
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+[profile.release.package."*"]
+opt-level = "s"

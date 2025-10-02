@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Qollective Framework - WASM Envelope Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0d1421 0%, #1a2332 100%);
+            color: #e0e6f1;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(0, 100, 200, 0.1);
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.3);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            color: #64b5f6;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            color: #b0bec5;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #4caf50;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+
+        .left-panel {
+            width: 40%;
+            background: rgba(30, 45, 65, 0.8);
+            border-right: 1px solid rgba(100, 150, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tab-nav {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(100, 150, 255, 0.3);
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 12px 8px;
+            background: none;
+            border: none;
+            color: #b0bec5;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-button:hover {
+            background: rgba(100, 150, 255, 0.1);
+            color: #e0e6f1;
+        }
+
+        .tab-button.active {
+            background: rgba(100, 150, 255, 0.2);
+            color: #64b5f6;
+            border-bottom: 2px solid #64b5f6;
+        }
+
+        .tab-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .tab-pane {
+            display: none;
+            height: 100%;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        .instructions {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .instructions h3 {
+            color: #81c784;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+            color: #c8e6c9;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b0bec5;
+            font-size: 0.9em;
+        }
+
+        .control-group input,
+        .control-group select,
+        .control-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #e0e6f1;
+            font-size: 0.9em;
+        }
+
+        .control-group textarea {
+            resize: vertical;
+            min-height: 70px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #1976d2, #42a5f5);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            background: linear-gradient(45deg, #1565c0, #2196f3);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .right-panel {
+            width: 60%;
+            background: rgba(20, 30, 45, 0.9);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .envelope-header {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.3);
+        }
+
+        .envelope-header h2 {
+            color: #ff9800;
+            margin-bottom: 5px;
+            font-size: 1.2em;
+        }
+
+        .envelope-header p {
+            color: #b0bec5;
+            font-size: 0.9em;
+        }
+
+        .envelope-display {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .envelope-entry {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(100, 150, 255, 0.2);
+            border-radius: 5px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .envelope-entry-header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .envelope-entry-header .type {
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .envelope-entry-header .request {
+            color: #ff9800;
+        }
+
+        .envelope-entry-header .response {
+            color: #4caf50;
+        }
+
+        .envelope-entry-header .timestamp {
+            color: #b0bec5;
+            font-size: 0.8em;
+        }
+
+        .envelope-json {
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #e0e6f1;
+        }
+
+        .json-key {
+            color: #64b5f6;
+        }
+
+        .json-string {
+            color: #81c784;
+        }
+
+        .json-number {
+            color: #ffb74d;
+        }
+
+        .json-boolean {
+            color: #f48fb1;
+        }
+
+        .json-null {
+            color: #90a4ae;
+        }
+
+        .clear-log {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: #ff8a80;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.3s ease;
+        }
+
+        .clear-log:hover {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        .no-envelopes {
+            text-align: center;
+            color: #b0bec5;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 150, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 150, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🚀 Qollective Framework - WASM Envelope Demo</h1>
+            <p><span class="status-indicator"></span><span id="connection-status">Initializing Mission Control...</span></p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="tab-nav">
+                    <button class="tab-button active" onclick="switchTab('missions')">🚀 Missions</button>
+                    <button class="tab-button" onclick="switchTab('tools')">🔧 Tools</button>
+                    <button class="tab-button" onclick="switchTab('control')">📊 Control</button>
+                    <button class="tab-button" onclick="switchTab('analytics')">🌌 Analytics</button>
+                </div>
+
+                <div class="tab-content">
+                    <div id="missions-tab" class="tab-pane active">
+                        <div class="instructions">
+                            <h3>🛸 Mission Management</h3>
+                            <ol>
+                                <li>Click "Get Missions" to fetch mission data from REST server</li>
+                                <li>Watch the envelope structure in the right panel</li>
+                                <li>Notice the qollective meta data and data payload</li>
+                                <li>Try different mission IDs to see envelope patterns</li>
+                            </ol>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="mission-id">Mission ID (optional):</label>
+                            <input type="text" id="mission-id" placeholder="e.g., mission-001">
+                        </div>
+
+                        <button class="btn" onclick="getMissions()">Get Missions</button>
+                        <button class="btn" onclick="getMissionData()">Get Mission Data (Real API)</button>
+                    </div>
+
+                    <div id="tools-tab" class="tab-pane">
+                        <div class="instructions">
+                            <h3>🔧 Space Tool Execution</h3>
+                            <ol>
+                                <li>Select a space tool from the dropdown</li>
+                                <li>Enter JSON parameters in the textarea</li>
+                                <li>Click "Execute Tool" to send MCP command</li>
+                                <li>Observe the JSON-RPC 2.0 envelope structure</li>
+                                <li>Notice how qollective wraps the MCP protocol</li>
+                            </ol>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="tool-name">Tool Name:</label>
+                            <select id="tool-name">
+                                <option value="rover_drill">Rover Drill</option>
+                                <option value="rover_photo">Rover Photo</option>
+                                <option value="probe_analyze">Probe Analyze</option>
+                                <option value="orbital_scan">Orbital Scan</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="tool-params">Parameters (JSON):</label>
+                            <textarea id="tool-params" placeholder='{"sector": "alpha-7", "depth": 1000}'></textarea>
+                        </div>
+
+                        <button class="btn" onclick="executeSpaceTool()">Execute Tool</button>
+                        <button class="btn" onclick="getAvailableTools()">Get Available Tools</button>
+                    </div>
+
+                    <div id="control-tab" class="tab-pane">
+                        <div class="instructions">
+                            <h3>📊 Mission Control</h3>
+                            <ol>
+                                <li>Configure MCP WebSocket endpoint</li>
+                                <li>Connect to real-time mission control</li>
+                                <li>Test emergency protocols</li>
+                                <li>Monitor envelope flow for WebSocket communication</li>
+                            </ol>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="mission-endpoint">MCP Endpoint:</label>
+                            <input type="text" id="mission-endpoint" value="ws://127.0.0.1:8445/mcp">
+                        </div>
+
+                        <button class="btn" onclick="connectToMissionControl()">Connect to Mission Control</button>
+                        <button class="btn" onclick="simulateEmergency()">Simulate Emergency</button>
+                        <button class="btn" onclick="getSystemStatus()">Get System Status</button>
+                    </div>
+
+                    <div id="analytics-tab" class="tab-pane">
+                        <div class="instructions">
+                            <h3>🌌 Space Analytics</h3>
+                            <ol>
+                                <li>Generate various types of space data</li>
+                                <li>Execute analytical tools with different parameters</li>
+                                <li>Observe how different data types are enveloped</li>
+                                <li>Compare envelope structures across operations</li>
+                            </ol>
+                        </div>
+
+                        <button class="btn" onclick="generateSpaceData()">Generate Space Data</button>
+                        <button class="btn" onclick="analyzeStellarData()">Analyze Stellar Data</button>
+                        <button class="btn" onclick="trackAsteroids()">Track Asteroids</button>
+                        <button class="btn" onclick="getSpacecraftTelemetry()">Get Telemetry</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="envelope-header">
+                    <h2>📦 Qollective Envelope Monitor</h2>
+                    <p>Real-time envelope structures showing qollective framework message patterns</p>
+                    <button class="clear-log" onclick="clearEnvelopeLog()">Clear Log</button>
+                </div>
+
+                <div class="envelope-display" id="envelope-display">
+                    <div class="no-envelopes">
+                        <p>🔍 No envelopes yet...</p>
+                        <p>Click any action on the left to see qollective envelope structures</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { SpaceMissionControl } from './pkg/space_wasm_client.js';
+
+        let missionControl = null;
+        let isInitialized = false;
+
+        // Initialize WASM module
+        async function initializeWasm() {
+            try {
+                await init();
+                missionControl = new SpaceMissionControl();
+                await missionControl.initialize();
+                
+                isInitialized = true;
+                updateConnectionStatus('✅ Mission Control Online - WASM Framework Ready');
+                logEnvelope('SYSTEM', 'initialization', {
+                    status: 'success',
+                    message: 'WASM Module initialized successfully',
+                    framework: 'qollective',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                console.error('Failed to initialize WASM:', error);
+                updateConnectionStatus('❌ Mission Control Offline - Initialization Failed');
+                logEnvelope('SYSTEM', 'initialization', {
+                    status: 'error',
+                    message: `Initialization failed: ${error.message}`,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(message) {
+            document.getElementById('connection-status').textContent = message;
+        }
+
+        // Log envelope to the right panel
+        function logEnvelope(type, operation, data) {
+            const display = document.getElementById('envelope-display');
+            const noEnvelopes = display.querySelector('.no-envelopes');
+            if (noEnvelopes) {
+                noEnvelopes.remove();
+            }
+
+            const timestamp = new Date().toLocaleTimeString();
+            const isRequest = type === 'REQUEST' || type === 'SYSTEM';
+            
+            const entry = document.createElement('div');
+            entry.className = 'envelope-entry';
+            entry.innerHTML = `
+                <div class="envelope-entry-header">
+                    <span class="type ${isRequest ? 'request' : 'response'}">${type}: ${operation}</span>
+                    <span class="timestamp">${timestamp}</span>
+                </div>
+                <div class="envelope-json">${syntaxHighlight(JSON.stringify(data, null, 2))}</div>
+            `;
+            
+            display.insertBefore(entry, display.firstChild);
+            
+            // Keep only last 20 entries
+            const entries = display.querySelectorAll('.envelope-entry');
+            if (entries.length > 20) {
+                entries[entries.length - 1].remove();
+            }
+        }
+
+        // Syntax highlight JSON
+        function syntaxHighlight(json) {
+            return json
+                .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                    let cls = 'json-number';
+                    if (/^"/.test(match)) {
+                        if (/:$/.test(match)) {
+                            cls = 'json-key';
+                        } else {
+                            cls = 'json-string';
+                        }
+                    } else if (/true|false/.test(match)) {
+                        cls = 'json-boolean';
+                    } else if (/null/.test(match)) {
+                        cls = 'json-null';
+                    }
+                    return '<span class="' + cls + '">' + match + '</span>';
+                });
+        }
+
+        // Tab switching
+        window.switchTab = function(tabName) {
+            // Remove active from all tabs
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            // Add active to selected tab
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+        };
+
+        // Clear envelope log
+        window.clearEnvelopeLog = function() {
+            const display = document.getElementById('envelope-display');
+            display.innerHTML = `
+                <div class="no-envelopes">
+                    <p>🔍 No envelopes yet...</p>
+                    <p>Click any action on the left to see qollective envelope structures</p>
+                </div>
+            `;
+        };
+
+        // Mission functions
+        window.getMissions = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'get_missions', {
+                    operation: 'get_missions',
+                    endpoint: 'REST API',
+                    method: 'GET',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.get_missions();
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'get_missions', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'get_missions', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.getMissionData = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'get_mission_data', {
+                    operation: 'get_mission_data',
+                    endpoint: 'http://127.0.0.1:8443/missions',
+                    method: 'POST',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.get_mission_data();
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'get_mission_data', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'get_mission_data', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        // Tool functions
+        window.executeSpaceTool = async function() {
+            if (!isInitialized) return;
+
+            const toolName = document.getElementById('tool-name').value;
+            const params = document.getElementById('tool-params').value || '{}';
+
+            try {
+                logEnvelope('REQUEST', 'execute_space_tool', {
+                    operation: 'execute_space_tool',
+                    tool_name: toolName,
+                    parameters: JSON.parse(params),
+                    protocol: 'MCP JSON-RPC 2.0',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.execute_space_tool(toolName, params);
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'execute_space_tool', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'execute_space_tool', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.getAvailableTools = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'get_available_tools', {
+                    operation: 'get_available_tools',
+                    endpoint: 'MCP Server',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = missionControl.get_available_tools();
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'get_available_tools', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'get_available_tools', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        // Control functions
+        window.connectToMissionControl = async function() {
+            if (!isInitialized) return;
+
+            const endpoint = document.getElementById('mission-endpoint').value;
+            
+            try {
+                logEnvelope('REQUEST', 'connect_mission_control', {
+                    operation: 'connect_mission_control',
+                    endpoint: endpoint,
+                    protocol: 'WebSocket',
+                    timestamp: new Date().toISOString()
+                });
+
+                await missionControl.connect_telemetry_stream();
+                
+                logEnvelope('RESPONSE', 'connect_mission_control', {
+                    status: 'success',
+                    message: 'Connected to mission control',
+                    endpoint: endpoint,
+                    timestamp: new Date().toISOString()
+                });
+                
+                updateConnectionStatus('✅ Mission Control Online - Connected');
+            } catch (error) {
+                logEnvelope('RESPONSE', 'connect_mission_control', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+                
+                updateConnectionStatus('❌ Mission Control Offline - Connection Failed');
+            }
+        };
+
+        window.simulateEmergency = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'emergency_protocol', {
+                    operation: 'emergency_protocol',
+                    level: 'high',
+                    type: 'system_failure',
+                    protocol: 'MCP JSON-RPC 2.0',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.execute_space_tool('emergency_protocol', '{"level": "high", "type": "system_failure"}');
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'emergency_protocol', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'emergency_protocol', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.getSystemStatus = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'get_system_status', {
+                    operation: 'get_system_status',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = missionControl.get_mission_control_status();
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'get_system_status', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'get_system_status', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        // Analytics functions
+        window.generateSpaceData = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'generate_space_data', {
+                    operation: 'generate_space_data',
+                    data_type: 'demo_missions',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.get_missions();
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'generate_space_data', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'generate_space_data', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.analyzeStellarData = async function() {
+            if (!isInitialized) return;
+
+            try {
+                const params = '{"region": "orion_arm", "wavelength": "infrared"}';
+                
+                logEnvelope('REQUEST', 'analyze_stellar_data', {
+                    operation: 'analyze_stellar_data',
+                    parameters: JSON.parse(params),
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.execute_space_tool('analyze_stellar_data', params);
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'analyze_stellar_data', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'analyze_stellar_data', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.trackAsteroids = async function() {
+            if (!isInitialized) return;
+
+            try {
+                const params = '{"sector": "belt_prime", "size_threshold": 100}';
+                
+                logEnvelope('REQUEST', 'track_asteroids', {
+                    operation: 'track_asteroids',
+                    parameters: JSON.parse(params),
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.execute_space_tool('track_asteroids', params);
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'track_asteroids', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'track_asteroids', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        window.getSpacecraftTelemetry = async function() {
+            if (!isInitialized) return;
+
+            try {
+                logEnvelope('REQUEST', 'get_spacecraft_telemetry', {
+                    operation: 'get_spacecraft_telemetry',
+                    spacecraft_id: 'demo-spacecraft-1',
+                    timestamp: new Date().toISOString()
+                });
+
+                const result = await missionControl.get_spacecraft_telemetry('demo-spacecraft-1');
+                const data = JSON.parse(result);
+                
+                logEnvelope('RESPONSE', 'get_spacecraft_telemetry', data);
+            } catch (error) {
+                logEnvelope('RESPONSE', 'get_spacecraft_telemetry', {
+                    status: 'error',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        };
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeWasm();
+        });
+    </script>
+</body>
+</html>

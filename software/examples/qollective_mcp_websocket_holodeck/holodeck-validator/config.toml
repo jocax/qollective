@@ -1,0 +1,34 @@
+# Holodeck Validator Service Configuration
+
+[service]
+name = "holodeck-validator"
+version = "0.1.0"
+
+[llm]
+# Primary LLM provider: "openai", "ollama", "anthropic", "perplexity"
+provider = "ollama"
+
+# Model name to use
+model = "gemma2:2b"
+
+# Optional: Custom API key (overrides .env file)
+# api_key = "your_custom_key_here"
+
+# Optional: Custom endpoint URL (for Ollama or custom providers)
+# endpoint_url = "http://localhost:11434"
+
+# Response parameters optimized for validation accuracy
+temperature = 0.4  # Lower temperature for more consistent validation results
+max_tokens = 3000  # Larger token limit for detailed analysis
+timeout_seconds = 45  # Longer timeout for comprehensive validation
+
+[validator]
+# Validation performance and quality settings
+response_time_target_ms = 400  # Target response time as per PRP requirements
+min_quality_score = 75
+min_canon_compliance = 80
+min_character_authenticity = 80
+
+# Analysis depth and strictness
+structure_analysis_depth = "standard"  # "basic", "standard", "comprehensive"
+canon_strictness_default = "standard"  # "lenient", "standard", "strict"

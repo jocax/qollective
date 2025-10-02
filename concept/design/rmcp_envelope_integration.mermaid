@@ -1,0 +1,92 @@
+%%{init: {
+  'theme': 'dark',
+  'themeVariables': {
+    'primaryColor': '#ff6b6b',
+    'primaryTextColor': '#ffffff',
+    'primaryBorderColor': '#ff9999',
+    'lineColor': '#00d4ff',
+    'secondaryColor': '#4ecdc4',
+    'tertiaryColor': '#45b7d1',
+    'background': '#1a1a1a',
+    'mainBkg': '#2d3748',
+    'secondBkg': '#4a5568',
+    'tertiaryBkg': '#2a4365'
+  }
+}}%%
+
+sequenceDiagram
+    participant Client as 🖥️ Qollective Client
+    participant REST as 🌐 REST Qollective Service
+    participant HTC as 🚀 HybridTransportClient
+    participant EA as 🔄 Envelope Adapter<br/>(QollectiveEnvelopeTransport)
+    participant RMCP_A as 🔧 RMCP Service A<br/>(Standard MCP Server)
+    participant QS as 📦 Qollective Service B<br/>(Envelope-aware)
+
+    Note over Client,QS: RMCP Integration in Qollective Envelope Architecture
+    
+    rect rgb(45, 55, 72)
+        Note over Client,REST: 1. Initial Qollective REST Request
+        Client->>+REST: POST /api/process<br/>Envelope{meta: {trace_id, tenant}, data: ProcessRequest}
+        Note right of REST: REST service receives<br/>Qollective envelope with<br/>full metadata context
+    end
+
+    rect rgb(42, 67, 101)
+        Note over REST,HTC: 2. Service Processing & Transport Selection
+        REST->>+HTC: route_mcp_request(endpoint_a, envelope)
+        Note right of HTC: HybridTransportClient<br/>analyzes target capabilities<br/>and selects optimal transport
+        
+        HTC->>HTC: detect_capabilities(endpoint_a)
+        Note right of HTC: Detects: Standard MCP Server<br/>Protocol: JSON-RPC<br/>Envelopes: Not Supported
+        
+        HTC->>+EA: send_to_standard_mcp(envelope)
+        Note right of EA: Envelope Adapter extracts<br/>CallToolRequest from envelope<br/>preserves metadata in context
+    end
+
+    rect rgb(106, 27, 27)
+        Note over EA,RMCP_A: 3A. Standard MCP Server Call (via RMCP)
+        EA->>EA: extract_mcp_request(envelope)
+        Note right of EA: Envelope → CallToolRequest<br/>Metadata → RequestContext<br/>Pure RMCP protocol
+        
+        EA->>+RMCP_A: RMCP JSON-RPC 2.0<br/>{"method": "tools/call", "params": {...}}
+        Note right of RMCP_A: Standard MCP server<br/>processes request using<br/>pure RMCP protocol
+        
+        RMCP_A-->>-EA: RMCP JSON-RPC Response<br/>{"result": {"content": [...], "is_error": false}}
+        
+        EA->>EA: wrap_in_envelope(response, preserved_metadata)
+        Note right of EA: CallToolResult → Envelope<br/>Restore trace_id, tenant, etc.<br/>Maintain context chain
+        
+        EA-->>-HTC: Envelope{meta: {trace_id, tenant}, data: CallToolResult}
+    end
+
+    rect rgb(42, 67, 101)
+        Note over HTC,QS: 3B. Envelope-aware Qollective Service Call
+        HTC->>HTC: detect_capabilities(endpoint_b)
+        Note right of HTC: Detects: Qollective Service<br/>Protocol: REST/gRPC/NATS<br/>Envelopes: Fully Supported
+        
+        HTC->>+QS: Direct Envelope Transport<br/>Envelope{meta: {trace_id, tenant}, data: CallToolRequest}
+        Note right of QS: Native envelope support<br/>Full metadata preservation<br/>No adaptation needed
+        
+        QS->>QS: process_with_full_context(envelope)
+        Note right of QS: Access to trace_id, tenant<br/>spans, authentication context<br/>Complete Qollective features
+        
+        QS-->>-HTC: Envelope{meta: {enriched_metadata}, data: CallToolResult}
+    end
+
+    rect rgb(45, 55, 72)
+        Note over REST,Client: 4. Response Aggregation & Return
+        HTC-->>-REST: [Envelope{CallToolResult_A}, Envelope{CallToolResult_B}]
+        
+        REST->>REST: aggregate_responses(results)
+        Note right of REST: Combine results from both<br/>Standard MCP server (via RMCP)<br/>and Qollective service
+        
+        REST-->>-Client: Envelope{meta: {complete_trace}, data: AggregatedResponse}
+        Note left of Client: Client receives unified<br/>response with full trace<br/>from both call paths
+    end
+
+    rect rgb(74, 85, 104)
+        Note over Client,QS: Key Architecture Benefits
+        Note over EA: 🔄 Envelope Adapter enables<br/>seamless RMCP integration<br/>with metadata preservation
+        Note over RMCP_A: 🔧 Standard MCP servers work<br/>without modification using<br/>pure RMCP protocol
+        Note over QS: 📦 Qollective services get<br/>full envelope benefits<br/>native integration
+        Note over HTC: 🚀 HybridTransportClient provides<br/>intelligent routing based<br/>on server capabilities
+    end

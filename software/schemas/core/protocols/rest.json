@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-extension-protocol-rest.json",
+  "title": "Qollective REST Protocol Extension Schema",
+  "description": "Validation schema for REST protocol metadata extension containing HTTP method, URI path, and optional request context for unified routing support",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "rest",
+      "description": "Protocol type identifier, always 'rest' for REST protocol extensions"
+    },
+    "method": {
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+      "description": "HTTP method used for the request following RFC 7231 standard methods",
+      "examples": ["GET", "POST", "PUT", "DELETE"]
+    },
+    "uri_path": {
+      "type": "string",
+      "pattern": "^/",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "URI path component starting with forward slash, excluding query parameters",
+      "examples": ["/api/v1/users", "/health", "/api/v2/orders/12345"]
+    },
+    "query_params": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional query parameters as key-value string pairs from request URL",
+      "examples": [
+        {"page": "1", "limit": "20"},
+        {"include": "profile", "sort": "name"}
+      ]
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional subset of HTTP headers relevant to application logic, not including Qollective envelope headers",
+      "examples": [
+        {"content-type": "application/json", "accept": "application/json"},
+        {"authorization": "Bearer token123", "user-agent": "QollectiveClient/1.0"}
+      ]
+    }
+  },
+  "required": ["type", "method", "uri_path"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "type": "rest",
+      "method": "GET",
+      "uri_path": "/api/v1/users"
+    },
+    {
+      "type": "rest", 
+      "method": "POST",
+      "uri_path": "/api/v1/users",
+      "query_params": {
+        "include": "profile"
+      },
+      "headers": {
+        "content-type": "application/json"
+      }
+    }
+  ]
+}

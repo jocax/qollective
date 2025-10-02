@@ -1,0 +1,13 @@
+# ABOUTME: Shared data structures and types for space exploration demo
+# ABOUTME: Contains mission data, spacecraft, telemetry types used by both servers and WASM client
+
+[package]
+name = "space-shared"
+version.workspace = true
+edition.workspace = true
+description = "Shared space exploration data structures for Qollective Framework demo"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

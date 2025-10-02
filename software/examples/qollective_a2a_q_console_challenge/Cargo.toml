@@ -1,0 +1,124 @@
+[package]
+name = "qollective_a2a_nats_enterprise"
+version = "0.1.0"
+edition = "2021"
+default-run = "enterprise"
+
+# Enterprise bridge command (main dispatcher)
+[[bin]]
+name = "enterprise"
+path = "src/main.rs"
+
+# Individual crew member agents
+[[bin]]
+name = "picard"
+path = "src/bin/picard.rs"
+
+[[bin]]
+name = "scotty"
+path = "src/bin/scotty.rs"
+
+[[bin]]
+name = "data"
+path = "src/bin/data.rs"
+
+[[bin]]
+name = "spock"
+path = "src/bin/spock.rs"
+
+# Support systems
+[[bin]]
+name = "q_console"
+path = "src/bin/q_console.rs"
+
+[[bin]]
+name = "log_agent"
+path = "src/bin/log_agent.rs"
+
+# TLS Analysis and Diagnostics
+[[bin]]
+name = "tls_analysis"
+path = "src/bin/tls_analysis.rs"
+
+# TLS Connection Testing
+[[bin]]
+name = "test_nats_tls_connection"
+path = "src/bin/test_nats_tls_connection.rs"
+
+# Enterprise TLS Integration Testing
+[[bin]]
+name = "test_enterprise_tls"
+path = "src/bin/test_enterprise_tls.rs"
+
+# TLS Resilience Testing
+[[bin]]
+name = "test_tls_resilience"
+path = "src/bin/test_tls_resilience.rs"
+
+# TLS Error Handling Testing
+[[bin]]
+name = "test_tls_error_handling"
+path = "src/bin/test_tls_error_handling.rs"
+
+# Secure Agent Communication Testing
+[[bin]]
+name = "test_secure_agent_communication"
+path = "src/bin/test_secure_agent_communication.rs"
+
+# Secure Registry Operations Testing
+[[bin]]
+name = "test_secure_registry_operations"
+path = "src/bin/test_secure_registry_operations.rs"
+
+# Q Console and Log Agent TLS Communication Testing
+[[bin]]
+name = "test_q_console_log_agent_tls"
+path = "src/bin/test_q_console_log_agent_tls.rs"
+
+# Final All Agents TLS Communication Testing
+[[bin]]
+name = "test_all_agents_tls_final"
+path = "src/bin/test_all_agents_tls_final.rs"
+
+# Comprehensive TLS Integration Test Suite
+[[bin]]
+name = "comprehensive_tls_integration_test"
+path = "src/bin/comprehensive_tls_integration_test.rs"
+
+# OpenAPI Integration Demo
+[[bin]]
+name = "openapi_demo"
+path = "src/bin/openapi_demo.rs"
+required-features = ["openapi"]
+
+[dependencies]
+qollective = { path = "../..", default-features = false, features = ["nats", "a2a", "config", "tracing", "tls", "tenant-extraction", "security", "rest-client", "rest-server", "openapi"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.9"
+uuid = { version = "1.0", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+# OpenAPI dependencies for openapi_demo
+utoipa = { version = "5.4", features = ["chrono", "uuid"], optional = true }
+colored = "3.0.0"
+tracing = "0.1"
+futures = "0.3"
+rustls = "0.23"
+rustls-pemfile = "2.2"
+async-nats = "0.42"
+env_logger = "0.11"
+tempfile = "3.0"
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio-test = "0.4"
+
+[features]
+default = ["nats-client", "nats-server", "a2a-client", "a2a-server"]
+nats-client = ["qollective/nats-client"]
+nats-server = ["qollective/nats-server"]
+a2a-client = ["qollective/a2a-client"]
+a2a-server = ["qollective/a2a-server"]
+openapi = ["qollective/openapi", "utoipa"]

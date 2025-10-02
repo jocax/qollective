@@ -1,0 +1,73 @@
+%%{init: {'theme':'dark', 'themeVariables': { 'primaryColor': '#bb86fc', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#bb86fc', 'lineColor': '#bb86fc', 'secondaryColor': '#03dac6', 'tertiaryColor': '#cf6679', 'background': '#121212', 'mainBkg': '#1e1e1e', 'secondBkg': '#2d2d2d', 'textColor': '#ffffff'}}}%%
+sequenceDiagram
+    participant U as User
+    participant A2AC as A2A Client
+    participant A2AS as A2A Server<br/>(Hybrid Agent)
+    participant MCPC as MCP Client<br/>(Internal)
+    participant MCPS as MCP Server<br/>(Tools)
+    participant LLM as LLM Engine
+    participant T as External Tools
+
+    Note over U,T: Mixed A2A + MCP Architecture with JSON-RPC 2.0
+
+%% A2A Agent Discovery
+    U->>A2AC: Find travel planning agents
+    A2AC->>A2AS: HTTP GET /.well-known/agent.json
+    A2AS-->>A2AC: Agent Card (includes MCP tool capabilities)
+    A2AC-->>U: Available: Travel Agent with flight/hotel tools
+
+%% A2A Task Initiation
+    U->>A2AC: "Plan 3-day Tokyo trip with flights and hotels"
+    A2AC->>A2AS: HTTP POST /rpc (A2A JSON-RPC)
+    Note over A2AC,A2AS: {"jsonrpc":"2.0","id":1,"method":"tasks/send",<br/>"params":{"message":{"role":"user","parts":[{"type":"text",<br/>"text":"Plan 3-day Tokyo trip"}]}}}
+
+%% Internal MCP Initialization
+    A2AS->>MCPC: Initialize MCP connection
+    MCPC->>MCPS: JSON-RPC Initialize (MCP)
+    Note over MCPC,MCPS: {"jsonrpc":"2.0","id":1,"method":"initialize",<br/>"params":{"protocolVersion":"2024-11-05"}}
+    MCPS-->>MCPC: MCP capabilities
+    MCPC-->>A2AS: Available tools: flight_search, hotel_search, weather
+
+%% A2A Task Processing with MCP Tools
+    A2AS->>LLM: Analyze request + available MCP tools
+    LLM-->>A2AS: Plan: 1) Search flights, 2) Find hotels, 3) Check weather
+
+%% Tool Execution via MCP
+    loop Tool Execution
+        A2AS->>MCPC: Execute next tool
+        MCPC->>MCPS: JSON-RPC Tool Call (MCP)
+        Note over MCPC,MCPS: {"jsonrpc":"2.0","id":2,"method":"tools/call",<br/>"params":{"name":"flight_search","arguments":{"destination":"Tokyo"}}}
+        MCPS->>T: API call to flight service
+        T-->>MCPS: Flight data
+        MCPS-->>MCPC: JSON-RPC Response (MCP)
+        Note over MCPS,MCPC: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text",<br/>"text":"Found 5 flights, cheapest: $650"}]}}
+        MCPC-->>A2AS: Tool result
+
+    %% Progress Update via A2A
+        A2AS->>A2AC: SSE Progress Update (A2A JSON-RPC)
+        Note over A2AS,A2AC: data: {"jsonrpc":"2.0","method":"tasks/update",<br/>"params":{"id":"task-123","progress":"Searched flights"}}
+        A2AC->>U: Progress: Found flights
+    end
+
+%% Final Response Assembly
+    A2AS->>LLM: Combine all tool results
+    LLM-->>A2AS: Complete itinerary
+    A2AS->>A2AC: SSE Final Result (A2A JSON-RPC)
+    Note over A2AS,A2AC: data: {"jsonrpc":"2.0","method":"tasks/complete",<br/>"params":{"id":"task-123","artifacts":[{"name":"itinerary",<br/>"content":"Day 1: Flight ANA123 ($650)..."}]}}
+    A2AC->>U: Complete Tokyo trip plan with flights and hotels
+
+%% Additional A2A Operations
+    U->>A2AC: "Modify hotel preference"
+    A2AC->>A2AS: HTTP POST /rpc (A2A JSON-RPC)
+    Note over A2AC,A2AS: {"jsonrpc":"2.0","id":3,"method":"tasks/send",<br/>"params":{"id":"task-123","message":{"role":"user",<br/>"parts":[{"type":"text","text":"Change to luxury hotels"}]}}}
+
+    A2AS->>MCPC: Re-execute hotel search
+    MCPC->>MCPS: JSON-RPC Tool Call (MCP)
+    MCPS->>T: Search luxury hotels
+    T-->>MCPS: Luxury hotel data
+    MCPS-->>MCPC: Updated results
+    MCPC-->>A2AS: New hotel options
+
+    A2AS-->>A2AC: A2A JSON-RPC Response
+    Note over A2AS,A2AC: {"jsonrpc":"2.0","id":3,"result":{"task":{"id":"task-123",<br/>"status":"updated","artifacts":[{"name":"updated_itinerary"}]}}}
+    A2AC-->>U: Updated plan with luxury hotels

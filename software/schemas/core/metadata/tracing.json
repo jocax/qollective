@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.qollective.io/core/meta-tracing.json",
+  "title": "Qollective Tracing Meta Schema",
+  "description": "Validation schema for distributed tracing meta following OpenTelemetry standards",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "description": "Distributed trace identifier (128-bit hex or UUID format)",
+      "examples": ["550e8400e29b41d4a716446655440000", "550e8400-e29b-41d4-a716-446655440000"]
+    },
+    "span_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{16}$",
+      "description": "Current span identifier (64-bit hex)",
+      "examples": ["b7ad6b7169203331", "00f067aa0ba902b7"]
+    },
+    "parent_span_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{16}$",
+      "description": "Parent span identifier (64-bit hex)",
+      "examples": ["00f067aa0ba902b7", "b7ad6b7169203331"]
+    },
+    "baggage": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 1000
+      },
+      "description": "Tracing baggage key-value pairs for cross-service context",
+      "maxProperties": 20,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+        "maxLength": 50
+      },
+      "examples": [{"user-type": "premium", "correlation-id": "abc123"}]
+    },
+    "sampling_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Trace sampling rate (0.0 to 1.0)",
+      "examples": [1.0, 0.1, 0.01]
+    },
+    "sampled": {
+      "type": "boolean",
+      "description": "Whether this trace is being sampled",
+      "examples": [true, false]
+    },
+    "trace_state": {
+      "type": "string",
+      "description": "W3C trace state header value for vendor-specific tracing data",
+      "maxLength": 512,
+      "pattern": "^[a-z0-9_-]+(=[a-zA-Z0-9+/]*(=|==)?)(,[a-z0-9_-]+(=[a-zA-Z0-9+/]*(=|==)?))*$",
+      "examples": ["vendor1=value1,vendor2=value2"]
+    },
+    "operation_name": {
+      "type": "string",
+      "description": "Name of the operation being traced",
+      "maxLength": 200,
+      "pattern": "^[a-zA-Z0-9_./:-]+$",
+      "examples": ["GET /api/users", "user.create", "database.query"]
+    },
+    "span_kind": {
+      "type": "string",
+      "enum": ["server", "client", "producer", "consumer", "internal"],
+      "description": "OpenTelemetry span kind",
+      "examples": ["server", "client"]
+    },
+    "span_status": {
+      "type": "object",
+      "description": "Span status information",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["ok", "error", "timeout"],
+          "description": "Span status code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Optional status message",
+          "maxLength": 500
+        }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "object",
+      "description": "Span tags/attributes for detailed tracing",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string", "maxLength": 1000},
+          {"type": "number", "minimum": -1.7976931348623157e+308, "maximum": 1.7976931348623157e+308},
+          {"type": "boolean"}
+        ]
+      },
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z][a-zA-Z0-9._-]*$",
+        "maxLength": 100
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Span events representing points in time during span execution",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the event occurred"
+          },
+          "name": {
+            "type": "string",
+            "description": "Event name",
+            "maxLength": 200,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9._-]*$"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "Event attributes",
+            "additionalProperties": {
+              "oneOf": [
+                {"type": "string", "maxLength": 1000},
+                {"type": "number"},
+                {"type": "boolean"}
+              ]
+            },
+            "maxProperties": 20
+          }
+        },
+        "required": ["timestamp", "name"],
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "links": {
+      "type": "array",
+      "description": "Links to other spans",
+      "items": {
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$",
+            "description": "Trace ID of the linked span"
+          },
+          "span_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{16}$",
+            "description": "Span ID of the linked span"
+          },
+          "trace_state": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Trace state of the linked span"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "Link attributes",
+            "additionalProperties": {
+              "oneOf": [
+                {"type": "string", "maxLength": 1000},
+                {"type": "number"},
+                {"type": "boolean"}
+              ]
+            },
+            "maxProperties": 10
+          }
+        },
+        "required": ["trace_id", "span_id"],
+        "additionalProperties": false
+      },
+      "maxItems": 10
+    },
+    "resource": {
+      "type": "object",
+      "description": "Resource information describing the entity producing telemetry",
+      "properties": {
+        "service_name": {
+          "type": "string",
+          "description": "Service name",
+          "pattern": "^[a-z][a-z0-9_-]*[a-z0-9]$",
+          "maxLength": 100
+        },
+        "service_version": {
+          "type": "string",
+          "description": "Service version",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "maxLength": 50
+        },
+        "service_instance_id": {
+          "type": "string",
+          "description": "Service instance identifier",
+          "maxLength": 100
+        },
+        "deployment_environment": {
+          "type": "string",
+          "enum": ["development", "staging", "testing", "production", "canary"],
+          "description": "Deployment environment"
+        }
+      },
+      "additionalProperties": false
+    },
+    "instrumentation": {
+      "type": "object",
+      "description": "Information about the instrumentation library",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Instrumentation library name",
+          "maxLength": 100
+        },
+        "version": {
+          "type": "string",
+          "description": "Instrumentation library version",
+          "maxLength": 50
+        },
+        "schema_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL for telemetry data"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "anyOf": [
+    {"required": ["trace_id"]},
+    {"required": ["span_id"]},
+    {"required": ["operation_name"]}
+  ],
+  "examples": [
+    {
+      "trace_id": "550e8400e29b41d4a716446655440000",
+      "span_id": "b7ad6b7169203331",
+      "parent_span_id": "00f067aa0ba902b7",
+      "operation_name": "GET /api/users/12345",
+      "span_kind": "server",
+      "sampled": true,
+      "sampling_rate": 0.1,
+      "span_status": {
+        "code": "ok"
+      },
+      "tags": {
+        "http.method": "GET",
+        "http.url": "/api/users/12345",
+        "http.status_code": 200,
+        "user.id": "12345"
+      },
+      "baggage": {
+        "user-type": "premium",
+        "correlation-id": "abc123"
+      },
+      "resource": {
+        "service_name": "user-service",
+        "service_version": "1.2.3",
+        "deployment_environment": "production"
+      }
+    },
+    {
+      "trace_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "span_id": "a1b2c3d4e5f67890",
+      "operation_name": "database.query",
+      "span_kind": "internal",
+      "sampled": false,
+      "span_status": {
+        "code": "error",
+        "message": "Connection timeout"
+      },
+      "events": [
+        {
+          "timestamp": "2024-06-06T14:23:15.456Z",
+          "name": "query.start",
+          "attributes": {
+            "db.statement": "SELECT * FROM users WHERE id = ?",
+            "db.connection_id": "conn_123"
+          }
+        }
+      ]
+    }
+  ]
+}
