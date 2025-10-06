@@ -1,15 +1,31 @@
-# Story Generator Configuration
+# Story Generator MCP Server Configuration
 
 [nats]
-url = "nats://localhost:5222"
-subject = "mcp.story.generate"
-queue_group = "story-generator"
-
-[nats.tls]
-ca_cert = "./certs/ca.pem"
-client_cert = "./certs/client-cert.pem"
-client_key = "./certs/client-key.pem"
+# NATS connection settings (loaded from environment/constants)
+# url = "nats://localhost:5222"  # From NATS_URL
+# tls_ca_cert = "./certs/ca.pem"  # From NATS_TLS_CA_CERT
+# tls_client_cert = "./certs/client-cert.pem"  # From NATS_TLS_CLIENT_CERT
+# tls_client_key = "./certs/client-key.pem"  # From NATS_TLS_CLIENT_KEY
 
 [server]
+# MCP server configuration
 name = "story-generator"
 version = "0.1.0"
+description = "TaleTrail Story Generator MCP Server - Creates DAG structures and generates narrative content"
+
+# NATS subjects (from shared-types constants)
+# subject = "mcp.story.generate"
+# queue_group = "story-generator"
+
+[generation]
+# Content generation settings (loaded from environment/constants)
+# timeout_secs = 60  # From GENERATION_TIMEOUT_SECS
+# batch_size_min = 4  # From BATCH_SIZE_MIN
+# batch_size_max = 6  # From BATCH_SIZE_MAX
+# target_words_per_node = 400  # From TARGET_WORDS_PER_NODE
+
+[llm]
+# LM Studio connection (loaded from environment/constants)
+# url = "http://127.0.0.1:1234"  # From LM_STUDIO_URL
+# model_name = "local-model"  # From LM_STUDIO_MODEL_NAME
+# max_tokens_per_node = 600  # From MAX_TOKENS_PER_NODE
