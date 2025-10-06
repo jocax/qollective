@@ -25,11 +25,11 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            nats_url: NATS_DEFAULT_URL.to_string(),
-            lm_studio_url: LM_STUDIO_DEFAULT_URL.to_string(),
-            nats_tls_ca_cert: NATS_TLS_CA_CERT_PATH.to_string(),
-            nats_tls_client_cert: NATS_TLS_CLIENT_CERT_PATH.to_string(),
-            nats_tls_client_key: NATS_TLS_CLIENT_KEY_PATH.to_string(),
+            nats_url: NATS_URL.clone(),
+            lm_studio_url: LM_STUDIO_URL.clone(),
+            nats_tls_ca_cert: NATS_TLS_CA_CERT_PATH.clone(),
+            nats_tls_client_cert: NATS_TLS_CLIENT_CERT_PATH.clone(),
+            nats_tls_client_key: NATS_TLS_CLIENT_KEY_PATH.clone(),
         }
     }
 }

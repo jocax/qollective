@@ -26,7 +26,7 @@ pub fn get_gateway_config() -> Result<RestServerConfig> {
             port: std::env::var("GATEWAY_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(GATEWAY_DEFAULT_PORT),
+                .unwrap_or(*GATEWAY_PORT),
             ..Default::default()
         },
         tls: Some(tls_config),  // Enable TLS for HTTPS

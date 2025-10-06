@@ -27,12 +27,12 @@ async fn main() -> Result<()> {
     info!("  NATS TLS Client Key: {}", config.nats_tls_client_key);
     info!("");
     info!("Constants from shared-types:");
-    info!("  Generation timeout: {}s", GENERATION_TIMEOUT_SECS);
-    info!("  Validation timeout: {}s", VALIDATION_TIMEOUT_SECS);
-    info!("  Retry max attempts: {}", RETRY_MAX_ATTEMPTS);
-    info!("  Batch size: {}-{}", BATCH_SIZE_MIN, BATCH_SIZE_MAX);
-    info!("  Concurrent batches: {}", CONCURRENT_BATCHES);
-    info!("  Default node count: {}", DEFAULT_NODE_COUNT);
+    info!("  Generation timeout: {}s", *GENERATION_TIMEOUT_SECS);
+    info!("  Validation timeout: {}s", *VALIDATION_TIMEOUT_SECS);
+    info!("  Retry max attempts: {}", *RETRY_MAX_ATTEMPTS);
+    info!("  Batch size: {}-{}", *BATCH_SIZE_MIN, *BATCH_SIZE_MAX);
+    info!("  Concurrent batches: {}", *CONCURRENT_BATCHES);
+    info!("  Default node count: {}", *DEFAULT_NODE_COUNT);
     info!("  Convergence ratio: {}", CONVERGENCE_POINT_RATIO);
     info!("");
 
