@@ -61,8 +61,8 @@ figment = { version = "0.10", features = ["toml", "env"] }
 # Async trait support
 async-trait = "0.1"
 
-# TLS support
-rustls = "0.23"
+# TLS support (using aws-lc-rs to match Qollective default)
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
 rustls-pemfile = "2.2"
 
 # Environment variables
