@@ -182,18 +182,18 @@ prost-types = { version = "0.14", optional = true }
 futures-util = { version = "0.3", optional = true }
 
 # NATS dependencies
-async-nats = { version = "0.42", optional = true }
+async-nats = { version = "0.44", optional = true }
 
 # WebSocket dependencies
-tokio-tungstenite = { version = "0.27", optional = true, features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.28", optional = true, features = ["rustls-tls-webpki-roots"] }
 url = { version = "2.5", optional = true }
 
 # JSON-RPC dependencies - Enhanced JSON-RPC 2.0 support
-jsonrpsee = { version = "0.25.1", features = ["server", "client", "ws-client", "http-client", "wasm-client", "macros"], optional = true }
+jsonrpsee = { version = "0.26", features = ["server", "client", "ws-client", "http-client", "wasm-client", "macros"], optional = true }
 
 # MCP dependencies - Official rmcp SDK with 0.3.0 features
-rmcp = { version = "0.6.0", features = ["server", "client", "transport-child-process"], optional = true }
-rmcp-macros = { version = "0.6.0", optional = true }
+rmcp = { version = "0.8", features = ["server", "client", "transport-child-process"], optional = true }
+rmcp-macros = { version = "0.8", optional = true }
 
 # A2A dependencies - Standard protocol implementation
 a2a-rs = { version = "0.1.0", features = ["http-client"], optional = true }
@@ -237,8 +237,8 @@ jsonwebtoken = { version = "9.3", default-features = false, optional = true }
 base64 = { version = "0.22", optional = true }
 
 # gRPC health and reflection services
-tonic-health = { version = "0.13", optional = true }
-tonic-reflection = { version = "0.13", optional = true }
+tonic-health = { version = "0.14", optional = true }
+tonic-reflection = { version = "0.14", optional = true }
 tonic-rustls = { version = "0.2", optional = true }
 
 # TLS dependencies
@@ -251,10 +251,10 @@ rand = "0.9"
 
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 [build-dependencies]
-tonic-prost-build = { version = "0.14.1"}
+tonic-prost-build = { version = "0.14"}
 
 [package.metadata.docs.rs]
 all-features = true

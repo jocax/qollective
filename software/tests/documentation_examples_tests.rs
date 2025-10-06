@@ -53,7 +53,6 @@ fn test_comprehensive_metadata_example() {
         auth_method: Some(AuthMethod::Jwt),
         permissions: vec!["READ".to_string(), "WRITE".to_string(), "ADMIN".to_string()],
         roles: vec!["CAPTAIN".to_string(), "STARFLEET_OFFICER".to_string()],
-        tenant_id: Some("enterprise_starfleet".to_string()),
         ip_address: Some("192.168.1.100".to_string()),
         user_agent: Some("Starfleet Command Interface v2.0".to_string()),
         token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(8)),
@@ -272,19 +271,17 @@ fn test_tenant_extraction_example() {
         auth_method: Some(AuthMethod::Jwt),
         permissions: vec!["READ".to_string(), "COMMAND".to_string()],
         roles: vec!["CAPTAIN".to_string()],
-        tenant_id: Some("starfleet_command".to_string()),
         ip_address: Some("10.0.0.1".to_string()),
         user_agent: Some("Starfleet Command Console v1.5".to_string()),
         token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(4)),
     });
-    
+
     let envelope = Envelope::new(meta, "Command authorized".to_string());
-    
+
     // Verify tenant context is preserved
     assert_eq!(envelope.meta.tenant.as_deref(), Some("starfleet_command"));
-    
+
     let security = envelope.meta.security.as_ref().unwrap();
-    assert_eq!(security.tenant_id.as_deref(), Some("starfleet_command"));
     assert_eq!(security.user_id.as_deref(), Some("kirk_001"));
 }
 

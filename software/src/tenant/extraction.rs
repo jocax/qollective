@@ -10,7 +10,6 @@
 
 use super::{ExtractionPriority, JwtParseError, JwtParser};
 use crate::envelope::meta::OnBehalfOfMeta;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
