@@ -1,0 +1,18 @@
+# Constraint Enforcer Configuration
+
+[nats]
+url = "nats://localhost:5222"
+subject = "mcp.constraint.enforce"
+queue_group = "constraint-enforcer"
+
+[nats.tls]
+ca_cert = "./certs/ca.pem"
+client_cert = "./certs/client-cert.pem"
+client_key = "./certs/client-key.pem"
+
+[server]
+name = "constraint-enforcer"
+version = "0.1.0"
+
+[constraints]
+vocabulary_levels = ["basic", "intermediate", "advanced"]

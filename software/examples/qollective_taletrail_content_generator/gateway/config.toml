@@ -1,0 +1,13 @@
+# Gateway Configuration
+
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[nats]
+url = "nats://localhost:5222"
+
+[nats.tls]
+ca_cert = "./certs/ca.pem"
+client_cert = "./certs/client-cert.pem"
+client_key = "./certs/client-key.pem"

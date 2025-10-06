@@ -1,0 +1,69 @@
+[workspace]
+members = [
+    "shared-types",
+    "orchestrator",
+    "story-generator",
+    "quality-control",
+    "constraint-enforcer",
+    "gateway",
+]
+
+resolver = "2"
+
+[workspace.dependencies]
+# Qollective runtime with multi-protocol support
+qollective = { path = "../..", features = ["hybrid-transport", "nats", "rest-server", "mcp-client", "mcp-server", "tenant-extraction", "config", "tracing"] }
+
+# MCP protocol and macros
+rmcp = "0.8.0"
+rmcp-macros = "0.8.0"
+
+# LLM integration
+rig-core = "0.21"
+
+# HTTP server
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+
+# NATS messaging
+async-nats = "0.44"
+
+# Async runtime
+tokio = { version = "1.47", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Identifiers and time
+uuid = { version = "1.17", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Validation and schema
+jsonschema = "0.33"
+schemars = "1.0"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration
+config = "0.15"
+figment = { version = "0.10", features = ["toml", "env"] }
+
+# Async trait support
+async-trait = "0.1"
+
+# TLS support
+rustls = "0.23"
+rustls-pemfile = "2.2"
+
+# Environment variables
+dotenvy = "0.15"

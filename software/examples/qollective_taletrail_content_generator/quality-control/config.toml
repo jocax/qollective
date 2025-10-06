@@ -1,0 +1,18 @@
+# Quality Control Configuration
+
+[nats]
+url = "nats://localhost:5222"
+subject = "mcp.quality.validate"
+queue_group = "quality-control"
+
+[nats.tls]
+ca_cert = "./certs/ca.pem"
+client_cert = "./certs/client-cert.pem"
+client_key = "./certs/client-key.pem"
+
+[server]
+name = "quality-control"
+version = "0.1.0"
+
+[validation]
+min_quality_score = 0.7

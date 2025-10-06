@@ -1,0 +1,34 @@
+services:
+  taletrail-nats:
+    image: nats:2.10-alpine
+    platform: linux/arm64
+    container_name: taletrail-nats
+    ports:
+      - "5222:5222"  # TLS client connections
+      - "9222:8222"  # HTTP monitoring (mapped from internal 8222)
+    volumes:
+      - ./nats-data:/data
+      - ./certs:/certs:ro
+    command: >
+      --js
+      --store_dir=/data
+      --tls
+      --tlscert=/certs/server-cert.pem
+      --tlskey=/certs/server-key.pem
+      --tlscacert=/certs/ca.pem
+      --tlsverify
+      --port=5222
+      --http_port=8222
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - taletrail
+
+networks:
+  taletrail:
+    driver: bridge

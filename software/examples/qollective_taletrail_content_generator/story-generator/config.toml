@@ -1,0 +1,15 @@
+# Story Generator Configuration
+
+[nats]
+url = "nats://localhost:5222"
+subject = "mcp.story.generate"
+queue_group = "story-generator"
+
+[nats.tls]
+ca_cert = "./certs/ca.pem"
+client_cert = "./certs/client-cert.pem"
+client_key = "./certs/client-key.pem"
+
+[server]
+name = "story-generator"
+version = "0.1.0"

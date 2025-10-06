@@ -1,0 +1,29 @@
+### Health Check (Qollective REST Server with TLS - Envelope-wrapped response)
+# Note: HealthCheckRequest is a unit struct, so send null
+# For self-signed certificates, curl equivalent:
+# curl --insecure -X POST https://localhost:8443/health -H "Content-Type: application/json" -d 'null'
+
+POST https://localhost:8443/health
+Content-Type: application/json
+
+null
+
+###
+
+# Expected Response (Envelope-wrapped):
+# {
+#   "meta": {
+#     "timestamp": "2025-10-06T19:15:05.277325Z"
+#   },
+#   "payload": {
+#     "status": "healthy",
+#     "service": "taletrail-gateway",
+#     "version": "0.1.0",
+#     "timestamp": "2025-10-06T19:15:05.277310+00:00"
+#   }
+# }
+#
+# TLS Certificate Info:
+# - CN: taletrail-gateway
+# - SANs: localhost, taletrail-gateway, 127.0.0.1, 0.0.0.0
+# - Per-service architecture: gateway-cert.pem (not shared with NATS)

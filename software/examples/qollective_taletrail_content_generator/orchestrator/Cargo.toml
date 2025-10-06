@@ -1,0 +1,20 @@
+[package]
+name = "orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"
+
+[dependencies]
+shared-types = { path = "../shared-types" }
+qollective = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+dotenvy = { workspace = true }
