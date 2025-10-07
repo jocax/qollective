@@ -1,0 +1,89 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **MCP Processing Flow with Supabase Integration**
+
+actor "Legend-State\nApp" as App #FF6B6B
+participant "Supabase\nDatabase" as Supabase #4ECDC4
+participant "Edge\nFunction" as Edge #95E1D3
+participant "REST\nService" as REST #F38181
+participant "MCP Client\nService" as MCPClient #AA96DA
+participant "MCP\nServers" as MCPServers #8FD9A8
+
+== Initial Request ==
+App -> Supabase: Subscribe to job updates\n(Realtime)
+activate Supabase
+App -> Edge: POST request with query
+activate Edge
+
+Edge -> Supabase: Create job record\n(status: 'pending')
+Supabase --> Edge: Return job with ID
+
+Edge -> REST: POST /process\n{jobId, query, supabaseCredentials}
+activate REST
+
+REST -> MCPClient: POST /process\n{jobId, query, callbackUrl}
+activate MCPClient
+
+MCPClient --> REST: 202 Accepted
+deactivate MCPClient
+
+REST --> Edge: Return {jobId, status: 'processing'}
+deactivate REST
+
+Edge --> App: Return {jobId}
+deactivate Edge
+
+== Asynchronous Processing ==
+activate MCPClient
+MCPClient -> MCPClient: Process async
+
+MCPClient -> MCPServers: Query Server 1
+activate MCPServers
+MCPServers --> MCPClient: Result 1
+
+MCPClient -> MCPServers: Query Server 2
+MCPServers --> MCPClient: Result 2
+
+MCPClient -> MCPServers: Query Server N
+MCPServers --> MCPClient: Result N
+deactivate MCPServers
+
+MCPClient -> MCPClient: Aggregate results
+
+== Result Callback ==
+MCPClient -> REST: POST /callback/{jobId}\n{results, status: 'completed'}
+activate REST
+
+REST -> Supabase: UPDATE jobs\nSET status='completed',\nresult={aggregated_data}
+
+Supabase --> REST: Update confirmed
+REST --> MCPClient: 200 OK
+deactivate REST
+deactivate MCPClient
+
+== Realtime Update ==
+Supabase -> App: Push update via Realtime\n{jobId, status: 'completed', result}
+deactivate Supabase
+
+App -> App: Update Legend-State\nwith results
+
+@enduml

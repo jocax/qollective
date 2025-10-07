@@ -37,41 +37,45 @@ async fn main() -> Result<()> {
     info!("");
 
     // Load full gateway configuration (HTTP + NATS)
-    let full_config = GatewayConfig::load()?;
+    let config = GatewayConfig::load()?;
+
+    info!("Configuration:");
+    info!("  Gateway: {} v{}", config.gateway.name, config.gateway.version);
+    info!("");
 
     info!("HTTP Server Configuration:");
-    info!("  Bind Address: {}", full_config.http.bind_address);
-    info!("  Port: {} (HTTPS/TLS)", full_config.http.port);
-    info!("  TLS Enabled: {}", full_config.http.tls.enabled);
-    info!("  TLS Certificate: {}", full_config.http.tls.cert);
-    info!("  TLS Key: {}", full_config.http.tls.key);
+    info!("  Bind Address: {}", config.http.bind_address);
+    info!("  Port: {} (HTTPS/TLS)", config.http.port);
+    info!("  TLS Enabled: {}", config.http.tls.enabled);
+    info!("  TLS Certificate: {}", config.http.tls.cert);
+    info!("  TLS Key: {}", config.http.tls.key);
     info!("");
 
     info!("NATS Client Configuration:");
-    info!("  NATS URL: {}", full_config.nats.url);
-    info!("  Orchestrator Subject: {}", full_config.nats.subjects.orchestrator);
-    info!("  TLS CA Cert: {}", full_config.nats.tls.ca_cert);
-    info!("  TLS Client Cert: {}", full_config.nats.tls.client_cert);
-    info!("  TLS Client Key: {}", full_config.nats.tls.client_key);
+    info!("  NATS URL: {}", config.nats.url);
+    info!("  Orchestrator Subject: {}", config.nats.subjects.orchestrator);
+    info!("  TLS CA Cert: {}", config.nats.tls.ca_cert);
+    info!("  TLS Client Cert: {}", config.nats.tls.client_cert);
+    info!("  TLS Client Key: {}", config.nats.tls.client_key);
     info!("");
 
     // Connect to NATS with TLS
     info!("Connecting to NATS with TLS...");
     let _nats_client = connect_nats_with_tls(
-        &full_config.nats.url,
-        &full_config.nats.tls.ca_cert,
-        &full_config.nats.tls.client_cert,
-        &full_config.nats.tls.client_key,
+        &config.nats.url,
+        &config.nats.tls.ca_cert,
+        &config.nats.tls.client_cert,
+        &config.nats.tls.client_key,
     ).await?;
     info!("✅ Connected to NATS with TLS");
     info!("");
 
     // Create REST server with TLS configuration
-    let config = get_gateway_config()?;
+    let rest_config = get_gateway_config(&config)?;
     info!("Starting HTTP/TLS server...");
     info!("");
 
-    let mut server = RestServer::new(config).await
+    let mut server = RestServer::new(rest_config).await
         .map_err(|e| TaleTrailError::QollectiveError(format!("Failed to create REST server: {}", e)))?;
 
     info!("📝 Registering REST endpoints...");
@@ -93,7 +97,7 @@ async fn main() -> Result<()> {
              protocol,
              server.config().base.bind_address,
              server.config().base.port);
-    println!("║  🔒 NATS Client: {} (TLS enabled)                  ║", full_config.nats.url);
+    println!("║  🔒 NATS Client: {} (TLS enabled)                  ║", config.nats.url);
     println!("║                                                                              ║");
     println!("║  Available Endpoints:                                                        ║");
     println!("║    POST /health            - Health check (envelope-wrapped)                 ║");

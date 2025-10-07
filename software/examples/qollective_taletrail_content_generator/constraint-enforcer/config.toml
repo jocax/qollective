@@ -1,18 +1,27 @@
-# Constraint Enforcer Configuration
+# Constraint Enforcer MCP Server Configuration
+# All values can be overridden by environment variables with CONSTRAINT_ENFORCER_ prefix
+# Example: CONSTRAINT_ENFORCER_NATS_URL=nats://production:4222
+
+[service]
+name = "constraint-enforcer"
+version = "0.1.0"
+description = "TaleTrail Constraint Enforcer MCP Server - Enforces vocabulary and theme constraints"
 
 [nats]
 url = "nats://localhost:5222"
 subject = "mcp.constraint.enforce"
 queue_group = "constraint-enforcer"
 
-[nats.tls]
-ca_cert = "./certs/ca.pem"
-client_cert = "./certs/client-cert.pem"
-client_key = "./certs/client-key.pem"
+[nats.auth]
+# NKey authentication (replaces mTLS client certificates)
+nkey_file = "./nkeys/constraint-enforcer.nk"
 
-[server]
-name = "constraint-enforcer"
-version = "0.1.0"
+[nats.tls]
+# TLS for encryption (no client cert needed with NKey auth)
+ca_cert = "./certs/ca.pem"
 
 [constraints]
+vocabulary_check_enabled = true
+theme_consistency_enabled = true
+required_elements_check_enabled = true
 vocabulary_levels = ["basic", "intermediate", "advanced"]

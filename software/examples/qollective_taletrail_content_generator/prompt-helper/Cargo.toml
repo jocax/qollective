@@ -1,21 +1,24 @@
 [package]
-name = "orchestrator"
+name = "prompt-helper"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "orchestrator"
+name = "prompt-helper"
 path = "src/main.rs"
 
 [dependencies]
 shared-types = { path = "../shared-types" }
 qollective = { workspace = true, features = [
-    "mcp-client",  # MCP client to communicate with MCP servers
+    "mcp-server",  # MCP server capabilities
     "nats",        # NATS transport layer
     "tls",         # TLS support for NATS
     "config",      # Configuration support
     "tracing"      # Observability
 ]}
+rmcp = { workspace = true }
+rmcp-macros = { workspace = true }
+async-nats = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -25,3 +28,6 @@ tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
 dotenvy = { workspace = true }
 figment = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+nkeys = "0.4"

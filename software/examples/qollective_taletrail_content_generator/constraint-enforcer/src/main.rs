@@ -11,6 +11,9 @@ use config::ConstraintEnforcerConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize rustls crypto provider
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter("info")
@@ -24,9 +27,13 @@ async fn main() -> Result<()> {
 
     info!("=== Constraint Enforcer MCP Server Starting ===");
     info!("Configuration:");
+    info!("  Service: {} v{}", config.service.name, config.service.version);
     info!("  NATS URL: {}", config.nats.url);
     info!("  NATS Subject: {}", config.nats.subject);
     info!("  NATS Queue Group: {}", config.nats.queue_group);
+    info!("  Vocabulary Check: {}", config.constraints.vocabulary_check_enabled);
+    info!("  Theme Consistency: {}", config.constraints.theme_consistency_enabled);
+    info!("  Required Elements: {}", config.constraints.required_elements_check_enabled);
     info!("  Vocabulary Levels: {:?}", config.constraints.vocabulary_levels);
     info!("");
 

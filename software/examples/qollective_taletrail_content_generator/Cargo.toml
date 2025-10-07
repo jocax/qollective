@@ -5,6 +5,7 @@ members = [
     "story-generator",
     "quality-control",
     "constraint-enforcer",
+    "prompt-helper",
     "gateway",
 ]
 
@@ -12,6 +13,7 @@ resolver = "2"
 
 [workspace.dependencies]
 # Qollective runtime with multi-protocol support
+# Note: Individual services can override with specific features, but library has internal dependencies
 qollective = { path = "../..", features = ["hybrid-transport", "nats", "rest-server", "mcp-client", "mcp-server", "tenant-extraction", "config", "tracing"] }
 
 # MCP protocol and macros
@@ -20,11 +22,6 @@ rmcp-macros = "0.8.0"
 
 # LLM integration
 rig-core = "0.21"
-
-# HTTP server
-axum = "0.8"
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors"] }
 
 # NATS messaging
 async-nats = "0.44"

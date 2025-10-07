@@ -1,8 +1,24 @@
-### Health Check (Qollective REST Server with TLS - Envelope-wrapped response)
+###
+# TaleTrail Content Generator - Gateway Health Check Tests
+#
+# Tests the TaleTrail Gateway health endpoint using Qollective's envelope-first architecture.
+# The gateway uses HTTPS with TLS on port 8443.
+#
+# Expected Response:
+# - Envelope-wrapped JSON response with metadata (timestamp)
+# - Status information for gateway health (status, service, version)
+#
+# TLS Certificate Info:
+# - CN: taletrail-gateway
+# - SANs: localhost, taletrail-gateway, 127.0.0.1, 0.0.0.0
+# - Per-service architecture: gateway-cert.pem (not shared with NATS)
+###
+
+### Health Check - POST Request
+# Tests the gateway health endpoint with envelope-first architecture
 # Note: HealthCheckRequest is a unit struct, so send null
 # For self-signed certificates, curl equivalent:
 # curl --insecure -X POST https://localhost:8443/health -H "Content-Type: application/json" -d 'null'
-
 POST https://localhost:8443/health
 Content-Type: application/json
 
@@ -22,8 +38,3 @@ null
 #     "timestamp": "2025-10-06T19:15:05.277310+00:00"
 #   }
 # }
-#
-# TLS Certificate Info:
-# - CN: taletrail-gateway
-# - SANs: localhost, taletrail-gateway, 127.0.0.1, 0.0.0.0
-# - Per-service architecture: gateway-cert.pem (not shared with NATS)

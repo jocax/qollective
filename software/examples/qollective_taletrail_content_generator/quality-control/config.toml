@@ -1,18 +1,26 @@
-# Quality Control Configuration
+# Quality Control MCP Server Configuration
+# All values can be overridden by environment variables with QUALITY_CONTROL_ prefix
+# Example: QUALITY_CONTROL_NATS_URL=nats://production:4222
+
+[service]
+name = "quality-control"
+version = "0.1.0"
+description = "TaleTrail Quality Control MCP Server - Validates content for age-appropriateness and safety"
 
 [nats]
 url = "nats://localhost:5222"
 subject = "mcp.quality.validate"
 queue_group = "quality-control"
 
-[nats.tls]
-ca_cert = "./certs/ca.pem"
-client_cert = "./certs/client-cert.pem"
-client_key = "./certs/client-key.pem"
+[nats.auth]
+# NKey authentication (replaces mTLS client certificates)
+nkey_file = "./nkeys/quality-control.nk"
 
-[server]
-name = "quality-control"
-version = "0.1.0"
+[nats.tls]
+# TLS for encryption (no client cert needed with NKey auth)
+ca_cert = "./certs/ca.pem"
 
 [validation]
 min_quality_score = 0.7
+timeout_secs = 10
+max_negotiation_rounds = 3

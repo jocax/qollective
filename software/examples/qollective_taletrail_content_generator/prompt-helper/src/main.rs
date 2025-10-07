@@ -1,4 +1,4 @@
-//! Quality Control MCP Server (Stub with TLS NATS Connection)
+//! Prompt Helper MCP Server (Stub with TLS NATS Connection)
 
 use shared_types::*;
 use tracing::info;
@@ -9,7 +9,7 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 mod config;
 mod server;
 
-use config::QualityControlConfig;
+use config::PromptHelperConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,14 +22,15 @@ async fn main() -> Result<()> {
         .init();
 
     // Load configuration
-    let config = QualityControlConfig::load()?;
+    let config = PromptHelperConfig::load()?;
 
-    info!("=== Quality Control MCP Server Starting ===");
+    info!("=== Prompt Helper MCP Server Starting ===");
     info!("Configuration:");
     info!("  NATS URL: {}", config.nats.url);
     info!("  NATS Subject: {}", config.nats.subject);
     info!("  NATS Queue Group: {}", config.nats.queue_group);
-    info!("  Min Quality Score: {}", config.validation.min_quality_score);
+    info!("  Supported Languages: {:?}", config.prompt.supported_languages);
+    info!("  Default Model: {}", config.prompt.models.default_model);
     info!("");
 
     // Build TLS configuration
@@ -37,10 +38,10 @@ async fn main() -> Result<()> {
     let tls_config = build_tls_config(&config)?;
     info!("✅ TLS configuration built successfully");
 
-    // Connect to NATS with TLS
+    // Connect to NATS with mTLS
     info!("Connecting to NATS with TLS...");
     let _nats_client = async_nats::ConnectOptions::new()
-        .name("quality-control-mcp-server")
+        .name("prompt-helper-mcp-server")
         .tls_client_config(tls_config)
         .connect(&config.nats.url)
         .await
@@ -48,7 +49,7 @@ async fn main() -> Result<()> {
 
     info!("✅ Connected to NATS with TLS");
     info!("");
-    info!("Quality Control MCP Server ready on {} (TLS enabled)", config.nats.subject);
+    info!("Prompt Helper MCP Server ready on {} (TLS enabled)", config.nats.subject);
     info!("Listening for shutdown signal (Ctrl+C)...");
 
     // Wait for shutdown signal
@@ -61,7 +62,7 @@ async fn main() -> Result<()> {
 }
 
 /// Build TLS configuration from certificate files
-fn build_tls_config(config: &QualityControlConfig) -> Result<rustls::ClientConfig> {
+fn build_tls_config(config: &PromptHelperConfig) -> Result<rustls::ClientConfig> {
     // Load CA certificate
     let ca_cert_file = fs::File::open(&config.nats.tls.ca_cert)
         .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to open CA cert at {}: {}", config.nats.tls.ca_cert, e)))?;

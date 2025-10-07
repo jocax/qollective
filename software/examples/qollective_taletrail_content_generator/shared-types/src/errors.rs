@@ -17,6 +17,10 @@ pub enum TaleTrailError {
     #[error("NATS TLS error: {0}")]
     NatsTlsError(String),
 
+    /// NATS NKey authentication errors
+    #[error("NATS NKey error: {0}")]
+    NatsNKeyError(String),
+
     /// Qollective framework errors
     #[error("Qollective error: {0}")]
     QollectiveError(String),

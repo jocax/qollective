@@ -1,0 +1,37 @@
+# Prompt Helper MCP Server Configuration
+# All values can be overridden by environment variables with PROMPT_HELPER_ prefix
+# Example: PROMPT_HELPER_NATS_URL=nats://production:4222
+
+[service]
+name = "prompt-helper"
+version = "0.1.0"
+description = "TaleTrail Prompt Helper MCP Server - Validates and optimizes prompts for story generation"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "mcp.prompt.helper"
+queue_group = "prompt-helper"
+
+[nats.auth]
+# NKey authentication (replaces mTLS client certificates)
+nkey_file = "./nkeys/prompt-helper.nk"
+
+[nats.tls]
+# TLS for encryption (no client cert needed with NKey auth)
+ca_cert = "./certs/ca.pem"
+
+[prompt]
+# Supported languages for prompt validation
+supported_languages = ["english", "german"]
+default_language = "english"
+
+# LLM model configurations
+[prompt.models]
+default_model = "llama-3.2-3b-instruct"
+temperature = 0.7
+max_tokens = 4096
+
+# Educational objectives configuration
+[prompt.educational]
+min_educational_score = 0.6
+required_elements = ["learning_objective", "age_appropriate", "safe_content"]

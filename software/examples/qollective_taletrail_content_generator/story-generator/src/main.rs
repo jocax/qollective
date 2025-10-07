@@ -7,7 +7,6 @@ use async_nats::ConnectOptions;
 use futures::StreamExt;
 use rustls::ClientConfig;
 use rustls_pemfile::{certs, pkcs8_private_keys};
-use shared_types::constants::*;
 use std::fs::File;
 use std::io::BufReader;
 use tokio::signal;
@@ -32,22 +31,22 @@ async fn main() -> Result<()> {
     info!("🚀 TaleTrail Story Generator MCP Server starting...");
 
     // Load configuration
-    let _config = StoryGeneratorConfig::load()?;
+    let config = StoryGeneratorConfig::load()?;
     info!("📋 Configuration loaded successfully");
-    info!("   NATS URL: {}", *NATS_URL);
-    info!("   Queue Group: {}", STORY_GENERATOR_GROUP);
-    info!("   Subject: {}", MCP_STORY_GENERATE);
+    info!("   NATS URL: {}", config.nats.url);
+    info!("   Queue Group: {}", config.nats.queue_group);
+    info!("   Subject: {}", config.nats.subject);
 
     // Build TLS configuration
     info!("🔐 Configuring TLS...");
-    let tls_config = build_tls_config()?;
+    let tls_config = build_tls_config(&config)?;
 
     // Connect to NATS with TLS
-    info!("🔌 Connecting to NATS at {} (TLS enabled)...", *NATS_URL);
+    info!("🔌 Connecting to NATS at {} (TLS enabled)...", config.nats.url);
     let client = ConnectOptions::new()
         .name("story-generator-mcp-server")
         .tls_client_config(tls_config)
-        .connect(&*NATS_URL)
+        .connect(&config.nats.url)
         .await
         .map_err(|e| {
             error!("Failed to connect to NATS: {}", e);
@@ -58,15 +57,14 @@ async fn main() -> Result<()> {
 
     // Subscribe to story generation subject with queue group
     let subscriber = client
-        .queue_subscribe(MCP_STORY_GENERATE.to_string(), STORY_GENERATOR_GROUP.to_string())
+        .queue_subscribe(config.nats.subject.clone(), config.nats.queue_group.clone())
         .await
         .map_err(|e| {
-            error!("Failed to subscribe to {}: {}", MCP_STORY_GENERATE, e);
+            error!("Failed to subscribe to subject: {}", e);
             anyhow::anyhow!("NATS subscription failed: {}", e)
         })?;
 
-    info!("👂 Story Generator MCP Server ready on {} (TLS enabled)", MCP_STORY_GENERATE);
-    info!("📦 Queue Group: {}", STORY_GENERATOR_GROUP);
+    info!("👂 Story Generator MCP Server ready on {} (TLS enabled)", config.nats.subject);
     info!("⏳ Waiting for generation requests...");
 
     // Set up graceful shutdown
@@ -92,64 +90,65 @@ async fn main() -> Result<()> {
 }
 
 /// Build TLS configuration from certificate files
-fn build_tls_config() -> Result<ClientConfig> {
+fn build_tls_config(config: &StoryGeneratorConfig) -> Result<ClientConfig> {
     // Load CA certificate
-    let ca_cert_file = File::open(&*NATS_TLS_CA_CERT_PATH)
-        .map_err(|e| anyhow::anyhow!("Failed to open CA cert at {}: {}", *NATS_TLS_CA_CERT_PATH, e))?;
+    let ca_cert_file = File::open(&config.nats.tls.ca_cert)
+        .map_err(|e| anyhow::anyhow!("Failed to open CA cert at {}: {}", config.nats.tls.ca_cert, e))?;
     let mut ca_cert_reader = BufReader::new(ca_cert_file);
     let ca_certs = certs(&mut ca_cert_reader)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| anyhow::anyhow!("Failed to parse CA cert: {}", e))?;
 
     // Load client certificate
-    let client_cert_file = File::open(&*NATS_TLS_CLIENT_CERT_PATH)
-        .map_err(|e| anyhow::anyhow!("Failed to open client cert at {}: {}", *NATS_TLS_CLIENT_CERT_PATH, e))?;
+    let client_cert_file = File::open(&config.nats.tls.client_cert)
+        .map_err(|e| anyhow::anyhow!("Failed to open client cert at {}: {}", config.nats.tls.client_cert, e))?;
     let mut client_cert_reader = BufReader::new(client_cert_file);
     let client_certs = certs(&mut client_cert_reader)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| anyhow::anyhow!("Failed to parse client cert: {}", e))?;
 
     // Load client private key
-    let client_key_file = File::open(&*NATS_TLS_CLIENT_KEY_PATH)
-        .map_err(|e| anyhow::anyhow!("Failed to open client key at {}: {}", *NATS_TLS_CLIENT_KEY_PATH, e))?;
+    let client_key_file = File::open(&config.nats.tls.client_key)
+        .map_err(|e| anyhow::anyhow!("Failed to open client key at {}: {}", config.nats.tls.client_key, e))?;
     let mut client_key_reader = BufReader::new(client_key_file);
     let mut client_keys = pkcs8_private_keys(&mut client_key_reader)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| anyhow::anyhow!("Failed to parse client key: {}", e))?;
 
-    if client_keys.is_empty() {
-        return Err(anyhow::anyhow!("No private keys found in {}", *NATS_TLS_CLIENT_KEY_PATH));
-    }
+    let client_key = client_keys.pop()
+        .ok_or_else(|| anyhow::anyhow!("No private key found in client key file"))?;
 
     // Build root certificate store
     let mut root_cert_store = rustls::RootCertStore::empty();
-    for cert in ca_certs {
-        root_cert_store
-            .add(cert)
-            .map_err(|e| anyhow::anyhow!("Failed to add CA cert to root store: {}", e))?;
+    for ca_cert in ca_certs {
+        root_cert_store.add(ca_cert)
+            .map_err(|e| anyhow::anyhow!("Failed to add CA cert: {:?}", e))?;
     }
 
-    // Build TLS configuration
-    let config = ClientConfig::builder()
+    // Build TLS configuration with client authentication
+    let tls_config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
-        .with_client_auth_cert(client_certs, client_keys.remove(0).into())
+        .with_client_auth_cert(client_certs, client_key.into())
         .map_err(|e| anyhow::anyhow!("Failed to build TLS config: {}", e))?;
 
-    Ok(config)
+    Ok(tls_config)
 }
 
 /// Listen for incoming NATS messages (stub implementation)
-async fn listen_for_messages(mut subscriber: async_nats::Subscriber) {
+async fn listen_for_messages(mut subscriber: async_nats::Subscriber) -> Result<()> {
     while let Some(message) = subscriber.next().await {
-        info!("📨 Received message on {}", message.subject);
-        info!("   Payload size: {} bytes", message.payload.len());
-        
-        // Stub: Just acknowledge receipt for now
-        // TODO: Implement actual MCP request handling in Phase 2
-        
-        if let Some(reply) = message.reply {
-            info!("   Reply subject: {}", reply);
-            // We would send response here in actual implementation
+        info!("📨 Received message on subject: {}", message.subject);
+
+        // Stub: Just log the message for Phase 0
+        if let Ok(payload) = std::str::from_utf8(&message.payload) {
+            info!("   Payload preview: {}...", &payload[..payload.len().min(100)]);
         }
+
+        // In Phase 2, this will:
+        // 1. Deserialize MCP request from envelope
+        // 2. Execute appropriate tool (generate_structure, generate_nodes, validate_paths)
+        // 3. Serialize response and send back
     }
+
+    Ok(())
 }

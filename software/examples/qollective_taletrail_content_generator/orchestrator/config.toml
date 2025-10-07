@@ -1,0 +1,46 @@
+# Orchestrator MCP Client Configuration
+# All values can be overridden by environment variables with ORCHESTRATOR_ prefix
+# Example: ORCHESTRATOR_NATS_URL=nats://production:4222
+
+[service]
+name = "orchestrator"
+version = "0.1.0"
+description = "TaleTrail Orchestrator - Coordinates multi-phase pipeline with negotiation protocol"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "mcp.orchestrator.request"
+queue_group = "orchestrator"
+
+[nats.auth]
+# NKey authentication (replaces mTLS client certificates)
+nkey_file = "./nkeys/orchestrator.nk"
+
+[nats.tls]
+# TLS for encryption (no client cert needed with NKey auth)
+ca_cert = "./certs/ca.pem"
+
+[llm]
+url = "http://127.0.0.1:1234"
+model_name = "local-model"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3

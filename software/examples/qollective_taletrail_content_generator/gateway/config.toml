@@ -16,10 +16,13 @@ url = "nats://localhost:5222"
 [nats.subjects]
 orchestrator = "mcp.orchestrator.request"
 
+[nats.auth]
+# NKey authentication (replaces mTLS client certificates)
+nkey_file = "./nkeys/gateway.nk"
+
 [nats.tls]
+# TLS for encryption (no client cert needed with NKey auth)
 ca_cert = "./certs/ca.pem"
-client_cert = "./certs/client-cert.pem"
-client_key = "./certs/client-key.pem"
 
 [gateway]
 name = "taletrail-gateway"

@@ -9,10 +9,10 @@ TaleTrail generates complete interactive story graphs (Directed Acyclic Graphs) 
 ### Architecture
 
 ```
-┌─────────────┐
-│   Gateway   │  HTTP API (port 8080)
-│  (Axum)     │
-└──────┬──────┘
+┌──────────────────────┐
+│   Gateway            │  HTTPS API (port 8443)
+│  (Qollective Rest)   │
+└──────┬───────────────┘
        │
        ↓ NATS (TLS: port 5222)
 ┌─────────────────────────────────────────┐
@@ -32,7 +32,7 @@ TaleTrail generates complete interactive story graphs (Directed Acyclic Graphs) 
 
 ### Components
 
-1. **Gateway** - HTTP API server providing RESTful endpoints
+1. **Gateway** - HTTP API server providing RESTful TLS endpoints via Qollective
 2. **Orchestrator** - Coordinates the multi-phase generation pipeline with negotiation protocol
 3. **Story Generator** - MCP server creating DAG structure and generating narrative content
 4. **Quality Control** - MCP server validating age-appropriateness, safety, and educational value
@@ -41,75 +41,163 @@ TaleTrail generates complete interactive story graphs (Directed Acyclic Graphs) 
 
 ## Prerequisites
 
-### TLS-Enabled Infrastructure
-
-TaleTrail demonstrates Qollective's production-ready TLS capabilities with **per-service certificates** for security isolation.
-
-#### Certificate Architecture
-
-Each service has dedicated certificates following security best practices:
-
-| Service | Certificate | Common Name | Purpose |
-|---------|-------------|-------------|---------|
-| NATS Server | `server-cert.pem` | taletrail-nats | Internal messaging |
-| Gateway HTTPS | `gateway-cert.pem` | taletrail-gateway | External API |
-| MCP Services | `client-cert.pem` | taletrail-client | NATS connections |
-
-**Security Benefits:**
-- ✅ Certificate compromise isolated to one service
-- ✅ Independent lifecycle management per service
-- ✅ Proper identity (CN) per service role
-- ✅ Service-specific SANs configuration
-
-1. **Generate TLS Certificates**
-   ```bash
-   cd certs
-   ./setup-tls.sh
-   cd ..
-   ```
-
-   This generates 4 certificate pairs (8 files total):
-   - CA certificate authority (ca.pem, ca-key.pem)
-   - NATS server certificate (server-cert.pem, server-key.pem)
-   - Gateway HTTPS certificate (gateway-cert.pem, gateway-key.pem)
-   - Client certificate (client-cert.pem, client-key.pem)
-
-2. **Start NATS with TLS**
-   ```bash
-   ./start-nats.sh
-   ```
-
-   Or manually:
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Verify NATS Health**
-   ```bash
-   curl http://localhost:9222/healthz
-   ```
-
-   Should return: `OK`
-
-4. **Access NATS Monitoring Dashboard**
-   Open http://localhost:9222 in your browser to see:
-   - Connection statistics
-   - Message throughput
-   - JetStream status
-   - Client connections
-
-### Port Information
-
-- **5222**: NATS TLS client connections
-- **9222**: NATS HTTP monitoring dashboard (mapped from internal 8222)
-- **8443**: Gateway HTTPS API (TLS-enabled)
-
 ### Required Software
 
 - Rust 1.75+
 - Docker and Docker Compose
 - OpenSSL (for certificate generation)
+- NATS CLI (`nats`) - for NKey generation
+- Apache htpasswd (`htpasswd`) - for monitoring authentication
 - LM Studio (optional, for LLM integration in later phases)
+
+### Security Architecture
+
+TaleTrail implements **defense-in-depth** security with multiple layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: TLS Encryption (All Traffic)                      │
+│  ├─ HTTPS Gateway (port 8443)                               │
+│  ├─ NATS TLS (port 5222)                                    │
+│  └─ HTTPS Monitoring (port 9222)                            │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: Authentication                                     │
+│  ├─ NKey Cryptographic Authentication (NATS clients)        │
+│  └─ Basic Auth (Monitoring dashboard)                       │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: Authorization                                      │
+│  └─ Subject-Level Permissions (per service)                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Security Features
+
+**🔐 NKey Authentication**
+- Ed25519 public-key cryptography for NATS client authentication
+- No passwords or shared secrets transmitted
+- Each service has unique cryptographic identity
+- Server never sees or stores private keys
+
+**🔒 TLS Encryption**
+- All NATS traffic encrypted with TLS 1.2/1.3
+- HTTPS for gateway API (port 8443)
+- HTTPS for monitoring dashboard (port 9222)
+- Per-service certificate architecture
+
+**🛡️ Subject-Level Authorization**
+- Principle of least privilege per service
+- Story Generator: Can only publish stories and subscribe to requests
+- Quality Control: Can only validate and publish results
+- Constraint Enforcer: Can only enforce constraints
+- Orchestrator: Full coordination access
+- Gateway: Can only send requests and receive events
+
+**🚫 Monitoring Security**
+- HTTPS with TLS encryption
+- Basic Authentication (username/password)
+- No public internet exposure
+- Unauthenticated health checks only
+
+#### Certificate & Key Architecture
+
+| Component | Authentication | Certificate/Key | Purpose |
+|-----------|---------------|-----------------|---------|
+| NATS Server | N/A | `server-cert.pem` | TLS encryption |
+| Gateway HTTPS | N/A | `gateway-cert.pem` | External API TLS |
+| Story Generator | NKey | `story-generator.nk` | NATS authentication |
+| Quality Control | NKey | `quality-control.nk` | NATS authentication |
+| Constraint Enforcer | NKey | `constraint-enforcer.nk` | NATS authentication |
+| Orchestrator | NKey | `orchestrator.nk` | NATS authentication |
+| Gateway NATS | NKey | `gateway.nk` | NATS authentication |
+| Monitoring Proxy | Basic Auth | `.htpasswd` | Dashboard access |
+
+### Quick Setup (5 Steps)
+
+#### 1. Generate TLS Certificates
+```bash
+cd certs
+./setup-tls.sh
+cd ..
+```
+
+This generates 4 certificate pairs (8 files total):
+- CA certificate authority (ca.pem, ca-key.pem)
+- NATS server certificate (server-cert.pem, server-key.pem)
+- Gateway HTTPS certificate (gateway-cert.pem, gateway-key.pem)
+- Client certificate (client-cert.pem, client-key.pem) [Not used with NKey auth]
+
+#### 2. Setup Security (NKeys + Basic Auth)
+```bash
+./setup-security.sh
+```
+
+This automated script:
+- ✅ Generates NKey pairs for all 5 services
+- ✅ Creates Basic Auth credentials for monitoring
+- ✅ Sets proper file permissions (600 for private keys)
+- ✅ Displays public keys for nats-server.conf
+
+**Monitoring Credentials:**
+- URL: https://localhost:9222
+- Username: `admin`
+- Password: (you'll set this during setup)
+
+#### 3. Update NATS Configuration (Already Done!)
+
+The `nats-server.conf` file already contains the NKey public keys from setup-security.sh. No manual editing needed!
+
+**Authorization Configuration:**
+```toml
+authorization {
+  users: [
+    { nkey: "UC..." permissions: { publish: ["mcp.story.>"] subscribe: ["mcp.story.generate"] } }
+    { nkey: "UB..." permissions: { publish: ["mcp.quality.>"] subscribe: ["mcp.quality.validate"] } }
+    # ... (3 more services)
+  ]
+}
+```
+
+#### 4. Start NATS with Security
+```bash
+./start-nats.sh
+```
+
+Or manually:
+```bash
+docker-compose up -d
+```
+
+This starts:
+- **NATS Server** - Port 5222 with NKey authentication
+- **Nginx Monitoring Proxy** - Port 9222 with HTTPS + Basic Auth
+
+#### 5. Verify Security
+
+**Test NATS Health:**
+```bash
+# Unauthenticated health check (allowed)
+curl --insecure https://localhost:9222/healthz
+# Should return: OK
+```
+
+**Test Monitoring Dashboard:**
+```bash
+# Requires authentication
+open https://localhost:9222
+# Login with: admin / <your-password>
+```
+
+**View Monitoring Dashboard:**
+- Connection statistics
+- Message throughput
+- JetStream status
+- Client connections (should show 5 authenticated services)
+
+### Port Information
+
+- **5222**: NATS TLS client connections (NKey authentication required)
+- **9222**: NATS HTTPS monitoring (Basic Auth: admin/<password>)
+- **8443**: Gateway HTTPS API (TLS-enabled)
 
 ## Configuration
 
@@ -230,14 +318,21 @@ Or use the IntelliJ HTTP client file:
 
 **Achievements:**
 - ✅ Complete workspace structure with 6 crates (shared-types, orchestrator, 3 MCP services, gateway)
-- ✅ **Per-service TLS architecture** - separate certificates for NATS, Gateway, and MCP services
+- ✅ **Defense-in-depth security architecture**:
+  - NKey cryptographic authentication for all NATS clients
+  - TLS encryption for all traffic (NATS, Gateway, Monitoring)
+  - Subject-level authorization with least privilege per service
+  - Basic Auth + HTTPS for monitoring dashboard
+  - Nginx reverse proxy for monitoring security
+- ✅ **Per-service TLS architecture** - separate certificates for NATS, Gateway
 - ✅ **TLS-enabled Gateway (HTTPS)** with Qollective REST Server on port 8443
 - ✅ TLS-enabled NATS infrastructure with Docker Compose (ports 5222/9222)
 - ✅ **Gateway envelope-first architecture** - all responses wrapped in UnifiedEnvelope
 - ✅ All services compile successfully with rmcp 0.8.0
 - ✅ CONSTANTS FIRST principle - all values in `shared-types/src/constants.rs`
 - ✅ Configuration inheritance pattern across all services
-- ✅ Production-ready certificate generation (4 cert pairs: CA, NATS, Gateway, Client)
+- ✅ Production-ready certificate generation and NKey management
+- ✅ Automated security setup script (`setup-security.sh`)
 - ✅ Verified HTTPS health endpoint with envelope-wrapped responses
 
 **Key Milestones:**
@@ -285,13 +380,99 @@ curl --insecure -X POST https://localhost:8443/health -H "Content-Type: applicat
 
 ## Troubleshooting
 
+### NKey Authentication Failures
+
+**Problem**: Services fail to connect with "authentication violation" errors
+
+**Solutions**:
+1. **Verify NKey files exist:**
+   ```bash
+   ls -l nkeys/*.nk nkeys/*.pub
+   ```
+
+2. **Check NKey permissions:**
+   ```bash
+   # Private keys should be 600 (owner read/write only)
+   chmod 600 nkeys/*.nk
+   ```
+
+3. **Verify public keys in nats-server.conf match:**
+   ```bash
+   # Compare public keys
+   cat nkeys/story-generator.pub
+   grep "story-generator" nats-server.conf
+   ```
+
+4. **Regenerate NKeys if needed:**
+   ```bash
+   ./setup-security.sh
+   # Then update nats-server.conf with new public keys
+   docker-compose restart taletrail-nats
+   ```
+
+5. **Check NATS logs for auth errors:**
+   ```bash
+   docker-compose logs taletrail-nats | grep -i "auth"
+   ```
+
+### Monitoring Access Issues
+
+**Problem**: Cannot access monitoring dashboard at https://localhost:9222
+
+**Solutions**:
+1. **Verify nginx proxy is running:**
+   ```bash
+   docker-compose ps nats-monitor-proxy
+   ```
+
+2. **Test Basic Auth credentials:**
+   ```bash
+   curl -u admin:<password> --insecure https://localhost:9222/varz
+   ```
+
+3. **Regenerate Basic Auth:**
+   ```bash
+   htpasswd -c nginx/.htpasswd admin
+   docker-compose restart nats-monitor-proxy
+   ```
+
+4. **Check nginx logs:**
+   ```bash
+   docker-compose logs nats-monitor-proxy
+   ```
+
+### Subject Authorization Errors
+
+**Problem**: Services get "permissions violation" when publishing/subscribing
+
+**Solutions**:
+1. **Check service permissions in nats-server.conf:**
+   Each service should only have access to specific subjects.
+
+2. **Example permission fix for story-generator:**
+   ```toml
+   # In nats-server.conf
+   {
+     nkey: "UCJEP5KGI..."  # story-generator public key
+     permissions: {
+       publish: { allow: ["mcp.story.response.>", "mcp.events.story.>"] }
+       subscribe: { allow: ["mcp.story.generate", "mcp.orchestrator.story.>"] }
+     }
+   }
+   ```
+
+3. **Restart NATS after config changes:**
+   ```bash
+   docker-compose restart taletrail-nats
+   ```
+
 ### NATS Connection Issues
 
 **Problem**: Services fail to connect to NATS
 
 **Solutions**:
 1. Verify NATS is running: `docker-compose ps`
-2. Check health: `curl http://localhost:9222/healthz`
+2. Check health: `curl --insecure https://localhost:9222/healthz`
 3. View logs: `docker-compose logs -f taletrail-nats`
 4. Restart NATS: `docker-compose restart taletrail-nats`
 
@@ -332,9 +513,17 @@ curl --insecure -X POST https://localhost:8443/health -H "Content-Type: applicat
 1. **CONSTANTS FIRST**: All hardcoded values in `shared-types/src/constants.rs`
 2. **Configuration Inheritance**: Each service inherits config from parent via constructor parameters
 3. **Envelope-First Architecture**: All communication wrapped in TaleTrailEnvelope
-4. **TLS from the Start**: Demonstrates Qollective's production-ready TLS capabilities
-5. **Test-Driven**: Write tests before implementation for each component
-6. **Build Verification**: Each phase ends with successful build and run verification
+4. **Defense-in-Depth Security**: Multiple layers of security controls
+   - Layer 1: TLS encryption for all traffic
+   - Layer 2: NKey cryptographic authentication
+   - Layer 3: Subject-level authorization (least privilege)
+   - Layer 4: Monitoring protection (HTTPS + Basic Auth)
+5. **Zero Trust Architecture**: Never trust, always verify
+   - All services must authenticate with NKeys
+   - All traffic encrypted with TLS
+   - Subject-level permissions enforced
+6. **Test-Driven**: Write tests before implementation for each component
+7. **Build Verification**: Each phase ends with successful build and run verification
 
 ## License
 

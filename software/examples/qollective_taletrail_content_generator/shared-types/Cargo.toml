@@ -9,6 +9,11 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
-qollective = { workspace = true }
+qollective = { workspace = true, features = [
+    "nats"  # NATS types and utilities (envelope is built-in)
+]}
 dotenvy = { workspace = true }
 lazy_static = { workspace = true }
+async-nats = { workspace = true }
+nkeys = "0.4"
+tokio = { workspace = true }

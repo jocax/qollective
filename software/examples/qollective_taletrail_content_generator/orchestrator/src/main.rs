@@ -15,25 +15,21 @@ async fn main() -> Result<()> {
         .init();
 
     // Load configuration
-    dotenvy::dotenv().ok();
-    let config = OrchestratorConfig::default();
+    let config = OrchestratorConfig::load()?;
 
     info!("=== TaleTrail Orchestrator Starting ===");
     info!("Configuration:");
-    info!("  NATS URL: {}", config.nats_url);
-    info!("  LM Studio URL: {}", config.lm_studio_url);
-    info!("  NATS TLS CA Cert: {}", config.nats_tls_ca_cert);
-    info!("  NATS TLS Client Cert: {}", config.nats_tls_client_cert);
-    info!("  NATS TLS Client Key: {}", config.nats_tls_client_key);
-    info!("");
-    info!("Constants from shared-types:");
-    info!("  Generation timeout: {}s", *GENERATION_TIMEOUT_SECS);
-    info!("  Validation timeout: {}s", *VALIDATION_TIMEOUT_SECS);
-    info!("  Retry max attempts: {}", *RETRY_MAX_ATTEMPTS);
-    info!("  Batch size: {}-{}", *BATCH_SIZE_MIN, *BATCH_SIZE_MAX);
-    info!("  Concurrent batches: {}", *CONCURRENT_BATCHES);
-    info!("  Default node count: {}", *DEFAULT_NODE_COUNT);
-    info!("  Convergence ratio: {}", CONVERGENCE_POINT_RATIO);
+    info!("  NATS URL: {}", config.nats.url);
+    info!("  NATS Subject: {}", config.nats.subject);
+    info!("  LM Studio URL: {}", config.llm.url);
+    info!("  Generation timeout: {}s", config.pipeline.generation_timeout_secs);
+    info!("  Validation timeout: {}s", config.pipeline.validation_timeout_secs);
+    info!("  Retry max attempts: {}", config.pipeline.retry_max_attempts);
+    info!("  Batch size: {}-{}", config.batch.size_min, config.batch.size_max);
+    info!("  Concurrent batches: {}", config.batch.concurrent_batches);
+    info!("  Default node count: {}", config.dag.default_node_count);
+    info!("  Convergence ratio: {}", config.dag.convergence_point_ratio);
+    info!("  Max negotiation rounds: {}", config.negotiation.max_rounds);
     info!("");
 
     // Simulate startup

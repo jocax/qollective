@@ -9,11 +9,17 @@ path = "src/main.rs"
 
 [dependencies]
 shared-types = { path = "../shared-types" }
-qollective = { workspace = true }
+qollective = { workspace = true, features = [
+    "rest-server",       # HTTP server capabilities
+    "mcp-client",        # MCP client to communicate with orchestrator
+    "nats",              # NATS transport layer
+    "tenant-extraction", # JWT tenant context extraction
+    "config",            # Configuration support
+    "tracing"            # Observability (envelope is built-in)
+]}
 async-nats = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
