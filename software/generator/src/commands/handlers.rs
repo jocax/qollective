@@ -2,7 +2,7 @@
 // ABOUTME: Processes CLI commands and orchestrates schema parsing and code generation
 
 use crate::cli::{GenerateArgs, InfoArgs, InitArgs, ValidateArgs};
-use crate::codegen::DirectTypifyGenerator;
+use crate::codegen::RustCodeGenerator;
 use crate::schema::{SchemaParser, SchemaValidator};
 use anyhow::{bail, Context, Result};
 use std::fs;
@@ -132,13 +132,15 @@ fn generate_rust_code(
         println!("🦀 Generating Rust code...");
     }
 
-    let code_generator = DirectTypifyGenerator::new();
-    
-    // Use DirectTypifyGenerator directly with the original schema file
-    // This avoids the round-trip through our custom IR and ensures typify gets clean JSON
-    let generated_code = code_generator
-        .generate_from_file(args.schema_file.to_str().unwrap())
+    let mut code_generator = RustCodeGenerator::new();
+
+    // Use RustCodeGenerator which properly handles $defs section
+    let rust_code = code_generator
+        .generate(_schema)
         .context("Failed to generate Rust code")?;
+
+    let generated_code = crate::codegen::render_rust_code(&rust_code)
+        .context("Failed to render Rust code")?;
 
     // Determine output file path
     let package_name = args.get_package_name();

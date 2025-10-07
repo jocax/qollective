@@ -37,7 +37,29 @@ TaleTrail generates complete interactive story graphs (Directed Acyclic Graphs) 
 3. **Story Generator** - MCP server creating DAG structure and generating narrative content
 4. **Quality Control** - MCP server validating age-appropriateness, safety, and educational value
 5. **Constraint Enforcer** - MCP server ensuring vocabulary, theme consistency, and required elements
-6. **Shared Types** - Common types, constants, and error handling
+6. **Prompt Helper** - MCP server generating language-appropriate prompts dynamically
+7. **Shared Types** - Common types, constants, and error handling
+
+## Schema-First Development
+
+All types are auto-generated from `schemas/taletrail-content-generator.json` (759 lines, 44 types).
+
+**Regenerate types after schema changes:**
+```bash
+./regenerate-types.sh
+```
+
+**Manual generation:**
+```bash
+# Validate
+cargo run -p generator -- validate schemas/taletrail-content-generator.json --lint
+
+# Generate
+cargo run -p generator -- generate schemas/taletrail-content-generator.json \
+  --output shared-types/src/generated --format single-file --force
+```
+
+**Documentation:** See `SCHEMA.md` for complete details on schema structure, generated types, and extension workflow
 
 ## Prerequisites
 

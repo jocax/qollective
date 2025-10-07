@@ -117,17 +117,20 @@ impl RustCodeGenerator {
     /// Generate a Rust struct from an object schema
     fn generate_struct(&mut self, schema: &Schema, name: &str, code: &mut RustCode) -> Result<(), CodegenError> {
         let struct_name = self.to_rust_type_name(name);
-        
+
         // Check for name conflicts
         if self.generated_types.contains(&struct_name) {
             return Err(CodegenError::NameConflict { name: struct_name });
         }
         self.generated_types.insert(struct_name.clone());
-        
+
+        // Detect if struct contains any float fields
+        let has_floats = self.schema_contains_floats(schema);
+
         let mut rust_struct = RustStruct {
             name: struct_name.clone(),
             visibility: Visibility::Public,
-            derives: self.get_standard_derives(),
+            derives: self.get_derives_for_struct(has_floats),
             attributes: self.get_standard_attributes(),
             generics: Vec::new(),
             fields: Vec::new(),
@@ -213,33 +216,33 @@ impl RustCodeGenerator {
     /// Generate a string enum from a schema with enum values
     fn generate_string_enum(&mut self, schema: &Schema, name: &str, code: &mut RustCode) -> Result<(), CodegenError> {
         let enum_name = self.to_rust_type_name(name);
-        
+
         if self.generated_types.contains(&enum_name) {
             return Err(CodegenError::NameConflict { name: enum_name });
         }
         self.generated_types.insert(enum_name.clone());
-        
+
         let mut rust_enum = RustEnum {
             name: enum_name.clone(),
             visibility: Visibility::Public,
-            derives: self.get_standard_derives(),
+            derives: self.get_derives_for_enum(true), // String enums are simple (unit variants)
             attributes: self.get_standard_attributes(),
             generics: Vec::new(),
             variants: Vec::new(),
             documentation: schema.description.clone(),
         };
-        
+
         // Generate variants from enum values
         for enum_value in &schema.enum_values {
             if let Some(value_str) = enum_value.as_str() {
                 let variant_name = self.to_rust_type_name(value_str);
                 let mut attributes = Vec::new();
-                
+
                 // Add serde rename if needed
                 if self.config.serde_support && variant_name != value_str {
                     attributes.push(format!("#[serde(rename = \"{}\")]", value_str));
                 }
-                
+
                 rust_enum.variants.push(RustEnumVariant {
                     name: variant_name,
                     data: RustVariantData::Unit,
@@ -248,7 +251,7 @@ impl RustCodeGenerator {
                 });
             }
         }
-        
+
         code.add_item(RustItem::Enum(rust_enum));
         Ok(())
     }
@@ -256,16 +259,16 @@ impl RustCodeGenerator {
     /// Generate a union enum from a schema with union types
     fn generate_union_enum(&mut self, schema: &Schema, name: &str, types: &[SchemaType], code: &mut RustCode) -> Result<(), CodegenError> {
         let enum_name = self.to_rust_type_name(name);
-        
+
         if self.generated_types.contains(&enum_name) {
             return Err(CodegenError::NameConflict { name: enum_name });
         }
         self.generated_types.insert(enum_name.clone());
-        
+
         let mut rust_enum = RustEnum {
             name: enum_name.clone(),
             visibility: Visibility::Public,
-            derives: self.get_standard_derives(),
+            derives: self.get_derives_for_enum(false), // Union enums are not simple (have data variants)
             attributes: self.get_standard_attributes(),
             generics: Vec::new(),
             variants: Vec::new(),
@@ -468,11 +471,42 @@ impl RustCodeGenerator {
         schema.max_items.is_some() ||
         !schema.enum_values.is_empty()
     }
-    
+
+    /// Check if a schema contains float/number fields (recursively checks properties)
+    fn schema_contains_floats(&self, schema: &Schema) -> bool {
+        // Check direct schema type
+        if matches!(schema.schema_type, SchemaType::Number) {
+            return true;
+        }
+
+        // Check properties
+        for (_field_name, field_schema) in &schema.properties {
+            if self.schema_type_is_float(&field_schema.schema_type) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Check if a SchemaType represents a float
+    fn schema_type_is_float(&self, schema_type: &SchemaType) -> bool {
+        match schema_type {
+            SchemaType::Number => true,
+            SchemaType::Union(types) => types.iter().any(|t| self.schema_type_is_float(t)),
+            _ => false,
+        }
+    }
+
     /// Get standard derives based on configuration
     fn get_standard_derives(&self) -> Vec<String> {
+        self.get_derives_for_struct(false)
+    }
+
+    /// Get derives for struct types with optional float detection
+    fn get_derives_for_struct(&self, has_floats: bool) -> Vec<String> {
         let mut derives = Vec::new();
-        
+
         if self.config.debug {
             derives.push("Debug".to_string());
         }
@@ -482,6 +516,11 @@ impl RustCodeGenerator {
         if self.config.partial_eq {
             derives.push("PartialEq".to_string());
         }
+        // Add Eq only if no floats (floats only support PartialEq, not Eq)
+        if self.config.partial_eq && !has_floats {
+            derives.push("Eq".to_string());
+            derives.push("Hash".to_string());
+        }
         if self.config.serde_support {
             derives.push("Serialize".to_string());
             derives.push("Deserialize".to_string());
@@ -489,7 +528,36 @@ impl RustCodeGenerator {
         if self.config.default {
             derives.push("Default".to_string());
         }
-        
+
+        derives.extend(self.config.custom_derives.clone());
+        derives
+    }
+
+    /// Get derives for simple enum types (unit variants only)
+    fn get_derives_for_enum(&self, is_simple: bool) -> Vec<String> {
+        let mut derives = Vec::new();
+
+        if self.config.debug {
+            derives.push("Debug".to_string());
+        }
+        if self.config.clone {
+            derives.push("Clone".to_string());
+        }
+        // Simple enums can be Copy
+        if is_simple {
+            derives.push("Copy".to_string());
+        }
+        if self.config.partial_eq {
+            derives.push("PartialEq".to_string());
+            derives.push("Eq".to_string());
+            derives.push("Hash".to_string());
+        }
+        if self.config.serde_support {
+            derives.push("Serialize".to_string());
+            derives.push("Deserialize".to_string());
+        }
+        // Do NOT add Default for enums - unclear which variant should be default
+
         derives.extend(self.config.custom_derives.clone());
         derives
     }
@@ -509,33 +577,110 @@ impl RustCodeGenerator {
         self.to_pascal_case(name)
     }
     
-    /// Convert a string to PascalCase
+    /// Convert a string to PascalCase, handling special characters
     fn to_pascal_case(&self, s: &str) -> String {
-        s.split(['_', '-', ' '])
-            .filter(|part| !part.is_empty())
-            .map(|part| {
+        // Handle leading special characters first
+        let sanitized = self.sanitize_identifier(s);
+
+        // Split on separators, but replace '-' between numbers with 'To'
+        let parts: Vec<String> = sanitized
+            .split(['_', '-', ' '])
+            .enumerate()
+            .filter_map(|(_i, part)| {
+                if part.is_empty() {
+                    return None;
+                }
+
                 let mut chars = part.chars();
                 match chars.next() {
-                    None => String::new(),
-                    Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                    None => None,
+                    Some(first) => {
+                        let capitalized = first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase();
+                        Some(capitalized)
+                    }
                 }
             })
-            .collect()
+            .collect();
+
+        let result = parts.join("");
+
+        // If the result starts with a digit, prefix with underscore
+        // (Rust identifiers cannot start with digits)
+        if result.chars().next().map_or(false, |c| c.is_numeric()) {
+            format!("_{}", result)
+        } else {
+            result
+        }
+    }
+
+    /// Sanitize a string to be a valid Rust identifier
+    fn sanitize_identifier(&self, s: &str) -> String {
+        let mut result = String::new();
+        let mut prev_char: Option<char> = None;
+
+        for ch in s.chars() {
+            match ch {
+                // Replace leading + with "Plus"
+                '+' if result.is_empty() => {
+                    result.push_str("Plus");
+                }
+                '+' => {} // Skip + in middle
+
+                // Replace dash between numbers with " To " (will be capitalized later)
+                '-' if prev_char.map_or(false, |p| p.is_numeric()) => {
+                    result.push_str(" To ");
+                }
+
+                // Keep alphanumeric and separators
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' | ' ' => {
+                    result.push(ch);
+                }
+
+                // Skip other special characters
+                _ => {}
+            }
+
+            prev_char = Some(ch);
+        }
+
+        result
     }
     
     /// Convert a string to snake_case
     fn to_snake_case(&self, s: &str) -> String {
         let mut result = String::new();
         let mut chars = s.chars().peekable();
-        
+
         while let Some(ch) = chars.next() {
             if ch.is_uppercase() && !result.is_empty() {
                 result.push('_');
             }
             result.push(ch.to_lowercase().next().unwrap_or(ch));
         }
-        
-        result.replace(['-', ' '], "_")
+
+        let result = result.replace(['-', ' '], "_");
+
+        // Escape Rust keywords
+        self.escape_rust_keyword(&result)
+    }
+
+    /// Escape Rust keywords with r# prefix
+    fn escape_rust_keyword(&self, s: &str) -> String {
+        // List of Rust keywords that need escaping
+        const KEYWORDS: &[&str] = &[
+            "as", "break", "const", "continue", "crate", "else", "enum", "extern",
+            "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
+            "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct",
+            "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+            "async", "await", "dyn", "abstract", "become", "box", "do", "final",
+            "macro", "override", "priv", "typeof", "unsized", "virtual", "yield", "try"
+        ];
+
+        if KEYWORDS.contains(&s) {
+            format!("r#{}", s)
+        } else {
+            s.to_string()
+        }
     }
 }
 
