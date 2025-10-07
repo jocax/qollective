@@ -14,6 +14,14 @@ certs/*.pem
 certs/*.srl
 certs/*.cnf
 
+# NKey Authentication (protect private keys, allow public keys)
+nkeys/*.nk
+nkeys/*.seed
+!nkeys/*.pub
+
+# Nginx Basic Auth
+nginx/.htpasswd
+
 # IDE
 .idea/
 .vscode/
