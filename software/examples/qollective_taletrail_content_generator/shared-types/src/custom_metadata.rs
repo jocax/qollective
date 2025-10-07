@@ -17,7 +17,7 @@ use uuid::Uuid;
 ///
 /// # Example
 /// ```
-/// use shared_types::extensions::TaleTrailCustomMetadata;
+/// use shared_types::TaleTrailCustomMetadata;
 /// use shared_types::generated::enums::GenerationPhase;
 /// use uuid::Uuid;
 ///

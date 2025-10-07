@@ -61,6 +61,84 @@ cargo run -p generator -- generate schemas/taletrail-content-generator.json \
 
 **Documentation:** See `SCHEMA.md` for complete details on schema structure, generated types, and extension workflow
 
+## Trait-Based Testability Architecture
+
+TaleTrail uses **dependency injection** with service traits to enable comprehensive unit testing with mocks.
+
+### Service Traits
+
+All service implementations must implement these traits (defined in `shared-types/src/traits/`):
+
+1. **LlmService** - LLM interaction for prompt generation and content generation
+2. **PromptHelperService** - Generate language-appropriate prompts dynamically
+3. **McpTransport** - MCP tool invocation across NATS
+4. **RequestMapper** - External API ↔ Internal API transformation
+5. **StoryGeneratorService** - DAG structure and content generation
+6. **ValidationService** - Quality and constraint validation
+
+### Testing Pattern
+
+**Production code** uses real implementations:
+```rust
+let llm_service = Box::new(RigLlmService::new(config));
+let prompt_helper = LlmPromptHelper::new(llm_service, templates, models, config);
+```
+
+**Test code** uses mocks:
+```rust
+let mut mock_llm = MockLlmService::new();
+mock_llm
+    .expect_generate_prompt()
+    .returning(|_, _| Ok(("system".into(), "user".into())));
+let prompt_helper = LlmPromptHelper::new(Box::new(mock_llm), templates, models, config);
+```
+
+**Run tests with mocking feature:**
+```bash
+cargo test -p shared-types --features mocking
+```
+
+### Benefits
+
+- ✅ **Unit tests** without external dependencies (no LLM, no NATS)
+- ✅ **Deterministic** test behavior
+- ✅ **Fast** test execution
+- ✅ **Clear** interface boundaries between components
+
+## Data Structures & Database Alignment
+
+All data structures align with the existing TaleTrails database schema.
+
+### Database Tables
+
+- **`trails`** - Trail metadata (title, description, metadata JSON, tags, status, tenant_id)
+- **`trail_steps`** - Ordered steps (step_order, title, description, metadata JSON, content_id, trail_id)
+- **`content`** - Actual content (category='story', content JSON field holds interactive story nodes)
+
+### Generated Types
+
+The `schemas/taletrail-content-generator.json` schema defines types that map to these tables:
+
+- **Trail** → `trails` table
+- **TrailStep** → `trail_steps` table
+- **Content** → `content.content` JSON field
+
+### API Layers
+
+**External API** (simplified, versioned):
+- `ExternalGenerationRequestV1` - Minimal fields (theme, age_group, language)
+- Gateway applies age-appropriate defaults and enrichment
+
+**Internal MCP API** (complete, rich parameters):
+- `GenerationRequest` - Full parameters (educational_goals, node_count, vocabulary_level, etc.)
+- Used for MCP service communication
+
+### Data Structure Documentation
+
+For complete field definitions and relationships, see:
+- `@.agent-os/specs/2025-10-02-taletrail-content-generator/sub-specs/data-structures.md`
+- `schemas/taletrail-content-generator.json`
+
 ## Prerequisites
 
 ### Required Software

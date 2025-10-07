@@ -15,12 +15,12 @@ use serde::{Deserialize, Serialize};
 /// Qollective's Envelope<TaleTrailPayload> for transmission.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// use qollective::envelope::Envelope;
-/// use shared_types::types::TaleTrailPayload;
+/// use shared_types::TaleTrailPayload;
 /// use shared_types::generated::internal_api::GenerationRequest;
 ///
-/// // Create a payload
+/// // Create a payload (fields omitted for brevity)
 /// let request = GenerationRequest { /* ... */ };
 /// let payload = TaleTrailPayload::GenerationRequest(request);
 ///
