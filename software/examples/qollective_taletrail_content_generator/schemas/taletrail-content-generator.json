@@ -1077,6 +1077,27 @@
           "type": "string"
         }
       }
+    },
+
+    "TaleTrailCustomMetadata": {
+      "type": "object",
+      "description": "Custom metadata extensions for TaleTrail content generation (stored in Meta.extensions)",
+      "properties": {
+        "generation_phase": {
+          "$ref": "#/$defs/GenerationPhase",
+          "description": "Current phase of the generation pipeline"
+        },
+        "batch_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Batch identifier for grouping related generation operations"
+        },
+        "correlation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Correlation ID for tracking request chains across services"
+        }
+      }
     }
   },
 

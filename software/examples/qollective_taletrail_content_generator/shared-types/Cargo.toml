@@ -3,6 +3,10 @@ name = "shared-types"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Mocking feature for test support
+mocking = ["mockall"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -17,3 +21,10 @@ lazy_static = { workspace = true }
 async-nats = { workspace = true }
 nkeys = "0.4"
 tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Optional dependencies (enabled by features)
+mockall = { workspace = true, optional = true }
+
+[dev-dependencies]
+mockall = { workspace = true }

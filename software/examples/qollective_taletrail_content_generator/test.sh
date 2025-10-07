@@ -22,7 +22,7 @@ echo -e "${BLUE}Running basic workspace tests...${NC}"
 echo ""
 
 # Run cargo test as placeholder
-cargo test --workspace
+cargo nextest run --workspace
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
