@@ -522,6 +522,8 @@ fn production_config() -> QollectiveConfig {
                 username: None,
                 password: None,
                 token: None,
+                nkey_file: None,
+                nkey_seed: None,
                 tls: crate::config::tls::TlsConfig {
                     enabled: true, // Production should use TLS
                     ca_cert_path: None,
@@ -788,6 +790,8 @@ fn development_config() -> QollectiveConfig {
                 username: None,
                 password: None,
                 token: None,
+                nkey_file: None,
+                nkey_seed: None,
                 tls: crate::config::tls::TlsConfig {
                     enabled: false, // Development uses plain connections
                     ca_cert_path: None,
@@ -1072,6 +1076,8 @@ fn high_performance_config() -> QollectiveConfig {
                 username: None,
                 password: None,
                 token: None,
+                nkey_file: None,
+                nkey_seed: None,
                 tls: crate::config::tls::TlsConfig {
                     enabled: true, // Performance with security
                     ca_cert_path: None,

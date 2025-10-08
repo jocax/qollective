@@ -1,0 +1,10 @@
+{
+  "tool_name": "generate_story_prompts",
+  "arguments": {
+    "theme": "Space Adventure",
+    "age_group": "6-8",
+    "language": "en",
+    "educational_goals": ["science", "creativity"],
+    "vocabulary_level": "basic"
+  }
+}

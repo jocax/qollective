@@ -8,6 +8,7 @@ members = [
     "constraint-enforcer",
     "prompt-helper",
     "gateway",
+    "nats-cli",
 ]
 
 resolver = "2"

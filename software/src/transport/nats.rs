@@ -211,6 +211,21 @@ impl InternalNatsClient {
             debug!("No NATS client name configured");
         }
 
+        // Configure NKey authentication if provided
+        if let Some(ref nkey_file) = config.connection.nkey_file {
+            debug!("Loading NKey from file: {:?}", nkey_file);
+            let nkey_seed = std::fs::read_to_string(nkey_file).map_err(|e| {
+                QollectiveError::nats_connection(format!(
+                    "Failed to read NKey file {:?}: {}",
+                    nkey_file, e
+                ))
+            })?;
+            connect_options = connect_options.nkey(nkey_seed.trim().to_string());
+        } else if let Some(ref nkey_seed) = config.connection.nkey_seed {
+            debug!("Configuring NKey from seed string");
+            connect_options = connect_options.nkey(nkey_seed.trim().to_string());
+        }
+
         // Configure TLS if enabled using unified TLS config
         if config.connection.tls.enabled {
             // Initialize crypto provider using strategy from config

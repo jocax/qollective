@@ -109,23 +109,39 @@ pub async fn handle_generate_story_prompts(
         batch_info: None,
     };
 
-    // Meta-prompt for LLM to generate story prompts
-    let meta_prompt = format!(
-        "Generate system and user prompts for a story generator service.\n\
-         Theme: {}\n\
-         Age Group: {:?}\n\
-         Language: {:?}\n\
-         Educational Goals: {}\n\n\
-         The system prompt should instruct the LLM on how to generate engaging, \
-         age-appropriate story content with educational value.\n\
-         The user prompt should provide context for the current story generation task.\n\n\
-         Return two prompts separated by '---SEPARATOR---':\n\
-         First the system prompt, then the user prompt.",
-        params.theme,
-        params.age_group,
-        params.language,
-        params.educational_goals.join(", ")
-    );
+    // Language-aware meta-prompt for LLM to generate story prompts
+    let meta_prompt = match params.language {
+        Language::De => format!(
+            "Generiere System- und Benutzer-Prompts für einen Story-Generator.\n\
+             Thema: {}\n\
+             Altersgruppe: {:?}\n\
+             Sprache: Deutsch\n\
+             Bildungsziele: {}\n\n\
+             Der System-Prompt soll das LLM anweisen, ansprechende, altersgerechte \
+             Story-Inhalte mit Bildungswert zu generieren.\n\
+             Der Benutzer-Prompt soll Kontext für die aktuelle Story-Generierung bieten.\n\n\
+             Gib zwei Prompts getrennt durch '---SEPARATOR---' zurück:\n\
+             Zuerst den System-Prompt, dann den Benutzer-Prompt.",
+            params.theme,
+            params.age_group,
+            params.educational_goals.join(", ")
+        ),
+        Language::En => format!(
+            "Generate system and user prompts for a story generator service.\n\
+             Theme: {}\n\
+             Age Group: {:?}\n\
+             Language: English\n\
+             Educational Goals: {}\n\n\
+             The system prompt should instruct the LLM on how to generate engaging, \
+             age-appropriate story content with educational value.\n\
+             The user prompt should provide context for the current story generation task.\n\n\
+             Return two prompts separated by '---SEPARATOR---':\n\
+             First the system prompt, then the user prompt.",
+            params.theme,
+            params.age_group,
+            params.educational_goals.join(", ")
+        ),
+    };
 
     // Try LLM generation
     let (system_prompt, user_prompt, fallback_used) =
@@ -146,20 +162,39 @@ pub async fn handle_generate_story_prompts(
                 );
                 let _guard = _fallback_span.enter();
 
-                let template_sys = format!(
-                    "You are a creative story generator for {} content.\n\
-                     Generate engaging, age-appropriate stories for age group: {:?}.\n\
-                     Language: {:?}.\n\
-                     Incorporate these educational goals: {}.",
-                    params.theme,
-                    params.age_group,
-                    params.language,
-                    params.educational_goals.join(", ")
-                );
-                let template_user = format!(
-                    "Create a story segment about {} that is educational and engaging.",
-                    params.theme
-                );
+                // Language-aware template fallback
+                let (template_sys, template_user) = match params.language {
+                    Language::De => (
+                        format!(
+                            "Du bist ein kreativer Story-Generator für {} Inhalte.\n\
+                             Erstelle ansprechende, altersgerechte Geschichten für Altersgruppe: {:?}.\n\
+                             Sprache: Deutsch.\n\
+                             Integriere diese Bildungsziele: {}.",
+                            params.theme,
+                            params.age_group,
+                            params.educational_goals.join(", ")
+                        ),
+                        format!(
+                            "Erstelle ein Story-Segment über {}, das lehrreich und ansprechend ist.",
+                            params.theme
+                        )
+                    ),
+                    Language::En => (
+                        format!(
+                            "You are a creative story generator for {} content.\n\
+                             Generate engaging, age-appropriate stories for age group: {:?}.\n\
+                             Language: English.\n\
+                             Incorporate these educational goals: {}.",
+                            params.theme,
+                            params.age_group,
+                            params.educational_goals.join(", ")
+                        ),
+                        format!(
+                            "Create a story segment about {} that is educational and engaging.",
+                            params.theme
+                        )
+                    ),
+                };
                 (template_sys, template_user, true)
             }
         };
@@ -168,7 +203,7 @@ pub async fn handle_generate_story_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.prompt.models.default_model.clone(),
+        llm_model: config.llm.get_model_for_language(&params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -333,7 +368,7 @@ pub async fn handle_generate_validation_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.prompt.models.default_model.clone(),
+        llm_model: config.llm.get_model_for_language(&params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -501,7 +536,7 @@ pub async fn handle_generate_constraint_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.prompt.models.default_model.clone(),
+        llm_model: config.llm.get_model_for_language(&params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -589,15 +624,8 @@ pub async fn handle_get_model_for_language(
         }
     };
 
-    // Language-specific model mapping (can be moved to config in future)
-    let model_name = match params.language {
-        Language::En => config.prompt.models.default_model.clone(),
-        Language::De => {
-            // For German, we might want a multilingual model
-            // For now, use default and let config override
-            config.prompt.models.default_model.clone()
-        }
-    };
+    // Use language-specific model from config
+    let model_name = config.llm.get_model_for_language(&params.language);
 
     // Verify model exists (optional check)
     match llm_service.model_exists(&model_name).await {

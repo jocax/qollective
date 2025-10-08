@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use shared_types::*;
 use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
+use std::collections::HashMap;
 
 /// Prompt Helper configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,14 +38,33 @@ pub struct AuthConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TlsConfig {
     pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub base_url: String,
     pub default_model: String,
+    #[serde(default)]
+    pub models: HashMap<String, String>,
+}
+
+impl LlmConfig {
+    /// Get the appropriate model for a given language
+    pub fn get_model_for_language(&self, language: &Language) -> String {
+        let lang_code = match language {
+            Language::De => "de",
+            Language::En => "en",
+        };
+
+        self.models
+            .get(lang_code)
+            .cloned()
+            .unwrap_or_else(|| self.default_model.clone())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,7 +77,8 @@ pub struct PromptConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
-    pub default_model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,  // Deprecated: use LlmConfig.models instead
     pub temperature: f32,
     pub max_tokens: u32,
 }
@@ -90,17 +111,22 @@ impl Default for TlsConfig {
     fn default() -> Self {
         Self {
             ca_cert: "./certs/ca.pem".to_string(),
-            client_cert: "./certs/client-cert.pem".to_string(),
-            client_key: "./certs/client-key.pem".to_string(),
+            client_cert: None,
+            client_key: None,
         }
     }
 }
 
 impl Default for LlmConfig {
     fn default() -> Self {
+        let mut models = HashMap::new();
+        models.insert("de".to_string(), "leolm-70b-chat".to_string());
+        models.insert("en".to_string(), "meta-llama-3-8b-instruct".to_string());
+
         Self {
             base_url: "http://127.0.0.1:1234/v1".to_string(),
-            default_model: "llama-3.2-3b-instruct".to_string(),
+            default_model: "meta-llama-3-8b-instruct".to_string(),
+            models,
         }
     }
 }
@@ -120,7 +146,7 @@ impl Default for NatsConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            default_model: "llama-3.2-3b-instruct".to_string(),
+            default_model: None,  // Deprecated: use LlmConfig.models instead
             temperature: 0.7,
             max_tokens: 4096,
         }
@@ -180,5 +206,58 @@ impl PromptHelperConfig {
             .map_err(|e| TaleTrailError::ConfigError(format!("Config error: {}", e)))?;
 
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_model_for_language_returns_german_model() {
+        let config = LlmConfig::default();
+        let model = config.get_model_for_language(&Language::De);
+        assert_eq!(model, "leolm-70b-chat");
+    }
+
+    #[test]
+    fn test_get_model_for_language_returns_english_model() {
+        let config = LlmConfig::default();
+        let model = config.get_model_for_language(&Language::En);
+        assert_eq!(model, "meta-llama-3-8b-instruct");
+    }
+
+    #[test]
+    fn test_get_model_for_language_falls_back_to_default() {
+        let mut config = LlmConfig::default();
+        config.models.clear(); // Remove all language mappings
+        let model_de = config.get_model_for_language(&Language::De);
+        let model_en = config.get_model_for_language(&Language::En);
+        assert_eq!(model_de, config.default_model);
+        assert_eq!(model_en, config.default_model);
+    }
+
+    #[test]
+    fn test_llm_config_loads_custom_models() {
+        let mut models = HashMap::new();
+        models.insert("de".to_string(), "test-german-model".to_string());
+        models.insert("en".to_string(), "test-english-model".to_string());
+
+        let config = LlmConfig {
+            base_url: "http://test".to_string(),
+            default_model: "test-default".to_string(),
+            models,
+        };
+
+        assert_eq!(config.get_model_for_language(&Language::De), "test-german-model");
+        assert_eq!(config.get_model_for_language(&Language::En), "test-english-model");
+    }
+
+    #[test]
+    fn test_llm_config_default_has_language_models() {
+        let config = LlmConfig::default();
+        assert!(config.models.contains_key("de"), "Should have German model mapping");
+        assert!(config.models.contains_key("en"), "Should have English model mapping");
+        assert_eq!(config.models.len(), 2, "Should have exactly 2 language mappings");
     }
 }

@@ -79,16 +79,19 @@ async fn main() -> Result<()> {
     )?;
     info!("✅ Created LLM service with base URL: {}", app_config.llm.base_url);
 
-    // Create Qollective NATS config
+    // Create Qollective NATS config with NKey authentication
     let nats_config = NatsConfig {
         connection: NatsConnectionConfig {
             urls: vec![app_config.nats.url.clone()],
+            // Use Qollective's native NKey support!
+            nkey_file: Some(app_config.nats.auth.nkey_file.clone().into()),
+            nkey_seed: None,
             tls: QollectiveTlsConfig {
                 enabled: true,
                 ca_cert_path: Some(app_config.nats.tls.ca_cert.clone().into()),
-                cert_path: Some(app_config.nats.tls.client_cert.clone().into()),
-                key_path: Some(app_config.nats.tls.client_key.clone().into()),
-                verification_mode: qollective::config::tls::VerificationMode::MutualTls,
+                cert_path: None, // No client cert needed with NKey
+                key_path: None,  // No client key needed with NKey
+                verification_mode: qollective::config::tls::VerificationMode::CustomCa,
             },
             crypto_provider_strategy: Some(
                 qollective::crypto::CryptoProviderStrategy::Skip

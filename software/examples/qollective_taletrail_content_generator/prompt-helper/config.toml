@@ -11,14 +11,14 @@ description = "TaleTrail Prompt Helper MCP Server - Validates and optimizes prom
 # Base URL for LLM API endpoint (compatible with OpenAI API format)
 [llm]
 base_url = "http://127.0.0.1:1234/v1"
-default_model = "meta-llama-3.1-8b-instruct"
+default_model = "meta-llama-3-8b-instruct"
 timeout_secs = 60
 
 # Language-specific LLM models
 # Maps language codes to optimal models for that language
 [llm.models]
-de = "german-qwen2.5-14b-instruct"
-en = "meta-llama-3.1-8b-instruct"
+de = "leolm-70b-chat"
+en = "meta-llama-3-8b-instruct"
 
 # NATS Connection Configuration
 [nats]
@@ -27,23 +27,21 @@ subject = "mcp.prompt.helper"
 queue_group = "prompt-helper"
 
 [nats.auth]
-# NKey authentication (replaces mTLS client certificates)
+# NKey authentication - now natively supported by Qollective!
 nkey_file = "./nkeys/prompt-helper.nk"
 
 [nats.tls]
-# TLS with mutual authentication (mTLS) using client certificates
-ca_cert = "../certs/ca.pem"
-client_cert = "../certs/client-cert.pem"
-client_key = "../certs/client-key.pem"
+# TLS for encryption (NKey handles authentication, no client certs needed)
+ca_cert = "./certs/ca.pem"
 
 [prompt]
 # Supported languages for prompt validation
 supported_languages = ["english", "german"]
 default_language = "english"
 
-# LLM model configurations (legacy - kept for backward compatibility)
+# LLM generation parameters (temperature and max_tokens)
 [prompt.models]
-default_model = "llama-3.2-3b-instruct"
+# Note: default_model removed - now using [llm.models] for language-specific models
 temperature = 0.7
 max_tokens = 4096
 

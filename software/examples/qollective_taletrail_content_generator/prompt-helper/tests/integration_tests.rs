@@ -552,6 +552,23 @@ async fn test_config_custom_cert_paths() {
     assert_eq!(config.nats.tls.client_key, custom_key);
 }
 
+#[tokio::test]
+async fn test_config_loads_language_specific_models() {
+    let config = create_test_config();
+
+    // Verify language model mappings are loaded
+    assert!(config.llm.models.contains_key("de"), "Should have German model mapping");
+    assert!(config.llm.models.contains_key("en"), "Should have English model mapping");
+
+    // Verify correct models
+    assert_eq!(config.llm.models.get("de").unwrap(), "leolm-70b-chat");
+    assert_eq!(config.llm.models.get("en").unwrap(), "meta-llama-3-8b-instruct");
+
+    // Verify get_model_for_language works
+    assert_eq!(config.llm.get_model_for_language(&Language::De), "leolm-70b-chat");
+    assert_eq!(config.llm.get_model_for_language(&Language::En), "meta-llama-3-8b-instruct");
+}
+
 // ============================================================================
 // 6. Tool Schema Validation Tests
 // ============================================================================
