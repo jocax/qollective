@@ -4,8 +4,8 @@
 //! used in TaleTrail content generation. These payloads are wrapped in
 //! Qollective's standard Envelope<T> structure.
 
-use crate::generated::internal_api::{GenerationRequest, GenerationResponse};
-use crate::generated::validation::{ConstraintResult, QualityResult, ValidationResult};
+use crate::{GenerationRequest, GenerationResponse};
+use crate::{ConstraintResult, ValidationResult};
 use serde::{Deserialize, Serialize};
 
 /// Discriminated union of all possible TaleTrail payload types
@@ -34,7 +34,6 @@ pub enum TaleTrailPayload {
     GenerationResponse(GenerationResponse),
     ValidationResult(ValidationResult),
     ConstraintResult(ConstraintResult),
-    QualityResult(QualityResult),
 }
 
 impl TaleTrailPayload {
@@ -56,10 +55,5 @@ impl TaleTrailPayload {
     /// Check if payload is a ConstraintResult
     pub fn is_constraint_result(&self) -> bool {
         matches!(self, TaleTrailPayload::ConstraintResult(_))
-    }
-
-    /// Check if payload is a QualityResult
-    pub fn is_quality_result(&self) -> bool {
-        matches!(self, TaleTrailPayload::QualityResult(_))
     }
 }

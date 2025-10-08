@@ -24,7 +24,7 @@
 use async_trait::async_trait;
 
 use crate::errors::TaleTrailError;
-use crate::generated::prompts::{PromptPackage, PromptGenerationRequest};
+use crate::{PromptPackage, PromptGenerationRequest};
 
 /// Node context for content generation
 #[derive(Debug, Clone)]

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "shared-types-generated",
     "shared-types",
     "orchestrator",
     "story-generator",

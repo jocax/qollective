@@ -3,7 +3,7 @@
 //! This module demonstrates how to extend Qollective's Meta structure with
 //! application-specific metadata using the ExtensionsMeta pattern.
 
-use crate::generated::enums::GenerationPhase;
+use crate::GenerationPhase;
 use qollective::envelope::meta::ExtensionsMeta;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

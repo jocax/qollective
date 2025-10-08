@@ -13,10 +13,10 @@
 //! Note: Configuration is handled per-service using Figment with
 //! Defaults → config.toml → Environment variables hierarchy.
 
+pub mod constants;
 pub mod custom_metadata;
 pub mod errors;
 pub mod extensions;
-pub mod generated;
 pub mod helpers;
 pub mod nats_nkey;
 pub mod payloads;
@@ -24,11 +24,12 @@ pub mod traits;
 pub mod types;
 
 // Re-export commonly used items
+pub use constants::*;
 pub use errors::{Result, TaleTrailError};
 pub use nats_nkey::{connect_with_nkey, load_nkey_from_file};
 
-// Re-export generated types for convenience
-pub use generated::*;
+// Re-export generated types from shared-types-generated crate
+pub use shared_types_generated::*;
 
 // Re-export custom metadata extensions
 pub use custom_metadata::TaleTrailCustomMetadata;

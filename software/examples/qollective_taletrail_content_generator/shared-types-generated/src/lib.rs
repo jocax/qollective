@@ -1,0 +1,12 @@
+//! Generated types for TaleTrail Content Generator
+//!
+//! This crate contains auto-generated types from JSON Schema.
+//! Do not edit manually - changes will be overwritten by regenerate-types.sh
+//!
+//! To regenerate: Run `./regenerate-types.sh` from this crate's root directory.
+
+// Include generated module
+mod generated;
+
+// Re-export all generated types
+pub use generated::*;

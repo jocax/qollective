@@ -243,8 +243,8 @@ impl Default for RustCodegenConfig {
             debug: true,
             clone: true,
             partial_eq: true,
-            default: true,
-            custom_derives: Vec::new(),
+            default: false,  // Disabled by default - enums may not have Default
+            custom_derives: vec!["JsonSchema".to_string()],  // Add JsonSchema for MCP support
             custom_attributes: Vec::new(),
             module_name: None,
             snake_case_fields: true,

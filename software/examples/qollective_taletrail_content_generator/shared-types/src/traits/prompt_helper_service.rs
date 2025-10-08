@@ -25,8 +25,8 @@
 use async_trait::async_trait;
 
 use crate::errors::TaleTrailError;
-use crate::generated::prompts::{PromptPackage, PromptGenerationRequest};
-use crate::generated::enums::Language;
+use crate::{PromptPackage, PromptGenerationRequest};
+use crate::Language;
 
 /// Statistics for prompt generation tracking
 #[derive(Debug, Clone)]

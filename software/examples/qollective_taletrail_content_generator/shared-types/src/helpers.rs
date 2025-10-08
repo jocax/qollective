@@ -5,8 +5,8 @@
 
 use crate::custom_metadata::TaleTrailCustomMetadata;
 use crate::errors::{Result, TaleTrailError};
-use crate::generated::internal_api::{GenerationRequest, GenerationResponse};
-use crate::generated::validation::ValidationResult;
+use crate::{GenerationRequest, GenerationResponse};
+use crate::ValidationResult;
 use crate::payloads::TaleTrailPayload;
 use chrono::Utc;
 use qollective::envelope::builder::Envelope;
@@ -235,19 +235,19 @@ pub fn extract_custom_metadata<T>(envelope: &Envelope<T>) -> Option<TaleTrailCus
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generated::enums::{AgeGroup, GenerationPhase, Language, VocabularyLevel};
+    use crate::{AgeGroup, GenerationPhase, Language, VocabularyLevel};
 
     #[test]
     fn test_create_request_envelope() {
         let request = GenerationRequest {
             theme: "Test Theme".to_string(),
-            age_group: AgeGroup::SixToEight,
+            age_group: AgeGroup::_6To8,
             language: Language::En,
-            educational_goals: vec![],
-            node_count: 8,
-            vocabulary_level: VocabularyLevel::Basic,
-            required_elements: vec![],
-            tags: vec![],
+            educational_goals: Some(vec![]),
+            node_count: Some(8),
+            vocabulary_level: Some(VocabularyLevel::Basic),
+            required_elements: Some(vec![]),
+            tags: Some(vec![]),
             author_id: None,
             tenant_id: 1,
             prompt_packages: None,
@@ -273,13 +273,13 @@ mod tests {
     fn test_envelope_without_custom_metadata() {
         let request = GenerationRequest {
             theme: "Test".to_string(),
-            age_group: AgeGroup::SixToEight,
+            age_group: AgeGroup::_6To8,
             language: Language::En,
-            educational_goals: vec![],
-            node_count: 8,
-            vocabulary_level: VocabularyLevel::Basic,
-            required_elements: vec![],
-            tags: vec![],
+            educational_goals: Some(vec![]),
+            node_count: Some(8),
+            vocabulary_level: Some(VocabularyLevel::Basic),
+            required_elements: Some(vec![]),
+            tags: Some(vec![]),
             author_id: None,
             tenant_id: 1,
             prompt_packages: None,

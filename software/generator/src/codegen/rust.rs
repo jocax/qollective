@@ -73,7 +73,12 @@ impl RustCodeGenerator {
         if self.config.serde_support {
             code.add_import("use serde::{Deserialize, Serialize};".to_string());
         }
-        
+
+        // Add schemars import if JsonSchema is in custom derives
+        if self.config.custom_derives.contains(&"JsonSchema".to_string()) {
+            code.add_import("use schemars::JsonSchema;".to_string());
+        }
+
         // Add std imports for collections
         code.add_import("use std::collections::HashMap;".to_string());
     }
@@ -144,17 +149,16 @@ impl RustCodeGenerator {
         }
         
         // Handle additional properties
-        if schema.additional_properties.is_some() {
+        if let Some(additional_schema) = &schema.additional_properties {
+            // Resolve the type for additional properties (may include $ref)
+            let value_type = self.schema_to_rust_type(additional_schema)?;
+
             // Add a HashMap field for additional properties
             let additional_field = RustField {
                 name: "additional_properties".to_string(),
                 field_type: RustType::HashMap(
                     Box::new(RustType::String),
-                    Box::new(RustType::Custom {
-                        name: "serde_json::Value".to_string(),
-                        generics: Vec::new(),
-                        module_path: None,
-                    })
+                    Box::new(value_type)
                 ),
                 visibility: Visibility::Public,
                 attributes: vec![
@@ -343,7 +347,27 @@ impl RustCodeGenerator {
                 module_path: None,
             });
         }
-        
+
+        // Handle arrays with items schema (may include $ref)
+        if matches!(schema.schema_type, SchemaType::Array) {
+            if let Some(items_schema) = &schema.items {
+                let item_type = self.schema_to_rust_type(items_schema)?;
+                return Ok(RustType::Vec(Box::new(item_type)));
+            }
+        }
+
+        // Handle objects with additionalProperties schema (may include $ref)
+        // Note: This is for when the entire object is a map (not when object has properties + additionalProperties)
+        if matches!(schema.schema_type, SchemaType::Object) && schema.properties.is_empty() {
+            if let Some(additional_schema) = &schema.additional_properties {
+                let value_type = self.schema_to_rust_type(additional_schema)?;
+                return Ok(RustType::HashMap(
+                    Box::new(RustType::String),
+                    Box::new(value_type)
+                ));
+            }
+        }
+
         self.schema_type_to_rust_type(&schema.schema_type)
     }
     
@@ -516,11 +540,12 @@ impl RustCodeGenerator {
         if self.config.partial_eq {
             derives.push("PartialEq".to_string());
         }
-        // Add Eq only if no floats (floats only support PartialEq, not Eq)
-        if self.config.partial_eq && !has_floats {
-            derives.push("Eq".to_string());
-            derives.push("Hash".to_string());
-        }
+        // Note: We don't derive Eq or Hash for structs by default because:
+        // - Floats only support PartialEq, not Eq
+        // - HashMaps can't be Hash
+        // - Nested structs may contain floats or HashMaps
+        // - References to other types may have these issues
+        // - It's safer to only use PartialEq and let users add Eq/Hash manually if needed
         if self.config.serde_support {
             derives.push("Serialize".to_string());
             derives.push("Deserialize".to_string());
@@ -591,12 +616,31 @@ impl RustCodeGenerator {
                     return None;
                 }
 
-                let mut chars = part.chars();
-                match chars.next() {
-                    None => None,
-                    Some(first) => {
-                        let capitalized = first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase();
-                        Some(capitalized)
+                // Check if part is already all uppercase (acronym like "DAG", "API")
+                let is_acronym = part.len() > 1 && part.chars().all(|c| !c.is_lowercase());
+
+                // Check if part is already PascalCase/camelCase (like "ContentNode")
+                let has_internal_caps = part.chars().skip(1).any(|c| c.is_uppercase());
+
+                if is_acronym || has_internal_caps {
+                    // Preserve the casing for acronyms and already-cased words
+                    // But ensure first letter is uppercase
+                    let mut chars = part.chars();
+                    match chars.next() {
+                        None => None,
+                        Some(first) => {
+                            Some(first.to_uppercase().collect::<String>() + chars.as_str())
+                        }
+                    }
+                } else {
+                    // Normal word - capitalize first letter, lowercase rest
+                    let mut chars = part.chars();
+                    match chars.next() {
+                        None => None,
+                        Some(first) => {
+                            let capitalized = first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase();
+                            Some(capitalized)
+                        }
                     }
                 }
             })

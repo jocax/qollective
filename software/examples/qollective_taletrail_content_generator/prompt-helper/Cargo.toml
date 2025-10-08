@@ -22,6 +22,7 @@ async-nats = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+schemars = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -30,4 +31,5 @@ dotenvy = { workspace = true }
 figment = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
+rig-core = { workspace = true }
 nkeys = "0.4"

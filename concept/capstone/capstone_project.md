@@ -33,16 +33,16 @@ Example code for capstone project will be put here: (TaleTrail Content Generator
               │  (MCP Client)    │   Negotiation protocol
               └──────┬──────────┘
                      │
-         ┌───────────┼───────────┬──────────────┐
-         │ NATS subjects:        │              │
-         │ mcp.story.*           │              │
-    ┌────▼────┐          ┌───────▼──────┐  ┌───▼─────┐
-    │  Story  │          │   Quality    │  │Constraint│
-    │Generator│          │   Control    │  │ Enforcer │
-    │  Server │          │    Server    │  │  Server  │
-    └────┬────┘          └───────┬──────┘  └────┬────┘
-         │                       │               │
-         └───────────┬───────────┴───────────────┘
+         ┌───────────┼───────────┬────────────────┬──────────────┐
+         │ NATS subjects:        │                │              │
+         │ mcp.story.*           │                │              │
+    ┌────▼────┐          ┌───────▼──────┐ ┌───────▼──────┐  ┌───▼─────┐
+    │  Story  │          │   Prompt     │ │   Quality    │  │Constraint│
+    │Generator│          │   Heler      │ │   Control    │  │ Enforcer │
+    │  Server │          │    Server    │ │    Server    │  │  Server  │
+    └────┬────┘          └───────┬──────┘ └───────┬──────┘  └────┬────┘
+         │                       │                │               │
+         └───────────┬───────────┴────────────────┴───────────────┘
                      │
               ┌──────▼──────┐
               │  LM Studio  │ ← Local LLM (127.0.0.1:1234)

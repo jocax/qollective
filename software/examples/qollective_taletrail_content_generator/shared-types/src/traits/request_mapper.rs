@@ -24,15 +24,13 @@
 use uuid::Uuid;
 
 use crate::errors::TaleTrailError;
-use crate::generated::external_api::{
+use crate::{
     ExternalGenerationRequestV1,
     ExternalGenerationResponseV1,
-};
-use crate::generated::internal_api::{
     GenerationRequest,
     GenerationResponse,
+    GatewayMappingConfig,
 };
-use crate::generated::gateway::GatewayMappingConfig;
 
 /// Abstracts gateway API mapping logic
 ///

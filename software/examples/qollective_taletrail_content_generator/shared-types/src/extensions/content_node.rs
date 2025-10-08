@@ -1,12 +1,23 @@
 //! ContentNode business logic extensions
 
-use crate::generated::{ContentNode, DAG};
+use crate::{ContentNode, DAG};
 use crate::errors::{TaleTrailError, Result};
-use uuid::Uuid;
 
-impl ContentNode {
+/// Extension trait for ContentNode business logic
+pub trait ContentNodeExt {
+    fn calculate_word_count(&self) -> usize;
+    fn validate_choices(&self, dag: &DAG) -> Result<()>;
+    fn get_next_nodes(&self) -> Vec<String>;
+    fn is_leaf_node(&self) -> bool;
+    fn is_convergence_point(&self) -> bool;
+    fn has_educational_content(&self) -> bool;
+    fn choice_count(&self) -> usize;
+    fn is_start_node(&self) -> bool;
+}
+
+impl ContentNodeExt for ContentNode {
     /// Calculate word count of the node's text content
-    pub fn calculate_word_count(&self) -> usize {
+    fn calculate_word_count(&self) -> usize {
         self.content.text
             .split_whitespace()
             .filter(|s| !s.is_empty())
@@ -14,7 +25,7 @@ impl ContentNode {
     }
 
     /// Validate that all choices point to nodes that exist in the DAG
-    pub fn validate_choices(&self, dag: &DAG) -> Result<()> {
+    fn validate_choices(&self, dag: &DAG) -> Result<()> {
         for choice in &self.content.choices {
             if !dag.nodes.contains_key(&choice.next_node_id) {
                 return Err(TaleTrailError::ValidationError(
@@ -28,7 +39,7 @@ impl ContentNode {
 
         // Verify all next_nodes are covered by choices
         let choice_targets: std::collections::HashSet<_> =
-            self.content.choices.iter().map(|c| c.next_node_id).collect();
+            self.content.choices.iter().map(|c| c.next_node_id.clone()).collect();
 
         for next_node_id in &self.content.next_nodes {
             if !choice_targets.contains(next_node_id) {
@@ -45,35 +56,35 @@ impl ContentNode {
     }
 
     /// Get all next node IDs from choices
-    pub fn get_next_nodes(&self) -> Vec<Uuid> {
+    fn get_next_nodes(&self) -> Vec<String> {
         self.content.choices
             .iter()
-            .map(|choice| choice.next_node_id)
+            .map(|choice| choice.next_node_id.clone())
             .collect()
     }
 
     /// Check if this is a leaf node (no outgoing edges)
-    pub fn is_leaf_node(&self) -> bool {
+    fn is_leaf_node(&self) -> bool {
         self.outgoing_edges == 0 || self.content.choices.is_empty()
     }
 
     /// Check if this node is a convergence point
-    pub fn is_convergence_point(&self) -> bool {
+    fn is_convergence_point(&self) -> bool {
         self.content.convergence_point || self.incoming_edges >= 2
     }
 
     /// Check if this node has educational content
-    pub fn has_educational_content(&self) -> bool {
+    fn has_educational_content(&self) -> bool {
         self.content.educational_content.is_some()
     }
 
     /// Get the number of choices available at this node
-    pub fn choice_count(&self) -> usize {
+    fn choice_count(&self) -> usize {
         self.content.choices.len()
     }
 
     /// Check if this is the start node (no incoming edges)
-    pub fn is_start_node(&self) -> bool {
+    fn is_start_node(&self) -> bool {
         self.incoming_edges == 0
     }
 }
@@ -81,14 +92,14 @@ impl ContentNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generated::models::Content;
+    use crate::Content;
 
     #[test]
     fn test_word_count_basic() {
-        let node_id = Uuid::now_v7();
+        let node_id = "node_test".to_string();
         let content = Content {
-            content_type: "interactive_story_node".to_string(),
-            node_id,
+            r#type: "interactive_story_node".to_string(),
+            node_id: node_id.clone(),
             text: "Hello world test".to_string(),
             choices: vec![],
             convergence_point: false,
@@ -108,10 +119,10 @@ mod tests {
 
     #[test]
     fn test_is_leaf() {
-        let node_id = Uuid::now_v7();
+        let node_id = "node_end".to_string();
         let content = Content {
-            content_type: "interactive_story_node".to_string(),
-            node_id,
+            r#type: "interactive_story_node".to_string(),
+            node_id: node_id.clone(),
             text: "End".to_string(),
             choices: vec![],
             convergence_point: false,

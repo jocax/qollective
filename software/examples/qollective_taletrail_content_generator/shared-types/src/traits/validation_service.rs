@@ -25,11 +25,7 @@
 use async_trait::async_trait;
 
 use crate::errors::TaleTrailError;
-use crate::generated::models::Content;
-use crate::generated::dag::DAG;
-use crate::generated::internal_api::GenerationRequest;
-use crate::generated::prompts::PromptPackage;
-use crate::generated::validation::{ValidationResult, ConstraintResult};
+use crate::{Content, DAG, GenerationRequest, PromptPackage, ValidationResult, ConstraintResult};
 
 /// Abstracts validation logic for quality control and constraint enforcement
 ///

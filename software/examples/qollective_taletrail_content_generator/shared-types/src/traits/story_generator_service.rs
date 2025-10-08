@@ -22,10 +22,7 @@
 use async_trait::async_trait;
 
 use crate::errors::TaleTrailError;
-use crate::generated::dag::{DAG, ContentNode};
-use crate::generated::models::Content;
-use crate::generated::internal_api::GenerationRequest;
-use crate::generated::prompts::PromptPackage;
+use crate::{DAG, ContentNode, Content, GenerationRequest, PromptPackage};
 use crate::traits::llm_service::NodeContext;
 
 /// Abstracts story content generation logic
