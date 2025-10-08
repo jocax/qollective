@@ -1,15 +1,53 @@
-//! Prompt Helper MCP Server (Stub with TLS NATS Connection)
+//! Prompt Helper MCP Server with Qollective Infrastructure
+//!
+//! This server provides Model Context Protocol (MCP) tools for generating
+//! prompts in the TaleTrail content generation pipeline using Qollective's
+//! envelope-first architecture and NatsServer infrastructure.
+//!
+//! # Architecture
+//!
+//! - **Envelope-First**: All requests/responses wrapped in `Envelope<McpData>`
+//! - **NATS Infrastructure**: Uses `qollective::server::nats::NatsServer`
+//! - **Queue Groups**: Automatic load balancing across multiple instances
+//! - **TLS Security**: mTLS authentication with NATS server
+//! - **Tenant Isolation**: Tenant ID tracked in envelope metadata
+//! - **Distributed Tracing**: Request and trace IDs propagated
+//!
+//! # Message Flow
+//!
+//! 1. NatsServer receives NATS message on subject
+//! 2. Auto-decodes to `Envelope<McpData>`
+//! 3. Calls `PromptHelperHandler::handle(envelope)`
+//! 4. Handler extracts `CallToolRequest` from envelope
+//! 5. Routes to tool handler (generate_story_prompts, etc.)
+//! 6. Wraps `CallToolResult` in response envelope
+//! 7. NatsServer auto-encodes and publishes to reply subject
+//!
+//! # Configuration
+//!
+//! Loaded from `config.toml` with environment variable overrides:
+//! - NATS connection (URL, subject, queue group)
+//! - TLS certificates (CA, client cert, client key)
+//! - LLM service (base URL, model)
+//! - Prompt generation (languages, models, educational config)
 
-use shared_types::*;
-use tracing::info;
-use std::fs;
-use std::io::BufReader;
-use rustls_pemfile::{certs, pkcs8_private_keys};
+use qollective::server::nats::NatsServer;
+use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
+use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
+use tracing::{info, error};
 
 mod config;
+mod handlers;
+mod llm;
+mod mcp_tools;
 mod server;
+mod templates;
+mod handler;
 
 use config::PromptHelperConfig;
+use llm::RigLlmService;
+use handler::PromptHelperHandler;
+use shared_types::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,87 +59,82 @@ async fn main() -> Result<()> {
         .with_env_filter("info")
         .init();
 
-    // Load configuration
-    let config = PromptHelperConfig::load()?;
+    // Load application config
+    let app_config = PromptHelperConfig::load()?;
 
     info!("=== Prompt Helper MCP Server Starting ===");
     info!("Configuration:");
-    info!("  NATS URL: {}", config.nats.url);
-    info!("  NATS Subject: {}", config.nats.subject);
-    info!("  NATS Queue Group: {}", config.nats.queue_group);
-    info!("  Supported Languages: {:?}", config.prompt.supported_languages);
-    info!("  Default Model: {}", config.prompt.models.default_model);
+    info!("  NATS URL: {}", app_config.nats.url);
+    info!("  NATS Subject: {}", app_config.nats.subject);
+    info!("  NATS Queue Group: {}", app_config.nats.queue_group);
+    info!("  LLM Base URL: {}", app_config.llm.base_url);
+    info!("  LLM Model: {}", app_config.llm.default_model);
+    info!("  Supported Languages: {:?}", app_config.prompt.supported_languages);
     info!("");
 
-    // Build TLS configuration
-    info!("Loading TLS certificates...");
-    let tls_config = build_tls_config(&config)?;
-    info!("✅ TLS configuration built successfully");
+    // Create LLM service
+    let llm_service = RigLlmService::new(
+        &app_config.llm.base_url,
+        &app_config.llm.default_model,
+    )?;
+    info!("✅ Created LLM service with base URL: {}", app_config.llm.base_url);
 
-    // Connect to NATS with mTLS
-    info!("Connecting to NATS with TLS...");
-    let _nats_client = async_nats::ConnectOptions::new()
-        .name("prompt-helper-mcp-server")
-        .tls_client_config(tls_config)
-        .connect(&config.nats.url)
-        .await
-        .map_err(|e| TaleTrailError::NatsError(format!("Failed to connect to NATS: {}", e)))?;
+    // Create Qollective NATS config
+    let nats_config = NatsConfig {
+        connection: NatsConnectionConfig {
+            urls: vec![app_config.nats.url.clone()],
+            tls: QollectiveTlsConfig {
+                enabled: true,
+                ca_cert_path: Some(app_config.nats.tls.ca_cert.clone().into()),
+                cert_path: Some(app_config.nats.tls.client_cert.clone().into()),
+                key_path: Some(app_config.nats.tls.client_key.clone().into()),
+                verification_mode: qollective::config::tls::VerificationMode::MutualTls,
+            },
+            crypto_provider_strategy: Some(
+                qollective::crypto::CryptoProviderStrategy::Skip
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
-    info!("✅ Connected to NATS with TLS");
+    // Create NATS server using Qollective infrastructure
+    let mut nats_server = NatsServer::new(nats_config).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to create NATS server: {}", e)))?;
+    info!("✅ Connected to NATS at {} with TLS", app_config.nats.url);
+
+    // Create handler
+    let handler = PromptHelperHandler::new(app_config.clone(), llm_service);
+    info!("✅ Created PromptHelperHandler with envelope support");
+
+    // Subscribe to subject with queue group
+    nats_server.subscribe_queue_group(
+        &app_config.nats.subject,
+        &app_config.nats.queue_group,
+        handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe: {}", e)))?;
+    info!("✅ Subscribed to '{}' with queue group '{}'",
+        app_config.nats.subject, app_config.nats.queue_group);
+    info!("   Automatic envelope decoding/encoding enabled");
+
+    // Start processing messages
+    nats_server.start().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to start NATS server: {}", e)))?;
     info!("");
-    info!("Prompt Helper MCP Server ready on {} (TLS enabled)", config.nats.subject);
-    info!("Listening for shutdown signal (Ctrl+C)...");
+    info!("Prompt Helper MCP Server is running. Press Ctrl+C to shutdown.");
+    info!("Architecture: Envelope-first with NatsServer infrastructure");
+    info!("");
 
     // Wait for shutdown signal
-    tokio::signal::ctrl_c()
-        .await
-        .map_err(|e| TaleTrailError::ConfigError(format!("Failed to listen for Ctrl+C: {}", e)))?;
+    tokio::signal::ctrl_c().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to listen for Ctrl+C: {}", e)))?;
+    info!("Received shutdown signal");
 
-    info!("Received Ctrl+C, shutting down gracefully...");
+    // Graceful shutdown
+    nats_server.shutdown().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to shutdown: {}", e)))?;
+    info!("✅ Shutdown complete");
+
     Ok(())
-}
-
-/// Build TLS configuration from certificate files
-fn build_tls_config(config: &PromptHelperConfig) -> Result<rustls::ClientConfig> {
-    // Load CA certificate
-    let ca_cert_file = fs::File::open(&config.nats.tls.ca_cert)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to open CA cert at {}: {}", config.nats.tls.ca_cert, e)))?;
-    let mut ca_cert_reader = BufReader::new(ca_cert_file);
-    let ca_certs = certs(&mut ca_cert_reader)
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to parse CA cert: {}", e)))?;
-
-    // Load client certificate
-    let client_cert_file = fs::File::open(&config.nats.tls.client_cert)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to open client cert at {}: {}", config.nats.tls.client_cert, e)))?;
-    let mut client_cert_reader = BufReader::new(client_cert_file);
-    let client_certs = certs(&mut client_cert_reader)
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to parse client cert: {}", e)))?;
-
-    // Load client private key
-    let client_key_file = fs::File::open(&config.nats.tls.client_key)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to open client key at {}: {}", config.nats.tls.client_key, e)))?;
-    let mut client_key_reader = BufReader::new(client_key_file);
-    let mut client_keys = pkcs8_private_keys(&mut client_key_reader)
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to parse client key: {}", e)))?;
-
-    let client_key = client_keys.pop()
-        .ok_or_else(|| TaleTrailError::TlsCertificateError("No private key found in client key file".to_string()))?;
-
-    // Build root certificate store
-    let mut root_cert_store = rustls::RootCertStore::empty();
-    for ca_cert in ca_certs {
-        root_cert_store.add(ca_cert)
-            .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to add CA cert: {:?}", e)))?;
-    }
-
-    // Build TLS configuration with client authentication
-    let tls_config = rustls::ClientConfig::builder()
-        .with_root_certificates(root_cert_store)
-        .with_client_auth_cert(client_certs, client_key.into())
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to build TLS config: {}", e)))?;
-
-    Ok(tls_config)
 }

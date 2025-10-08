@@ -1,0 +1,270 @@
+//! Envelope-first handler for Prompt Helper MCP server
+//!
+//! This module implements the `EnvelopeHandler<McpData, McpData>` trait to process
+//! MCP tool requests wrapped in Qollective envelopes. This enables:
+//! - Tenant isolation via `tenant_id` in envelope metadata
+//! - Distributed tracing via `trace_id` and `request_id`
+//! - Compatibility with Phase 4 orchestrator
+//!
+//! # Architecture
+//!
+//! ```text
+//! Envelope<McpData> (request)
+//!   ↓
+//! Extract CallToolRequest from envelope.payload.tool_call
+//!   ↓
+//! Route to handler (handle_generate_story_prompts, etc.)
+//!   ↓
+//! Wrap CallToolResult in Envelope<McpData> (response)
+//! ```
+
+use qollective::envelope::Envelope;
+use qollective::types::mcp::McpData;
+use qollective::server::EnvelopeHandler;
+use qollective::error::Result;
+use rmcp::model::{CallToolRequest, CallToolResult, Content};
+use std::sync::Arc;
+use std::future::Future;
+
+use crate::config::PromptHelperConfig;
+use crate::llm::RigLlmService;
+use crate::handlers::{
+    handle_generate_story_prompts,
+    handle_generate_validation_prompts,
+    handle_generate_constraint_prompts,
+    handle_get_model_for_language,
+};
+
+/// Handler for prompt-helper MCP requests over NATS with envelope support
+///
+/// This handler implements the envelope-first architecture pattern by:
+/// 1. Accepting `Envelope<McpData>` with complete metadata
+/// 2. Extracting `CallToolRequest` from `envelope.payload.tool_call`
+/// 3. Routing to appropriate tool handler
+/// 4. Wrapping `CallToolResult` in response `Envelope<McpData>`
+///
+/// # Example
+///
+/// ```no_run
+/// use prompt_helper::handler::PromptHelperHandler;
+/// use prompt_helper::config::PromptHelperConfig;
+/// use prompt_helper::llm::RigLlmService;
+/// use qollective::traits::handlers::EnvelopeHandler;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = PromptHelperConfig::load()?;
+/// let llm_service = RigLlmService::new(&config.llm.base_url, &config.llm.default_model)?;
+/// let handler = PromptHelperHandler::new(config, llm_service);
+///
+/// // Handler is used by NatsServer.subscribe_queue_group()
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone)]
+pub struct PromptHelperHandler {
+    config: Arc<PromptHelperConfig>,
+    llm_service: Arc<RigLlmService>,
+}
+
+impl PromptHelperHandler {
+    /// Create a new PromptHelperHandler
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Prompt helper configuration for template fallback
+    /// * `llm_service` - LLM service for prompt generation
+    pub fn new(config: PromptHelperConfig, llm_service: RigLlmService) -> Self {
+        Self {
+            config: Arc::new(config),
+            llm_service: Arc::new(llm_service),
+        }
+    }
+
+    /// Route tool call to appropriate handler
+    ///
+    /// This method dispatches the tool call based on the tool name to one of:
+    /// - `handle_generate_story_prompts` - Generate story prompts
+    /// - `handle_generate_validation_prompts` - Generate validation prompts
+    /// - `handle_generate_constraint_prompts` - Generate constraint prompts
+    /// - `handle_get_model_for_language` - Get LLM model for language
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - MCP CallToolRequest with tool name and arguments
+    ///
+    /// # Returns
+    ///
+    /// CallToolResult with PromptPackage JSON or error
+    async fn execute_tool(&self, request: CallToolRequest) -> CallToolResult {
+        match request.params.name.as_ref() {
+            "generate_story_prompts" => {
+                handle_generate_story_prompts(
+                    request,
+                    self.llm_service.as_ref(),
+                    &self.config,
+                ).await
+            }
+            "generate_validation_prompts" => {
+                handle_generate_validation_prompts(
+                    request,
+                    self.llm_service.as_ref(),
+                    &self.config,
+                ).await
+            }
+            "generate_constraint_prompts" => {
+                handle_generate_constraint_prompts(
+                    request,
+                    self.llm_service.as_ref(),
+                    &self.config,
+                ).await
+            }
+            "get_model_for_language" => {
+                handle_get_model_for_language(
+                    request,
+                    self.llm_service.as_ref(),
+                    &self.config,
+                ).await
+            }
+            _ => {
+                // Unknown tool - return error
+                tracing::error!("Unknown tool requested: {}", request.params.name);
+                CallToolResult {
+                    content: vec![Content::text(format!(
+                        "Unknown tool: {}",
+                        request.params.name
+                    ))],
+                    is_error: Some(true),
+                    structured_content: None,
+                    meta: None,
+                }
+            }
+        }
+    }
+}
+
+impl EnvelopeHandler<McpData, McpData> for PromptHelperHandler {
+    fn handle(&self, envelope: Envelope<McpData>) -> impl Future<Output = Result<Envelope<McpData>>> + Send {
+        async move {
+        // Extract metadata and payload
+        let (meta, data) = envelope.extract();
+
+        // Extract tool call from envelope
+        let tool_call = data.tool_call.ok_or_else(|| {
+            qollective::error::QollectiveError::mcp_tool_execution(
+                "No tool_call in envelope".to_string()
+            )
+        })?;
+
+        // Extract trace_id from tracing metadata if present
+        let trace_id = meta.tracing.as_ref()
+            .and_then(|t| t.trace_id.clone());
+
+        tracing::info!(
+            "Processing tool: {} (tenant: {:?}, request_id: {:?}, trace_id: {:?})",
+            tool_call.params.name,
+            meta.tenant,
+            meta.request_id,
+            trace_id
+        );
+
+        // Execute tool
+        let result = self.execute_tool(tool_call).await;
+
+        tracing::info!(
+            "Tool execution complete (is_error: {:?})",
+            result.is_error
+        );
+
+        // Create response McpData
+        let response_data = McpData {
+            tool_call: None,
+            tool_response: Some(result),
+            tool_registration: None,
+            discovery_data: None,
+        };
+
+        // Create response envelope (preserving metadata)
+        Ok(Envelope::new(meta, response_data))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qollective::envelope::Meta;
+    use rmcp::model::ToolCallParams;
+    use serde_json::json;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_prompt_helper_handler_unknown_tool() {
+        // ARRANGE: Create handler with mock config
+        let config = PromptHelperConfig::default();
+        let llm_service = RigLlmService::new("http://localhost:11434", "llama3.2").unwrap();
+        let handler = PromptHelperHandler::new(config, llm_service);
+
+        let request = CallToolRequest {
+            method: "tools/call".to_string(),
+            params: ToolCallParams {
+                name: "unknown_tool".to_string(),
+                arguments: Some(serde_json::Map::new()),
+            },
+        };
+
+        let mcp_data = McpData {
+            tool_call: Some(request),
+            tool_response: None,
+            tool_registration: None,
+            discovery_data: None,
+        };
+
+        let mut meta = Meta::default();
+        meta.tenant = Some("test-tenant".to_string());
+        meta.request_id = Some(Uuid::new_v4());
+
+        let envelope = Envelope::new(meta, mcp_data);
+
+        // ACT: Handle envelope
+        let result = handler.handle(envelope).await;
+
+        // ASSERT: Should return error response
+        assert!(result.is_ok());
+        let response_envelope = result.unwrap();
+        let (_, response_data) = response_envelope.extract();
+
+        assert!(response_data.tool_response.is_some());
+        let tool_response = response_data.tool_response.unwrap();
+        assert_eq!(tool_response.is_error, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_prompt_helper_handler_missing_tool_call() {
+        // ARRANGE: Create handler with mock config
+        let config = PromptHelperConfig::default();
+        let llm_service = RigLlmService::new("http://localhost:11434", "llama3.2").unwrap();
+        let handler = PromptHelperHandler::new(config, llm_service);
+
+        // Create envelope with NO tool_call
+        let mcp_data = McpData {
+            tool_call: None,
+            tool_response: None,
+            tool_registration: None,
+            discovery_data: None,
+        };
+
+        let mut meta = Meta::default();
+        meta.tenant = Some("test-tenant".to_string());
+        meta.request_id = Some(Uuid::new_v4());
+
+        let envelope = Envelope::new(meta, mcp_data);
+
+        // ACT: Handle envelope
+        let result = handler.handle(envelope).await;
+
+        // ASSERT: Should return error
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("No tool_call in envelope"));
+    }
+}

@@ -10,11 +10,12 @@ path = "src/main.rs"
 [dependencies]
 shared-types = { path = "../shared-types" }
 qollective = { workspace = true, features = [
-    "mcp-server",  # MCP server capabilities
-    "nats",        # NATS transport layer
-    "tls",         # TLS support for NATS
-    "config",      # Configuration support
-    "tracing"      # Observability
+    "nats-server",    # For NatsServer infrastructure
+    "mcp-server",     # MCP server capabilities and McpData types
+    "nats",           # NATS transport layer
+    "tls",            # TLS support for NATS
+    "config",         # Configuration support
+    "tracing"         # Observability
 ]}
 rmcp = { workspace = true }
 rmcp-macros = { workspace = true }
@@ -32,4 +33,16 @@ figment = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rig-core = { workspace = true }
+reqwest = "0.12"
 nkeys = "0.4"
+chrono = { workspace = true }
+futures-util = "0.3"
+
+[dev-dependencies]
+shared-types = { path = "../shared-types", features = ["mocking"] }
+qollective = { workspace = true, features = [
+    "nats-client",    # For NatsClient in integration tests
+]}
+mockall = { workspace = true }
+futures-util = "0.3"
+uuid = { workspace = true }

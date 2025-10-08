@@ -9,6 +9,7 @@ use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
 pub struct PromptHelperConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
+    pub llm: LlmConfig,
     pub prompt: PromptConfig,
 }
 
@@ -38,6 +39,12 @@ pub struct TlsConfig {
     pub ca_cert: String,
     pub client_cert: String,
     pub client_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    pub base_url: String,
+    pub default_model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +92,15 @@ impl Default for TlsConfig {
             ca_cert: "./certs/ca.pem".to_string(),
             client_cert: "./certs/client-cert.pem".to_string(),
             client_key: "./certs/client-key.pem".to_string(),
+        }
+    }
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "http://127.0.0.1:1234/v1".to_string(),
+            default_model: "llama-3.2-3b-instruct".to_string(),
         }
     }
 }
@@ -140,6 +156,7 @@ impl Default for PromptHelperConfig {
         Self {
             service: ServiceConfig::default(),
             nats: NatsConfig::default(),
+            llm: LlmConfig::default(),
             prompt: PromptConfig::default(),
         }
     }

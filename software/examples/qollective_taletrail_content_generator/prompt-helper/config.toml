@@ -7,6 +7,20 @@ name = "prompt-helper"
 version = "0.1.0"
 description = "TaleTrail Prompt Helper MCP Server - Validates and optimizes prompts for story generation"
 
+# LLM Configuration
+# Base URL for LLM API endpoint (compatible with OpenAI API format)
+[llm]
+base_url = "http://127.0.0.1:1234/v1"
+default_model = "meta-llama-3.1-8b-instruct"
+timeout_secs = 60
+
+# Language-specific LLM models
+# Maps language codes to optimal models for that language
+[llm.models]
+de = "german-qwen2.5-14b-instruct"
+en = "meta-llama-3.1-8b-instruct"
+
+# NATS Connection Configuration
 [nats]
 url = "nats://localhost:5222"
 subject = "mcp.prompt.helper"
@@ -17,15 +31,17 @@ queue_group = "prompt-helper"
 nkey_file = "./nkeys/prompt-helper.nk"
 
 [nats.tls]
-# TLS for encryption (no client cert needed with NKey auth)
-ca_cert = "./certs/ca.pem"
+# TLS with mutual authentication (mTLS) using client certificates
+ca_cert = "../certs/ca.pem"
+client_cert = "../certs/client-cert.pem"
+client_key = "../certs/client-key.pem"
 
 [prompt]
 # Supported languages for prompt validation
 supported_languages = ["english", "german"]
 default_language = "english"
 
-# LLM model configurations
+# LLM model configurations (legacy - kept for backward compatibility)
 [prompt.models]
 default_model = "llama-3.2-3b-instruct"
 temperature = 0.7
@@ -35,3 +51,76 @@ max_tokens = 4096
 [prompt.educational]
 min_educational_score = 0.6
 required_elements = ["learning_objective", "age_appropriate", "safe_content"]
+
+# ============================================================================
+# PROMPT TEMPLATES CONFIGURATION
+# ============================================================================
+# Templates support variable substitution using {variable_name} syntax
+# Available variables differ by template type - see documentation
+
+# Story Generator Templates - English
+# Used for generating creative story content for children
+# Variables: {age_group}, {language}, {educational_goals}, {theme}
+[templates.story_generator.en]
+system_prompt = """You are a creative storyteller for children. Create engaging, age-appropriate stories \
+for age group {age_group}. Use {language} language. Incorporate these educational goals: {educational_goals}. \
+The story should be about the theme: {theme}. Ensure the content is safe, educational, and entertaining."""
+
+user_prompt = """Generate a story segment about {theme} that incorporates the educational goals: {educational_goals}. \
+Make it appropriate for children aged {age_group}. Focus on creating engaging narrative content."""
+
+# Story Generator Templates - German
+# Verwendet für die Generierung kreativer Geschichteninhalte für Kinder
+# Variablen: {age_group}, {language}, {educational_goals}, {theme}
+[templates.story_generator.de]
+system_prompt = """Du bist ein kreativer Geschichtenerzähler für Kinder. Erstelle ansprechende, altersgerechte \
+Geschichten für die Altersgruppe {age_group}. Verwende die Sprache {language}. Integriere diese Lernziele: \
+{educational_goals}. Die Geschichte sollte das Thema behandeln: {theme}. Stelle sicher, dass der Inhalt sicher, \
+lehrreich und unterhaltsam ist."""
+
+user_prompt = """Generiere ein Geschichtensegment über {theme}, das die Lernziele integriert: {educational_goals}. \
+Mache es passend für Kinder im Alter von {age_group}. Konzentriere dich auf die Erstellung ansprechender narrativer Inhalte."""
+
+# Quality Control Templates - English
+# Used for validating content quality, safety, and age-appropriateness
+# Variables: {content_type}, {age_group}, {language}
+[templates.quality_control.en]
+system_prompt = """You are a quality control validator for {content_type} content. Validate content for age group \
+{age_group}. Language: {language}. Check for: age-appropriateness, language quality, educational value, and safety. \
+Provide detailed feedback with scores."""
+
+user_prompt = """Validate the following {content_type} content and provide a comprehensive quality assessment. \
+Check for age-appropriateness for {age_group}, language quality, educational value, and safety concerns."""
+
+# Quality Control Templates - German
+# Verwendet für die Validierung von Inhaltsqualität, Sicherheit und Altersangemessenheit
+# Variablen: {content_type}, {age_group}, {language}
+[templates.quality_control.de]
+system_prompt = """Du bist ein Qualitätsprüfer für {content_type}-Inhalte. Überprüfe Inhalte für die Altersgruppe \
+{age_group}. Sprache: {language}. Prüfe: Altersangemessenheit, Sprachqualität, Bildungswert und Sicherheit. \
+Gib detailliertes Feedback mit Bewertungen."""
+
+user_prompt = """Überprüfe den folgenden {content_type}-Inhalt und erstelle eine umfassende Qualitätsbewertung. \
+Prüfe die Altersangemessenheit für {age_group}, Sprachqualität, Bildungswert und Sicherheitsbedenken."""
+
+# Constraint Enforcer Templates - English
+# Used for enforcing vocabulary levels, required elements, and theme consistency
+# Variables: {vocabulary_level}, {language}, {required_elements}, {theme}
+[templates.constraint_enforcer.en]
+system_prompt = """You are a constraint enforcement validator. Enforce vocabulary level: {vocabulary_level}. \
+Language: {language}. Verify presence of required elements: {required_elements}. Check theme consistency with: {theme}. \
+Flag any violations and provide specific corrections."""
+
+user_prompt = """Check the following content for constraint violations. Verify vocabulary level is {vocabulary_level}, \
+required elements are present: {required_elements}, and theme consistency is maintained."""
+
+# Constraint Enforcer Templates - German
+# Verwendet für die Durchsetzung von Vokabularstufen, erforderlichen Elementen und Themenkonsistenz
+# Variablen: {vocabulary_level}, {language}, {required_elements}, {theme}
+[templates.constraint_enforcer.de]
+system_prompt = """Du bist ein Einschränkungsprüfer. Setze die Vokabularstufe durch: {vocabulary_level}. \
+Sprache: {language}. Überprüfe das Vorhandensein erforderlicher Elemente: {required_elements}. \
+Prüfe die Themenkonsistenz mit: {theme}. Markiere Verstöße und gib spezifische Korrekturen."""
+
+user_prompt = """Überprüfe den folgenden Inhalt auf Verstöße gegen Einschränkungen. Überprüfe, ob die Vokabularstufe \
+{vocabulary_level} ist, erforderliche Elemente vorhanden sind: {required_elements}, und die Themenkonsistenz gewahrt bleibt."""

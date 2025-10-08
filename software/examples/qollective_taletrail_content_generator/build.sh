@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 
 # Build order based on dependencies
 CRATES=(
+    "shared-types-generated"
     "shared-types"
     "orchestrator"
     "story-generator"
