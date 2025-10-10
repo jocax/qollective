@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 shared-types = { path = "../shared-types" }
+shared-types-llm = { path = "../shared-types-llm" }
 qollective = { workspace = true, features = [
     "nats-server",    # For NatsServer infrastructure
     "mcp-server",     # MCP server capabilities and McpData types

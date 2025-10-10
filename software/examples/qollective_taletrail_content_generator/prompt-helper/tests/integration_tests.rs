@@ -62,15 +62,33 @@ fn init_rustls() {
 
 /// Create test configuration with default values
 fn create_test_config() -> PromptHelperConfig {
-    PromptHelperConfig::default()
+    use prompt_helper::config::*;
+
+    let llm_toml = r#"
+[llm]
+type = "shimmy"
+url = "http://127.0.0.1:11435/v1"
+default_model = "test-model"
+
+[llm.models]
+de = "leolm-70b-chat"
+en = "meta-llama-3-8b-instruct"
+    "#;
+
+    PromptHelperConfig {
+        service: ServiceConfig::default(),
+        nats: NatsConfig::default(),
+        llm: shared_types_llm::LlmConfig::from_toml_str(llm_toml).unwrap(),
+        prompt: PromptConfig::default(),
+    }
 }
 
 /// Create test configuration with custom certificate paths
 fn create_test_config_with_certs(ca_cert: &str, client_cert: &str, client_key: &str) -> PromptHelperConfig {
-    let mut config = PromptHelperConfig::default();
+    let mut config = create_test_config();
     config.nats.tls.ca_cert = ca_cert.to_string();
-    config.nats.tls.client_cert = client_cert.to_string();
-    config.nats.tls.client_key = client_key.to_string();
+    config.nats.tls.client_cert = Some(client_cert.to_string());
+    config.nats.tls.client_key = Some(client_key.to_string());
     config
 }
 
@@ -150,8 +168,8 @@ async fn test_nats_connection_with_tls_succeeds() {
     // Build TLS configuration
     let tls_config = build_tls_config(
         &config.nats.tls.ca_cert,
-        &config.nats.tls.client_cert,
-        &config.nats.tls.client_key,
+        config.nats.tls.client_cert.as_ref().unwrap(),
+        config.nats.tls.client_key.as_ref().unwrap(),
     )
     .expect("Failed to build TLS config");
 
@@ -267,13 +285,12 @@ async fn test_mcp_server_config_has_valid_defaults() {
 
     // Verify TLS config paths
     assert!(!config.nats.tls.ca_cert.is_empty());
-    assert!(!config.nats.tls.client_cert.is_empty());
-    assert!(!config.nats.tls.client_key.is_empty());
+    // client_cert and client_key are optional in default config
+    // They are only required for mTLS scenarios
 
     // Verify prompt config
     assert!(!config.prompt.supported_languages.is_empty());
     assert!(!config.prompt.default_language.is_empty());
-    assert!(!config.prompt.models.default_model.is_empty());
     assert!(config.prompt.models.temperature > 0.0);
     assert!(config.prompt.models.max_tokens > 0);
 }
@@ -407,8 +424,8 @@ async fn test_nats_message_routing_to_handler() {
     // Build TLS config
     let tls_config = build_tls_config(
         &config.nats.tls.ca_cert,
-        &config.nats.tls.client_cert,
-        &config.nats.tls.client_key,
+        config.nats.tls.client_cert.as_ref().unwrap(),
+        config.nats.tls.client_key.as_ref().unwrap(),
     )
     .expect("Failed to build TLS config");
 
@@ -482,8 +499,8 @@ async fn test_graceful_shutdown_drains_subscriptions() {
     // Build TLS config
     let tls_config = build_tls_config(
         &config.nats.tls.ca_cert,
-        &config.nats.tls.client_cert,
-        &config.nats.tls.client_key,
+        config.nats.tls.client_cert.as_ref().unwrap(),
+        config.nats.tls.client_key.as_ref().unwrap(),
     )
     .expect("Failed to build TLS config");
 
@@ -534,7 +551,6 @@ async fn test_config_default_values() {
     assert_eq!(config.nats.queue_group, "prompt-helper");
 
     // Verify prompt model defaults
-    assert_eq!(config.prompt.models.default_model, "llama-3.2-3b-instruct");
     assert_eq!(config.prompt.models.temperature, 0.7);
     assert_eq!(config.prompt.models.max_tokens, 4096);
 }
@@ -548,8 +564,8 @@ async fn test_config_custom_cert_paths() {
     let config = create_test_config_with_certs(custom_ca, custom_cert, custom_key);
 
     assert_eq!(config.nats.tls.ca_cert, custom_ca);
-    assert_eq!(config.nats.tls.client_cert, custom_cert);
-    assert_eq!(config.nats.tls.client_key, custom_key);
+    assert_eq!(config.nats.tls.client_cert.as_deref(), Some(custom_cert));
+    assert_eq!(config.nats.tls.client_key.as_deref(), Some(custom_key));
 }
 
 #[tokio::test]
@@ -557,16 +573,16 @@ async fn test_config_loads_language_specific_models() {
     let config = create_test_config();
 
     // Verify language model mappings are loaded
-    assert!(config.llm.models.contains_key("de"), "Should have German model mapping");
-    assert!(config.llm.models.contains_key("en"), "Should have English model mapping");
+    assert!(config.llm.provider.models.contains_key("de"), "Should have German model mapping");
+    assert!(config.llm.provider.models.contains_key("en"), "Should have English model mapping");
 
     // Verify correct models
-    assert_eq!(config.llm.models.get("de").unwrap(), "leolm-70b-chat");
-    assert_eq!(config.llm.models.get("en").unwrap(), "meta-llama-3-8b-instruct");
+    assert_eq!(config.llm.provider.models.get("de").unwrap(), "leolm-70b-chat");
+    assert_eq!(config.llm.provider.models.get("en").unwrap(), "meta-llama-3-8b-instruct");
 
     // Verify get_model_for_language works
-    assert_eq!(config.llm.get_model_for_language(&Language::De), "leolm-70b-chat");
-    assert_eq!(config.llm.get_model_for_language(&Language::En), "meta-llama-3-8b-instruct");
+    assert_eq!(config.llm.provider.get_model_for_language("de"), Some(&"leolm-70b-chat".to_string()));
+    assert_eq!(config.llm.provider.get_model_for_language("en"), Some(&"meta-llama-3-8b-instruct".to_string()));
 }
 
 // ============================================================================

@@ -9,7 +9,7 @@ use async_nats::Client;
 use qollective::envelope::meta::Meta;
 use qollective::envelope::Envelope;
 use qollective::types::mcp::McpData;
-use rmcp::model::CallToolRequest;
+use rmcp::model::{CallToolRequest, CallToolRequestParam, CallToolRequestMethod};
 use shared_types::{connect_with_nkey, TaleTrailError};
 use std::time::Duration;
 use tracing::{debug, info, warn};
@@ -199,7 +199,6 @@ impl NatsClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmcp::model::CallToolParams;
 
     #[test]
     fn test_create_request_envelope() {
@@ -208,10 +207,12 @@ mod tests {
         // Create a mock client (won't actually connect in test)
         // We're just testing envelope creation logic
         let request = CallToolRequest {
-            params: rmcp::model::ToolCallParams {
-                name: "test_tool".to_string(),
+            method: CallToolRequestMethod,
+            params: CallToolRequestParam {
+                name: "test_tool".to_string().into(),
                 arguments: None,
             },
+            extensions: Default::default(),
         };
 
         // The actual client creation would fail without a real NATS server,

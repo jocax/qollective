@@ -10,15 +10,20 @@ description = "TaleTrail Prompt Helper MCP Server - Validates and optimizes prom
 # LLM Configuration
 # Base URL for LLM API endpoint (compatible with OpenAI API format)
 [llm]
-base_url = "http://127.0.0.1:1234/v1"
+type = "lmstudio"
+url = "http://127.0.0.1:1234/v1"
 default_model = "meta-llama-3-8b-instruct"
-timeout_secs = 60
+use_default_model_fallback = true
+timeout_secs = 180
+max_tokens = 4096
+temperature = 0.7
+system_prompt_style = "chatml"
 
 # Language-specific LLM models
 # Maps language codes to optimal models for that language
 [llm.models]
-de = "leolm-70b-chat"
 en = "meta-llama-3-8b-instruct"
+de = "leolm-70b-chat"
 
 # NATS Connection Configuration
 [nats]

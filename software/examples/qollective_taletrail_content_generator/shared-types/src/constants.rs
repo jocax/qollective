@@ -101,7 +101,7 @@ pub const CONCURRENT_BATCHES: usize = 3;
 // ============================================================================
 
 /// Default LM Studio URL
-pub const LM_STUDIO_DEFAULT_URL: &str = "http://127.0.0.1:1234";
+pub const LM_STUDIO_DEFAULT_URL: &str = "http://127.0.0.1:1234/v1";
 
 /// Default LM Studio model name
 pub const LM_STUDIO_MODEL_NAME: &str = "meta-llama-3.1-8b-instruct";

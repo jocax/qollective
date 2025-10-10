@@ -27,8 +27,8 @@ use std::sync::Arc;
 use std::future::Future;
 
 use crate::config::PromptHelperConfig;
-use crate::llm::RigLlmService;
-use crate::handlers::{
+use crate::llm::SharedLlmService;
+use crate::tool_handlers::{
     handle_generate_story_prompts,
     handle_generate_validation_prompts,
     handle_generate_constraint_prompts,
@@ -63,7 +63,7 @@ use crate::handlers::{
 #[derive(Clone)]
 pub struct PromptHelperHandler {
     config: Arc<PromptHelperConfig>,
-    llm_service: Arc<RigLlmService>,
+    llm_service: Arc<SharedLlmService>,
 }
 
 impl PromptHelperHandler {
@@ -73,7 +73,7 @@ impl PromptHelperHandler {
     ///
     /// * `config` - Prompt helper configuration for template fallback
     /// * `llm_service` - LLM service for prompt generation
-    pub fn new(config: PromptHelperConfig, llm_service: RigLlmService) -> Self {
+    pub fn new(config: PromptHelperConfig, llm_service: SharedLlmService) -> Self {
         Self {
             config: Arc::new(config),
             llm_service: Arc::new(llm_service),
@@ -192,24 +192,58 @@ impl EnvelopeHandler<McpData, McpData> for PromptHelperHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::SharedLlmService;
+    use crate::config::{ServiceConfig, NatsConfig, PromptConfig, PromptHelperConfig};
+    use shared_types_llm::LlmConfig;
     use qollective::envelope::Meta;
-    use rmcp::model::ToolCallParams;
+    use rmcp::model::{CallToolRequestParam, CallToolRequestMethod};
     use serde_json::json;
     use uuid::Uuid;
+
+    /// Create a test LlmConfig using TOML configuration
+    fn test_llm_config() -> LlmConfig {
+        let toml = r#"
+[llm]
+type = "shimmy"
+url = "http://localhost:11434/v1"
+default_model = "test-model"
+use_default_model_fallback = true
+max_tokens = 4096
+temperature = 0.7
+timeout_secs = 60
+system_prompt_style = "native"
+
+[llm.models]
+en = "test-model-en"
+de = "test-model-de"
+        "#;
+        LlmConfig::from_toml_str(toml).expect("Failed to create test LLM config")
+    }
+
+    /// Create a test PromptHelperConfig for testing
+    fn test_prompt_helper_config() -> PromptHelperConfig {
+        PromptHelperConfig {
+            service: ServiceConfig::default(),
+            nats: NatsConfig::default(),
+            llm: test_llm_config(),
+            prompt: PromptConfig::default(),
+        }
+    }
 
     #[tokio::test]
     async fn test_prompt_helper_handler_unknown_tool() {
         // ARRANGE: Create handler with mock config
-        let config = PromptHelperConfig::default();
-        let llm_service = RigLlmService::new("http://localhost:11434", "llama3.2").unwrap();
+        let config = test_prompt_helper_config();
+        let llm_service = SharedLlmService::new(test_llm_config()).unwrap();
         let handler = PromptHelperHandler::new(config, llm_service);
 
         let request = CallToolRequest {
-            method: "tools/call".to_string(),
-            params: ToolCallParams {
-                name: "unknown_tool".to_string(),
+            method: CallToolRequestMethod,
+            params: CallToolRequestParam {
+                name: "unknown_tool".into(),
                 arguments: Some(serde_json::Map::new()),
             },
+            extensions: Default::default(),
         };
 
         let mcp_data = McpData {
@@ -241,8 +275,8 @@ mod tests {
     #[tokio::test]
     async fn test_prompt_helper_handler_missing_tool_call() {
         // ARRANGE: Create handler with mock config
-        let config = PromptHelperConfig::default();
-        let llm_service = RigLlmService::new("http://localhost:11434", "llama3.2").unwrap();
+        let config = test_prompt_helper_config();
+        let llm_service = SharedLlmService::new(test_llm_config()).unwrap();
         let handler = PromptHelperHandler::new(config, llm_service);
 
         // Create envelope with NO tool_call

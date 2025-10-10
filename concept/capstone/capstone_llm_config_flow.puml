@@ -1,0 +1,137 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **LLM Configuration Override Flow**
+
+participant ".env File" as DotEnv #FF6B6B
+participant "config.toml" as TOML #4ECDC4
+participant "System ENV" as SysEnv #95E1D3
+participant "Figment\nMerge" as Figment #F38181
+participant "LlmConfig" as Config #AA96DA
+participant "MCP Server\n(prompt-helper)" as MCP1 #8FD9A8
+participant "MCP Server\n(story-generator)" as MCP2 #FCBAD3
+
+== Application Startup ==
+
+MCP1 -> DotEnv: Load .env file\n(if exists)
+activate DotEnv
+DotEnv --> MCP1: LLM_OPENAI_API_KEY=sk-...\nLLM_ANTHROPIC_API_KEY=sk-ant-...\nLLM_GOOGLE_API_KEY=AIza...
+deactivate DotEnv
+
+MCP1 -> TOML: Load config.toml
+activate TOML
+TOML --> MCP1: [llm]\ntype = "lmstudio"\nurl = "http://127.0.0.1:1234/v1"\napi_key = "toml-key"
+deactivate TOML
+
+MCP1 -> SysEnv: Check system env vars\n(LLM_* prefix)
+activate SysEnv
+SysEnv --> MCP1: LLM_TYPE=openai\nLLM_API_KEY=system-key
+deactivate SysEnv
+
+== Configuration Merge (Priority: .env < TOML < System ENV) ==
+
+MCP1 -> Figment: Merge layers\n1. .env\n2. TOML\n3. System ENV
+activate Figment
+
+note right of Figment
+**Override Priority:**
+1. .env file (lowest)
+2. config.toml
+3. System ENV (highest)
+
+**Provider-Specific Keys:**
+- LLM_OPENAI_API_KEY
+- LLM_ANTHROPIC_API_KEY
+- LLM_GOOGLE_API_KEY
+- LLM_API_KEY (fallback)
+end note
+
+Figment -> Figment: Layer 1: Apply .env values
+Figment -> Figment: Layer 2: Apply TOML\n(overrides .env)
+Figment -> Figment: Layer 3: Apply System ENV\n(overrides all)
+
+Figment --> MCP1: Merged LlmConfig
+deactivate Figment
+
+== Provider Resolution ==
+
+MCP1 -> Config: Create LlmConfig\nwith merged values
+activate Config
+
+Config -> Config: Validate configuration\n- Check required fields\n- Validate temperature\n- Verify URLs
+
+note right of Config
+**Resolved Config:**
+type = "openai"  (from System ENV)
+api_key = "system-key"  (from System ENV)
+url = "http://127.0.0.1:1234/v1"  (from TOML)
+default_model = "meta-llama-3-8b-instruct"
+end note
+
+Config --> MCP1: ✅ Valid LlmConfig
+deactivate Config
+
+== Same Process for Other MCP Servers ==
+
+MCP2 -> DotEnv: Load .env file
+activate DotEnv
+DotEnv --> MCP2: Same .env values
+deactivate DotEnv
+
+MCP2 -> TOML: Load story-generator/config.toml
+activate TOML
+TOML --> MCP2: [llm] configuration
+deactivate TOML
+
+MCP2 -> SysEnv: Check system env vars
+activate SysEnv
+SysEnv --> MCP2: STORY_GENERATOR_LLM_*\nor LLM_*
+deactivate SysEnv
+
+MCP2 -> Figment: Merge with same priority
+activate Figment
+Figment --> MCP2: Merged LlmConfig
+deactivate Figment
+
+MCP2 -> Config: Create & validate
+activate Config
+Config --> MPC2: ✅ Valid LlmConfig
+deactivate Config
+
+== Runtime Request ==
+
+note over MCP1, MCP2
+Both servers now have LlmConfig
+with properly overridden API keys
+end note
+
+MCP1 -> MCP1: Incoming MCP request
+MCP1 -> Config: Get provider client\nusing resolved config
+activate Config
+
+Config -> Config: Build rig-core client\nwith api_key from config
+
+Config --> MCP1: DynamicLlmClient
+deactivate Config
+
+MCP1 -> MCP1: Process request\nusing LLM provider
+
+@enduml

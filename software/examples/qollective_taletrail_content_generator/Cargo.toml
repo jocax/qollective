@@ -2,6 +2,7 @@
 members = [
     "shared-types-generated",
     "shared-types",
+    "shared-types-llm",
     "orchestrator",
     "story-generator",
     "quality-control",

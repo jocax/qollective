@@ -66,7 +66,7 @@ mod observability_tests {
         };
 
         // Execute handler - this should create tracing spans
-        let result = handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
 
         // Verify result is success
         assert!(result.is_error.is_none() || result.is_error == Some(false));
@@ -120,7 +120,7 @@ mod observability_tests {
         };
 
         // Execute handler - should create spans with tool_name attribute
-        let result = handlers::handle_generate_validation_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_validation_prompts(request, &mock_llm, &config).await;
 
         // Verify success
         assert!(result.is_error.is_none() || result.is_error == Some(false));
@@ -166,7 +166,7 @@ mod observability_tests {
         };
 
         // Execute - should fallback to template and create fallback span
-        let result = handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
 
         // Verify fallback succeeded
         assert!(result.is_error.is_none() || result.is_error == Some(false));
@@ -217,7 +217,7 @@ mod observability_tests {
         };
 
         // Execute handler - should record timing
-        let result = handlers::handle_generate_constraint_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_constraint_prompts(request, &mock_llm, &config).await;
 
         // Verify success
         assert!(result.is_error.is_none() || result.is_error == Some(false));
@@ -259,7 +259,7 @@ mod observability_tests {
         };
 
         // Execute handler - should create error span
-        let result = handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_story_prompts(request, &mock_llm, &config).await;
 
         // Verify error result
         assert_eq!(result.is_error, Some(true));
@@ -288,22 +288,22 @@ mod observability_tests {
         };
 
         // Test story prompts handler
-        let result1 = handlers::handle_generate_story_prompts(invalid_request.clone(), &mock_llm, &config).await;
+        let result1 = tool_handlers::handle_generate_story_prompts(invalid_request.clone(), &mock_llm, &config).await;
         assert_eq!(result1.is_error, Some(true));
         assert!(result1.content.first().unwrap().raw.as_text().unwrap().text.as_str().contains("Missing arguments"));
 
         // Test validation prompts handler
-        let result2 = handlers::handle_generate_validation_prompts(invalid_request.clone(), &mock_llm, &config).await;
+        let result2 = tool_handlers::handle_generate_validation_prompts(invalid_request.clone(), &mock_llm, &config).await;
         assert_eq!(result2.is_error, Some(true));
         assert!(result2.content.first().unwrap().raw.as_text().unwrap().text.as_str().contains("Missing arguments"));
 
         // Test constraint prompts handler
-        let result3 = handlers::handle_generate_constraint_prompts(invalid_request.clone(), &mock_llm, &config).await;
+        let result3 = tool_handlers::handle_generate_constraint_prompts(invalid_request.clone(), &mock_llm, &config).await;
         assert_eq!(result3.is_error, Some(true));
         assert!(result3.content.first().unwrap().raw.as_text().unwrap().text.as_str().contains("Missing arguments"));
 
         // Test get model handler
-        let result4 = handlers::handle_get_model_for_language(invalid_request.clone(), &mock_llm, &config).await;
+        let result4 = tool_handlers::handle_get_model_for_language(invalid_request.clone(), &mock_llm, &config).await;
         assert_eq!(result4.is_error, Some(true));
         assert!(result4.content.first().unwrap().raw.as_text().unwrap().text.as_str().contains("Missing arguments"));
     }
@@ -340,7 +340,7 @@ mod observability_tests {
             extensions: Default::default(),
         };
 
-        let result = handlers::handle_generate_validation_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_validation_prompts(request, &mock_llm, &config).await;
 
         // Verify fallback worked
         assert!(result.is_error.is_none() || result.is_error == Some(false));
@@ -387,7 +387,7 @@ mod observability_tests {
             extensions: Default::default(),
         };
 
-        let result = handlers::handle_generate_constraint_prompts(request, &mock_llm, &config).await;
+        let result = tool_handlers::handle_generate_constraint_prompts(request, &mock_llm, &config).await;
 
         // Verify success
         assert!(result.is_error.is_none() || result.is_error == Some(false));

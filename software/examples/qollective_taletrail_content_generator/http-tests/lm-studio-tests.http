@@ -1,0 +1,206 @@
+### LM Studio - List Available Models
+GET http://127.0.0.1:1234/v1/models
+Accept: application/json
+
+###
+
+### LM Studio - Test English Model (Llama 3)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "meta-llama-3-8b-instruct",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Say hello in one sentence."
+    }
+  ],
+  "max_tokens": 50,
+  "temperature": 0.7
+}
+
+###
+
+### LM Studio - Test German Model (LeoLM)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "leolm-70b-chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Sag Hallo auf Deutsch in einem Satz."
+    }
+  ],
+  "max_tokens": 50,
+  "temperature": 0.7
+}
+
+###
+
+### LM Studio - Test with System Prompt (Llama 3)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "meta-llama-3-8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful storytelling assistant for children."
+    },
+    {
+      "role": "user",
+      "content": "Tell me a very short story about a friendly robot."
+    }
+  ],
+  "max_tokens": 150,
+  "temperature": 0.8
+}
+
+###
+
+### LM Studio - Test ChatML Format (Qwen Model)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "qwen2.5-vl-32b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a creative assistant."
+    },
+    {
+      "role": "user",
+      "content": "Write a haiku about artificial intelligence."
+    }
+  ],
+  "max_tokens": 100,
+  "temperature": 0.9
+}
+
+###
+
+### LM Studio - Test German Story Generation (LeoLM)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "leolm-70b-chat",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Du bist ein kreativer Geschichtenerzähler für Kinder."
+    },
+    {
+      "role": "user",
+      "content": "Erzähle eine sehr kurze Geschichte über einen freundlichen Roboter."
+    }
+  ],
+  "max_tokens": 200,
+  "temperature": 0.8
+}
+
+###
+
+### LM Studio - Test Magistral Model
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "magistral-small-2509-mlx",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 2+2? Answer in one sentence."
+    }
+  ],
+  "max_tokens": 30,
+  "temperature": 0.1
+}
+
+###
+
+### LM Studio - Test High Temperature (Creative)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "meta-llama-3-8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are an extremely creative writer."
+    },
+    {
+      "role": "user",
+      "content": "Invent a new word and define it."
+    }
+  ],
+  "max_tokens": 100,
+  "temperature": 1.0
+}
+
+###
+
+### LM Studio - Test Low Temperature (Deterministic)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "meta-llama-3-8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a precise, factual assistant."
+    },
+    {
+      "role": "user",
+      "content": "What is the capital of France?"
+    }
+  ],
+  "max_tokens": 20,
+  "temperature": 0.0
+}
+
+###
+
+### LM Studio - Test Mistral Model
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "mistralai/mistral-7b-instruct-v0.3",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain quantum computing in one simple sentence."
+    }
+  ],
+  "max_tokens": 80,
+  "temperature": 0.7
+}
+
+###
+
+### LM Studio - Test Streaming Response (if supported)
+POST http://127.0.0.1:1234/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "meta-llama-3-8b-instruct",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Count from 1 to 5."
+    }
+  ],
+  "max_tokens": 50,
+  "temperature": 0.7,
+  "stream": false
+}
+
+###

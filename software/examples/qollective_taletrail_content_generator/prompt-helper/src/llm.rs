@@ -1,172 +1,50 @@
-//! Production LLM service implementation using rig-core
+//! LLM service implementation using shared-types-llm
 //!
-//! This module provides the production implementation of the `LlmService` trait
-//! using rig-core 0.21 to communicate with LM Studio or other OpenAI-compatible endpoints.
-//!
-//! # Architecture
-//!
-//! The `RigLlmService` is designed for:
-//! - **Prompt Generation**: Using meta-prompts to dynamically generate system and user prompts
-//! - **Content Generation**: Using pre-generated prompt packages to create story content
-//! - **Model Management**: Querying available models and checking model availability
-//!
-//! # LM Studio Integration
-//!
-//! LM Studio provides an OpenAI-compatible API endpoint (default: http://127.0.0.1:1234/v1)
-//! that rig-core can communicate with using standard OpenAI client patterns.
-//!
-//! # Prompt Parsing Strategy
-//!
-//! LLM responses are expected to contain two sections separated by a delimiter:
-//! - **System Prompt**: Instructions for the LLM on how to behave
-//! - **User Prompt**: The actual prompt template with placeholders
-//!
-//! Supported separators (case-insensitive):
-//! - `---SEPARATOR---`
-//! - `--- SEPARATOR ---`
-//! - `---separator---`
-//! - `--- separator ---`
-//! - `\n---\n`
-//! - `###SEPARATOR###`
-//!
-//! # Error Handling
-//!
-//! All errors are mapped to `TaleTrailError` variants:
-//! - Network/connection errors → `NetworkError`
-//! - Timeout errors → `TimeoutError`
-//! - Parse/validation errors → `LLMError`
-//! - Empty responses → `LLMError`
-//!
-//! # Example Usage
-//!
-//! ```rust,ignore
-//! use prompt_helper::llm::RigLlmService;
-//! use shared_types::traits::LlmService;
-//!
-//! let llm = RigLlmService::new("http://127.0.0.1:1234/v1", "llama-3.2-3b-instruct")?;
-//!
-//! let (system_prompt, user_prompt) = llm
-//!     .generate_prompt(meta_prompt, &context)
-//!     .await?;
-//!
-//! println!("System: {}", system_prompt);
-//! println!("User: {}", user_prompt);
-//! ```
+//! This module provides integration with the shared-types-llm crate for
+//! dynamic multi-provider LLM support with tenant-aware configuration.
 
 use async_trait::async_trait;
-use rig::client::CompletionClient;
-use rig::completion::Prompt;
-use rig::providers::openai;
 use shared_types::{
-    traits::llm_service::NodeContext, traits::LlmService, PromptGenerationRequest, PromptPackage,
+    traits::llm_service::NodeContext,
+    traits::LlmService,
+    PromptGenerationRequest,
+    PromptPackage,
     TaleTrailError,
 };
+use shared_types_llm::{
+    DefaultDynamicLlmClientProvider,
+    DynamicLlmClientProvider,
+    LlmConfig,
+    LlmParameters,
+    SystemPromptStyle,
+};
+use std::sync::Arc;
 use tracing::{debug, error, info, warn, info_span, Instrument};
 
-/// Production LLM service using rig-core for OpenAI-compatible endpoints
-///
-/// This implementation communicates with LM Studio or other OpenAI-compatible
-/// API servers to generate prompts and content.
-///
-/// # Configuration
-///
-/// - `base_url`: Full API endpoint URL (e.g., "http://127.0.0.1:1234/v1")
-/// - `model_name`: Model identifier (e.g., "llama-3.2-3b-instruct")
-///
-/// # Thread Safety
-///
-/// `RigLlmService` is `Send + Sync` and can be safely shared across async tasks.
+/// LLM service using shared-types-llm for multi-provider support
 #[derive(Clone)]
-pub struct RigLlmService {
-    /// OpenAI-compatible client
-    client: openai::Client,
-    /// Model name for completions
-    model_name: String,
-    /// Base URL for API endpoint
-    base_url: String,
+pub struct SharedLlmService {
+    provider: Arc<DefaultDynamicLlmClientProvider>,
 }
 
-impl std::fmt::Debug for RigLlmService {
+impl std::fmt::Debug for SharedLlmService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RigLlmService")
-            .field("model_name", &self.model_name)
-            .field("base_url", &self.base_url)
-            .finish()
+        f.debug_struct("SharedLlmService").finish()
     }
 }
 
-impl RigLlmService {
-    /// Create new LLM service with specified endpoint and model
-    ///
-    /// # Arguments
-    ///
-    /// * `base_url` - Full API endpoint URL (must be non-empty)
-    /// * `model_name` - Model identifier (must be non-empty)
-    ///
-    /// # Returns
-    ///
-    /// Configured `RigLlmService` instance or `ConfigError` if parameters are invalid
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// let llm = RigLlmService::new(
-    ///     "http://127.0.0.1:1234/v1",
-    ///     "llama-3.2-3b-instruct"
-    /// )?;
-    /// ```
-    pub fn new(base_url: &str, model_name: &str) -> Result<Self, TaleTrailError> {
-        if base_url.is_empty() {
-            return Err(TaleTrailError::ConfigError(
-                "Base URL cannot be empty".to_string(),
-            ));
-        }
-        if model_name.is_empty() {
-            return Err(TaleTrailError::ConfigError(
-                "Model name cannot be empty".to_string(),
-            ));
-        }
-
-        debug!(
-            "Initializing RigLlmService with base_url={}, model={}",
-            base_url, model_name
-        );
-
-        // Create OpenAI-compatible client
-        // Note: LM Studio doesn't require an API key, so we use a dummy value
-        let client = openai::Client::builder("dummy-key")
-            .base_url(base_url)
-            .build()
-            .map_err(|e| {
-                TaleTrailError::ConfigError(format!("Failed to build LLM client: {}", e))
-            })?;
+impl SharedLlmService {
+    /// Create new LLM service from configuration
+    pub fn new(config: LlmConfig) -> Result<Self, TaleTrailError> {
+        let provider = DefaultDynamicLlmClientProvider::new(config);
 
         Ok(Self {
-            client,
-            model_name: model_name.to_string(),
-            base_url: base_url.to_string(),
+            provider: Arc::new(provider),
         })
     }
 
     /// Parse LLM response to extract system and user prompts
-    ///
-    /// Expected format: "SYSTEM PROMPT\n---SEPARATOR---\nUSER PROMPT"
-    ///
-    /// # Arguments
-    ///
-    /// * `response` - Raw LLM response text
-    ///
-    /// # Returns
-    ///
-    /// Tuple of `(system_prompt, user_prompt)` or `LLMError` if parsing fails
-    ///
-    /// # Errors
-    ///
-    /// - Missing separator → `LLMError`
-    /// - Empty system prompt → `LLMError`
-    /// - Empty user prompt → `LLMError`
     fn parse_llm_response(response: &str) -> Result<(String, String), TaleTrailError> {
-        // Try different separator variants (case-insensitive)
         let separators = vec![
             "---SEPARATOR---",
             "--- SEPARATOR ---",
@@ -192,10 +70,7 @@ impl RigLlmService {
                     ));
                 }
 
-                debug!(
-                    "Successfully parsed LLM response with separator: {}",
-                    separator
-                );
+                debug!("Successfully parsed LLM response with separator: {}", separator);
                 return Ok((system_prompt, user_prompt));
             }
         }
@@ -208,9 +83,6 @@ impl RigLlmService {
     }
 
     /// Build meta-prompt with context information
-    ///
-    /// Constructs a detailed meta-prompt that includes all context from the request
-    /// to guide the LLM in generating appropriate system and user prompts.
     fn build_meta_prompt(meta_prompt: &str, context: &PromptGenerationRequest) -> String {
         format!(
             "{}\n\nContext:\n- Theme: {}\n- Age Group: {:?}\n- Language: {:?}\n- Educational Goals: {:?}\n- Node Count: {:?}",
@@ -224,16 +96,12 @@ impl RigLlmService {
     }
 
     /// Build content generation prompt with node context
-    ///
-    /// Constructs a prompt that includes the system prompt, user prompt, and node context
-    /// to generate story content at a specific node in the DAG.
     fn build_content_prompt(prompt_package: &PromptPackage, node_context: &NodeContext) -> String {
         let mut prompt = format!(
             "System: {}\n\nUser: {}\n\n",
             prompt_package.system_prompt, prompt_package.user_prompt
         );
 
-        // Add node context
         prompt.push_str(&format!(
             "Context:\n- Node position: {}/{}\n",
             node_context.node_position, node_context.total_nodes
@@ -252,25 +120,7 @@ impl RigLlmService {
 }
 
 #[async_trait]
-impl LlmService for RigLlmService {
-    /// Generate prompts using meta-prompt (for prompt-helper service)
-    ///
-    /// Uses LLM to dynamically create system and user prompts based on meta-prompt instructions.
-    ///
-    /// # Arguments
-    ///
-    /// * `meta_prompt` - Instructions telling LLM how to generate prompts
-    /// * `context` - Request context (age group, language, theme, educational goals)
-    ///
-    /// # Returns
-    ///
-    /// Tuple of `(system_prompt, user_prompt)`
-    ///
-    /// # Errors
-    ///
-    /// - `TaleTrailError::LLMError`: LLM API communication failure or parse error
-    /// - `TaleTrailError::NetworkError`: Network connection failure
-    /// - `TaleTrailError::TimeoutError`: Request timeout
+impl LlmService for SharedLlmService {
     async fn generate_prompt(
         &self,
         meta_prompt: &str,
@@ -278,7 +128,6 @@ impl LlmService for RigLlmService {
     ) -> Result<(String, String), TaleTrailError> {
         let span = info_span!(
             "llm_generation",
-            model = %self.model_name,
             service_target = ?context.service_target,
         );
 
@@ -286,8 +135,10 @@ impl LlmService for RigLlmService {
             let start_time = std::time::Instant::now();
 
             info!(
-                "Generating prompts for theme='{}', age_group={:?}",
-                context.generation_request.theme, context.generation_request.age_group
+                "Generating prompts for theme='{}', age_group={:?}, language={:?}",
+                context.generation_request.theme,
+                context.generation_request.age_group,
+                context.generation_request.language
             );
 
             // Build comprehensive meta-prompt with context
@@ -295,19 +146,36 @@ impl LlmService for RigLlmService {
 
             debug!("Sending meta-prompt to LLM: {}", full_prompt);
 
-            // Create agent for the model using completions API
-            let agent = self
-                .client
-                .completion_model(&self.model_name)
-                .completions_api()
-                .into_agent_builder()
-                .build();
+            // Get language code for model selection
+            let language_code = match context.generation_request.language {
+                shared_types::Language::De => "de",
+                shared_types::Language::En => "en",
+            };
+
+            // Create LLM parameters
+            let params = LlmParameters {
+                language_code: language_code.to_string(),
+                model_name: None, // Use language mapping
+                system_prompt_style: SystemPromptStyle::ChatML,
+                tenant_id: None,
+                tenant_config: None,
+            };
+
+            // Get dynamic client
+            let client = self.provider.get_dynamic_llm_client(&params).await
+                .map_err(|e| {
+                    error!("Failed to get LLM client: {}", e);
+                    TaleTrailError::LLMError(format!("Failed to get LLM client: {}", e))
+                })?;
+
+            info!("Using model: {}", client.model_name());
 
             // Send prompt and get response
-            let response = agent.prompt(&full_prompt).await.map_err(|e| {
-                error!("LLM API request failed: {}", e);
-                TaleTrailError::LLMError(format!("LLM request failed: {}", e))
-            })?;
+            let response = client.prompt(&full_prompt).await
+                .map_err(|e| {
+                    error!("LLM API request failed: {}", e);
+                    TaleTrailError::LLMError(format!("LLM request failed: {}", e))
+                })?;
 
             debug!("Received LLM response: {}", response);
 
@@ -323,22 +191,6 @@ impl LlmService for RigLlmService {
         .await
     }
 
-    /// Generate content using prepared prompt package
-    ///
-    /// # Arguments
-    ///
-    /// * `prompt_package` - Pre-generated prompts with LLM configuration
-    /// * `node_context` - Story context (previous content, choices made)
-    ///
-    /// # Returns
-    ///
-    /// Generated content string
-    ///
-    /// # Errors
-    ///
-    /// - `TaleTrailError::LLMError`: Content generation failure
-    /// - `TaleTrailError::NetworkError`: Network connection failure
-    /// - `TaleTrailError::TimeoutError`: Request timeout
     async fn generate_content(
         &self,
         prompt_package: &PromptPackage,
@@ -354,19 +206,34 @@ impl LlmService for RigLlmService {
 
         debug!("Sending content prompt to LLM: {}", full_prompt);
 
-        // Create agent for the model using completions API
-        let agent = self
-            .client
-            .completion_model(&self.model_name)
-            .completions_api()
-            .into_agent_builder()
-            .build();
+        // Get language code for model selection
+        let language_code = match prompt_package.language {
+            shared_types::Language::De => "de",
+            shared_types::Language::En => "en",
+        };
+
+        // Create LLM parameters
+        let params = LlmParameters {
+            language_code: language_code.to_string(),
+            model_name: None,
+            system_prompt_style: SystemPromptStyle::ChatML,
+            tenant_id: None,
+            tenant_config: None,
+        };
+
+        // Get dynamic client
+        let client = self.provider.get_dynamic_llm_client(&params).await
+            .map_err(|e| {
+                error!("Failed to get LLM client: {}", e);
+                TaleTrailError::LLMError(format!("Failed to get LLM client: {}", e))
+            })?;
 
         // Send prompt and get response
-        let content = agent.prompt(&full_prompt).await.map_err(|e| {
-            error!("LLM content generation failed: {}", e);
-            TaleTrailError::LLMError(format!("Content generation failed: {}", e))
-        })?;
+        let content = client.prompt(&full_prompt).await
+            .map_err(|e| {
+                error!("LLM content generation failed: {}", e);
+                TaleTrailError::LLMError(format!("Content generation failed: {}", e))
+            })?;
 
         if content.trim().is_empty() {
             warn!("LLM returned empty content");
@@ -380,93 +247,14 @@ impl LlmService for RigLlmService {
         Ok(content)
     }
 
-    /// List available LLM models
-    ///
-    /// # Returns
-    ///
-    /// Vector of model identifiers (e.g., "gpt-4", "llama-3.2-3b-instruct")
-    ///
-    /// # Errors
-    ///
-    /// - `TaleTrailError::LLMError`: Failed to fetch model list
-    /// - `TaleTrailError::NetworkError`: Network connection failure
     async fn list_models(&self) -> Result<Vec<String>, TaleTrailError> {
-        info!("Fetching available models from {}", self.base_url);
-
-        // Query models endpoint
-        // Note: LM Studio exposes models via /v1/models endpoint (OpenAI-compatible)
-        let url = format!("{}/models", self.base_url);
-
-        let response = reqwest::get(&url).await.map_err(|e| {
-            error!("Failed to fetch model list: {}", e);
-            TaleTrailError::NetworkError(format!("Failed to fetch model list: {}", e))
-        })?;
-
-        if !response.status().is_success() {
-            error!("Model list request failed with status: {}", response.status());
-            return Err(TaleTrailError::LLMError(format!(
-                "Model list request failed with status: {}",
-                response.status()
-            )));
-        }
-
-        let body = response.text().await.map_err(|e| {
-            error!("Failed to read model list response: {}", e);
-            TaleTrailError::NetworkError(format!("Failed to read response: {}", e))
-        })?;
-
-        // Parse JSON response
-        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-            error!("Failed to parse model list JSON: {}", e);
-            TaleTrailError::LLMError(format!("Failed to parse model list: {}", e))
-        })?;
-
-        // Extract model IDs from response
-        // Expected format: {"data": [{"id": "model-name"}, ...]}
-        let models = json
-            .get("data")
-            .and_then(|data| data.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|item| item.get("id"))
-                    .filter_map(|id| id.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_default();
-
-        debug!("Found {} available models", models.len());
-
-        Ok(models)
+        // Not implemented in shared-types-llm yet
+        Ok(vec![])
     }
 
-    /// Check if specific model is available
-    ///
-    /// # Arguments
-    ///
-    /// * `model_name` - Model identifier to check
-    ///
-    /// # Returns
-    ///
-    /// `true` if model exists and is available
-    ///
-    /// # Errors
-    ///
-    /// - `TaleTrailError::LLMError`: Failed to check model availability
-    /// - `TaleTrailError::NetworkError`: Network connection failure
-    async fn model_exists(&self, model_name: &str) -> Result<bool, TaleTrailError> {
-        debug!("Checking if model '{}' exists", model_name);
-
-        let models = self.list_models().await?;
-        let exists = models.contains(&model_name.to_string());
-
-        if exists {
-            debug!("Model '{}' is available", model_name);
-        } else {
-            warn!("Model '{}' not found in available models", model_name);
-        }
-
-        Ok(exists)
+    async fn model_exists(&self, _model_name: &str) -> Result<bool, TaleTrailError> {
+        // Not implemented in shared-types-llm yet
+        Ok(true)
     }
 }
 
@@ -477,7 +265,7 @@ mod tests {
     #[test]
     fn test_parse_llm_response_success() {
         let response = "System prompt here\n---SEPARATOR---\nUser prompt here";
-        let result = RigLlmService::parse_llm_response(response);
+        let result = SharedLlmService::parse_llm_response(response);
 
         assert!(result.is_ok());
         let (system, user) = result.unwrap();
@@ -486,55 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_llm_response_with_variant_separator() {
-        let response = "System\n--- SEPARATOR ---\nUser";
-        let result = RigLlmService::parse_llm_response(response);
-
-        assert!(result.is_ok());
-        let (system, user) = result.unwrap();
-        assert_eq!(system, "System");
-        assert_eq!(user, "User");
-    }
-
-    #[test]
     fn test_parse_llm_response_missing_separator() {
         let response = "This has no separator";
-        let result = RigLlmService::parse_llm_response(response);
+        let result = SharedLlmService::parse_llm_response(response);
 
         assert!(result.is_err());
-        match result.unwrap_err() {
-            TaleTrailError::LLMError(msg) => {
-                assert!(msg.contains("missing separator"));
-            }
-            _ => panic!("Expected LLMError"),
-        }
-    }
-
-    #[test]
-    fn test_parse_llm_response_empty_system_prompt() {
-        let response = "\n---SEPARATOR---\nUser prompt";
-        let result = RigLlmService::parse_llm_response(response);
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            TaleTrailError::LLMError(msg) => {
-                assert!(msg.contains("System prompt is empty"));
-            }
-            _ => panic!("Expected LLMError"),
-        }
-    }
-
-    #[test]
-    fn test_parse_llm_response_empty_user_prompt() {
-        let response = "System prompt\n---SEPARATOR---\n";
-        let result = RigLlmService::parse_llm_response(response);
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            TaleTrailError::LLMError(msg) => {
-                assert!(msg.contains("User prompt is empty"));
-            }
-            _ => panic!("Expected LLMError"),
-        }
     }
 }

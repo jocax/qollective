@@ -1,0 +1,201 @@
+# shared-types-llm Configuration Example
+#
+# ============================================================================
+# Configuration Priority (lowest to highest):
+# ============================================================================
+# 1. .env file (lowest priority) - Loaded from current directory
+# 2. config.toml file (middle priority) - This file
+# 3. System environment variables (highest priority) - Runtime overrides
+#
+# All TOML values can be overridden by environment variables with LLM_ prefix
+# Example: LLM_URL=http://production:11435/v1
+# Example: LLM_OPENAI_API_KEY=sk-...
+#
+# See ".env.example" for example .env file configuration
+
+[llm]
+# Provider type: "shimmy" | "lmstudio" | "openai" | "anthropic" | "google"
+type = "shimmy"
+
+# Provider URL (base URL for API endpoint)
+url = "http://127.0.0.1:11435/v1"
+
+# Optional API key for the provider (server's default credential)
+# For security, prefer using environment variables or .env file:
+#   - LLM_OPENAI_API_KEY for OpenAI
+#   - LLM_ANTHROPIC_API_KEY for Anthropic
+#   - LLM_GOOGLE_API_KEY for Google/Gemini
+#   - LLM_API_KEY for generic provider API key
+# api_key = "your-api-key-here"
+
+# Default model to use when no language-specific mapping exists
+default_model = "qwen2.5-32b-instruct-q4_k_m"
+
+# Fallback to default model if requested model is unavailable
+use_default_model_fallback = true
+
+# Request timeout in seconds
+timeout_secs = 60
+
+# Maximum tokens for completions
+max_tokens = 4096
+
+# Temperature (0.0 = deterministic, 1.0 = creative)
+temperature = 0.7
+
+# System prompt style: "native" | "prepend" | "chatml" | "none"
+system_prompt_style = "chatml"
+
+# Language → model mappings
+# Format: language_code = "model_name"
+[llm.models]
+en = "qwen2.5-32b-instruct-q4_k_m"
+de = "qwen2.5-32b-instruct-q4_k_m"
+fr = "llama-3.3-70b-instruct-q4_k_m"
+es = "qwen2.5-32b-instruct-q4_k_m"
+
+# ============================================================================
+# Static Tenant Configurations (Server-Managed)
+# ============================================================================
+# These are tenant-specific overrides managed by the server operator.
+# Tenant credentials can be stored here as server-side defaults, but are
+# overridden by runtime TenantLlmConfig if provided.
+#
+# Premium tenants with their own API keys provide credentials at runtime
+# via TenantLlmConfig in the request (highest priority).
+
+[llm.tenants.acme-corp]
+type = "shimmy"
+url = "http://127.0.0.1:11435/v1"
+default_model = "magistral-small-2509-q8_0"
+# Optional tenant-specific API key (server credential for this tenant)
+# api_key = "tenant-specific-api-key"
+
+[llm.tenants.acme-corp.models]
+en = "magistral-small-2509-q8_0"
+de = "magistral-small-2509-q8_0"
+
+[llm.tenants.enterprise-client]
+type = "shimmy"
+url = "http://127.0.0.1:11435/v1"
+default_model = "llama-3.3-70b-instruct-q4_k_m"
+
+[llm.tenants.enterprise-client.models]
+en = "llama-3.3-70b-instruct-q4_k_m"
+de = "llama-3.3-70b-instruct-q4_k_m"
+fr = "llama-3.3-70b-instruct-q4_k_m"
+
+# ============================================================================
+# Environment Variables and .env File Support
+# ============================================================================
+#
+# You can create a .env file in your project root with API keys:
+#
+# .env file example:
+# ------------------
+# LLM_OPENAI_API_KEY=sk-your-openai-key-here
+# LLM_ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+# LLM_GOOGLE_API_KEY=AIza-your-google-key
+# LLM_API_KEY=your-generic-api-key
+#
+# Provider-Specific Environment Variables:
+# -----------------------------------------
+# LLM_OPENAI_API_KEY      - OpenAI API key (for GPT models)
+# LLM_ANTHROPIC_API_KEY   - Anthropic API key (for Claude models)
+# LLM_GOOGLE_API_KEY      - Google API key (for Gemini models)
+# LLM_API_KEY             - Generic API key (fallback for all providers)
+#
+# General Configuration Environment Variables:
+# --------------------------------------------
+# LLM_TYPE                - Override provider type
+# LLM_URL                 - Override provider URL
+# LLM_DEFAULT_MODEL       - Override default model
+# LLM_TIMEOUT_SECS        - Override timeout
+# LLM_MAX_TOKENS          - Override max tokens
+# LLM_TEMPERATURE         - Override temperature
+# LLM_SYSTEM_PROMPT_STYLE - Override system prompt style
+#
+# Priority: .env file < config.toml < System environment variables
+
+# ============================================================================
+# Premium Tenant Example (Runtime Credentials)
+# ============================================================================
+# Premium tenants who own their own LLM provider accounts (OpenAI, Anthropic, etc.)
+# provide their credentials at REQUEST TIME via TenantLlmConfig.
+# This configuration is NOT stored in TOML for security reasons.
+#
+# Example usage in code:
+#
+# let tenant_config = TenantLlmConfig {
+#     tenant_id: "premium-corp".to_string(),
+#     provider_type: ProviderType::OpenAI,
+#     api_key: Some("sk-tenant-owned-key-xyz".to_string()),
+#     base_url: Some("https://api.openai.com/v1".to_string()),
+#     model_overrides: HashMap::from([
+#         ("en".to_string(), "gpt-4-turbo".to_string()),
+#         ("de".to_string(), "gpt-4-turbo".to_string()),
+#     ]),
+#     max_tokens: Some(8192),
+#     temperature: Some(0.8),
+#     timeout_secs: Some(120),
+#     system_prompt_style: Some(SystemPromptStyle::Native),
+# };
+#
+# let params = LlmParameters {
+#     language_code: "en".to_string(),
+#     tenant_config: Some(tenant_config),
+#     ..Default::default()
+# };
+
+# ============================================================================
+# Google Vertex AI / Gemini Example (Runtime Credentials)
+# ============================================================================
+# Google tenants provide credentials at runtime via TenantLlmConfig
+#
+# Example with simple API key:
+# let tenant_config = TenantLlmConfig {
+#     tenant_id: "google-premium".to_string(),
+#     provider_type: ProviderType::Google,
+#     api_key: Some("AIza...".to_string()),
+#     model_overrides: HashMap::from([
+#         ("en".to_string(), "gemini-pro".to_string()),
+#     ]),
+#     ..Default::default()
+# };
+#
+# Example with full Google credentials:
+# let tenant_config = TenantLlmConfig {
+#     tenant_id: "google-enterprise".to_string(),
+#     provider_type: ProviderType::Google,
+#     google_credentials: Some(GoogleCredentials {
+#         project_id: "my-project-123".to_string(),
+#         api_key: "AIza...".to_string(),
+#     }),
+#     model_overrides: HashMap::from([
+#         ("en".to_string(), "gemini-pro".to_string()),
+#     ]),
+#     ..Default::default()
+# };
+#
+# Or via environment variable (.env file or system):
+# LLM_GOOGLE_API_KEY=AIza...
+
+# ============================================================================
+# Production Deployment Example
+# ============================================================================
+# For production, use environment variables to override configuration:
+#
+# Provider Configuration:
+# export LLM_TYPE=shimmy
+# export LLM_URL=http://production-llm-host:11435/v1
+# export LLM_DEFAULT_MODEL=qwen2.5-32b-instruct-q4_k_m
+# export LLM_TIMEOUT_SECS=120
+# export LLM_MAX_TOKENS=8192
+#
+# API Keys (Provider-Specific):
+# export LLM_OPENAI_API_KEY=sk-your-production-openai-key
+# export LLM_ANTHROPIC_API_KEY=sk-ant-your-production-anthropic-key
+# export LLM_GOOGLE_API_KEY=AIza-your-production-google-key
+#
+# Or use a .env file for local development:
+# See .env.example in the project root

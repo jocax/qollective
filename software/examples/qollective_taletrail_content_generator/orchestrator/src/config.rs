@@ -107,7 +107,7 @@ impl Default for NatsConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            url: "http://127.0.0.1:1234".to_string(),
+            url: "http://127.0.0.1:1234/v1".to_string(),
             model_name: "local-model".to_string(),
         }
     }

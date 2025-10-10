@@ -14,10 +14,14 @@ certs/*.pem
 certs/*.srl
 certs/*.cnf
 
-# NKey Authentication (protect private keys, allow public keys)
+# NKey Authentication (protect ALL generated files, allow scripts/docs)
 nkeys/*.nk
 nkeys/*.seed
-!nkeys/*.pub
+nkeys/*.pub
+nkeys/users.conf
+!nkeys/nkeys-generate.sh
+!nkeys/nkeys-test-setup.sh
+!nkeys/README.md
 
 # Nginx Basic Auth
 nginx/.htpasswd

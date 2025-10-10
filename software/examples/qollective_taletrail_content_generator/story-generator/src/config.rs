@@ -1,8 +1,9 @@
 //! Configuration module for Story Generator MCP Server
 
 use anyhow::Result;
-use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
+use figment::{Figment, providers::{Env, Format, Toml}};
 use serde::{Deserialize, Serialize};
+use shared_types_llm::LlmConfig as SharedLlmConfig;
 
 /// Story Generator MCP Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,7 +18,7 @@ pub struct StoryGeneratorConfig {
     pub generation: GenerationConfig,
 
     /// LLM configuration
-    pub llm: LlmConfig,
+    pub llm: SharedLlmConfig,
 }
 
 /// Server-specific configuration
@@ -45,8 +46,18 @@ pub struct NatsConfig {
     /// NATS queue group for load balancing
     pub queue_group: String,
 
+    /// Authentication configuration
+    pub auth: AuthConfig,
+
     /// TLS configuration
     pub tls: TlsConfig,
+}
+
+/// Authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    /// NKey file path for authentication
+    pub nkey_file: String,
 }
 
 /// TLS configuration
@@ -54,12 +65,6 @@ pub struct NatsConfig {
 pub struct TlsConfig {
     /// CA certificate path
     pub ca_cert: String,
-
-    /// Client certificate path
-    pub client_cert: String,
-
-    /// Client key path
-    pub client_key: String,
 }
 
 /// Content generation settings
@@ -78,18 +83,7 @@ pub struct GenerationConfig {
     pub target_words_per_node: usize,
 }
 
-/// LLM configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
-    /// LM Studio URL
-    pub url: String,
-
-    /// LLM model name
-    pub model_name: String,
-
-    /// Maximum tokens per node
-    pub max_tokens_per_node: u32,
-}
+// LlmConfig removed - now using shared-types-llm::LlmConfig
 
 impl Default for ServiceConfig {
     fn default() -> Self {
@@ -101,12 +95,18 @@ impl Default for ServiceConfig {
     }
 }
 
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            nkey_file: "./nkeys/story-generator.nk".to_string(),
+        }
+    }
+}
+
 impl Default for TlsConfig {
     fn default() -> Self {
         Self {
             ca_cert: "./certs/ca.pem".to_string(),
-            client_cert: "./certs/client-cert.pem".to_string(),
-            client_key: "./certs/client-key.pem".to_string(),
         }
     }
 }
@@ -117,6 +117,7 @@ impl Default for NatsConfig {
             url: "nats://localhost:5222".to_string(),
             subject: "mcp.story.generate".to_string(),
             queue_group: "story-generator".to_string(),
+            auth: AuthConfig::default(),
             tls: TlsConfig::default(),
         }
     }
@@ -133,39 +134,20 @@ impl Default for GenerationConfig {
     }
 }
 
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            url: "http://127.0.0.1:1234".to_string(),
-            model_name: "local-model".to_string(),
-            max_tokens_per_node: 600,
-        }
-    }
-}
-
-impl Default for StoryGeneratorConfig {
-    fn default() -> Self {
-        Self {
-            service: ServiceConfig::default(),
-            nats: NatsConfig::default(),
-            generation: GenerationConfig::default(),
-            llm: LlmConfig::default(),
-        }
-    }
-}
+// LlmConfig::default() and StoryGeneratorConfig::default() removed - now loading from TOML
 
 impl StoryGeneratorConfig {
     /// Load configuration using Figment merge strategy
-    /// Priority (lowest to highest): Defaults → config.toml → Environment variables
+    /// Priority (lowest to highest): .env file → config.toml → Environment variables
     pub fn load() -> Result<Self> {
-        let config: Self = Figment::new()
-            // Layer 1: Hardcoded defaults (fallback)
-            .merge(Serialized::defaults(Self::default()))
+        // Load .env file from current directory (lowest priority)
+        dotenvy::dotenv().ok();
 
-            // Layer 2: config.toml file (overrides defaults)
+        let config: Self = Figment::new()
+            // Layer 1: config.toml file
             .merge(Toml::file("story-generator/config.toml"))
 
-            // Layer 3: Environment variables (highest priority)
+            // Layer 2: Environment variables (highest priority)
             .merge(Env::prefixed("STORY_GENERATOR_"))
 
             .extract()?;

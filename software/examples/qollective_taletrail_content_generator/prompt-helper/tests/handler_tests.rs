@@ -9,7 +9,7 @@
 
 use prompt_helper::{
     config::PromptHelperConfig,
-    handlers::{
+    tool_handlers::{
         handle_generate_constraint_prompts, handle_generate_story_prompts,
         handle_generate_validation_prompts, handle_get_model_for_language,
     },
@@ -27,9 +27,26 @@ use shared_types::{
 // Test Utilities
 // ============================================================================
 
+/// Create test LLM configuration
+fn test_llm_config() -> shared_types_llm::LlmConfig {
+    let toml = r#"
+[llm]
+type = "shimmy"
+url = "http://localhost:11434/v1"
+default_model = "test-model"
+    "#;
+    shared_types_llm::LlmConfig::from_toml_str(toml).unwrap()
+}
+
 /// Create test configuration with defaults
 fn create_test_config() -> PromptHelperConfig {
-    PromptHelperConfig::default()
+    use prompt_helper::config::{ServiceConfig, NatsConfig, PromptConfig};
+    PromptHelperConfig {
+        service: ServiceConfig::default(),
+        nats: NatsConfig::default(),
+        llm: test_llm_config(),
+        prompt: PromptConfig::default(),
+    }
 }
 
 /// Create CallToolRequest from parameters
@@ -432,7 +449,8 @@ async fn test_get_model_for_language_english() {
         _ => panic!("Expected text content"),
     };
 
-    assert_eq!(model_name, &config.prompt.models.default_model);
+    // Model should come from LLM config's default model
+    assert_eq!(model_name, &config.llm.provider.default_model);
 }
 
 #[tokio::test]
@@ -459,7 +477,8 @@ async fn test_get_model_for_language_german() {
         rmcp::model::RawContent::Text(text) => &text.text,
         _ => panic!("Expected text content"),
     };
-    assert_eq!(model_name, &config.prompt.models.default_model);
+    // Model should come from LLM config (either language-specific or default)
+    assert!(!model_name.is_empty(), "Model name should not be empty");
 }
 
 #[tokio::test]

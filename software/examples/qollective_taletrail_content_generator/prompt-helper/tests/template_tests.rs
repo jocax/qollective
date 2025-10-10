@@ -34,6 +34,32 @@ use shared_types::{AgeGroup, Language, MCPServiceType, VocabularyLevel};
 use std::collections::HashMap;
 
 // ============================================================================
+// Test Utilities
+// ============================================================================
+
+/// Create test LLM configuration
+fn test_llm_config() -> shared_types_llm::LlmConfig {
+    let toml = r#"
+[llm]
+type = "shimmy"
+url = "http://localhost:11434/v1"
+default_model = "test-model"
+    "#;
+    shared_types_llm::LlmConfig::from_toml_str(toml).unwrap()
+}
+
+/// Create test configuration with defaults
+fn test_prompt_helper_config() -> PromptHelperConfig {
+    use prompt_helper::config::{ServiceConfig, NatsConfig, PromptConfig};
+    PromptHelperConfig {
+        service: ServiceConfig::default(),
+        nats: NatsConfig::default(),
+        llm: test_llm_config(),
+        prompt: PromptConfig::default(),
+    }
+}
+
+// ============================================================================
 // Expected Template Module API (to be implemented in src/templates.rs)
 // ============================================================================
 
@@ -119,7 +145,7 @@ fn create_test_template() -> Template {
 fn create_test_config_with_templates() -> PromptHelperConfig {
     // Returns default config for now
     // In actual implementation, this would include template definitions
-    PromptHelperConfig::default()
+    test_prompt_helper_config()
 }
 
 // ============================================================================
@@ -654,7 +680,7 @@ fn test_load_config_with_templates() {
     //     ...
     // }
 
-    let config = PromptHelperConfig::default();
+    let config = test_prompt_helper_config();
 
     // For now, just verify config loads without crashing
     assert_eq!(config.service.name, "prompt-helper");

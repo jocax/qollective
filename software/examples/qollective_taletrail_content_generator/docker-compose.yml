@@ -10,6 +10,7 @@ services:
       - ./nats-data:/data
       - ./certs:/certs:ro
       - ./nats-server.conf:/config/nats-server.conf:ro
+      - ./nkeys:/config/nkeys:ro
     command: ["--config", "/config/nats-server.conf"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "--no-check-certificate", "https://localhost:8222/healthz"]

@@ -24,13 +24,30 @@ use shared_types::{
     AgeGroup, Language, LLMConfig, MCPServiceType, PromptGenerationMethod, PromptGenerationRequest,
     PromptMetadata, PromptPackage,
 };
-use tracing::{error, info, warn, info_span, Instrument};
+use tracing::{error, info, warn, info_span};
 
 use crate::config::PromptHelperConfig;
 use crate::mcp_tools::{
     GenerateConstraintPromptsParams, GenerateStoryPromptsParams, GenerateValidationPromptsParams,
     GetModelForLanguageParams,
 };
+
+/// Convert Language enum to language code string
+fn language_to_code(language: &Language) -> &'static str {
+    match language {
+        Language::De => "de",
+        Language::En => "en",
+    }
+}
+
+/// Get model name for a language from config
+fn get_model_for_language_from_config(config: &PromptHelperConfig, language: &Language) -> String {
+    let lang_code = language_to_code(language);
+    config.llm.provider
+        .get_model_for_language(lang_code)
+        .cloned()
+        .unwrap_or_else(|| config.llm.provider.default_model.clone())
+}
 
 // ============================================================================
 // Handler: generate_story_prompts
@@ -203,7 +220,7 @@ pub async fn handle_generate_story_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.llm.get_model_for_language(&params.language),
+        llm_model: get_model_for_language_from_config(config, &params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -368,7 +385,7 @@ pub async fn handle_generate_validation_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.llm.get_model_for_language(&params.language),
+        llm_model: get_model_for_language_from_config(config, &params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -536,7 +553,7 @@ pub async fn handle_generate_constraint_prompts(
     let prompt_package = PromptPackage {
         system_prompt,
         user_prompt,
-        llm_model: config.llm.get_model_for_language(&params.language),
+        llm_model: get_model_for_language_from_config(config, &params.language),
         language: params.language.clone(),
         llm_config: LLMConfig {
             temperature: config.prompt.models.temperature as f64,
@@ -625,7 +642,7 @@ pub async fn handle_get_model_for_language(
     };
 
     // Use language-specific model from config
-    let model_name = config.llm.get_model_for_language(&params.language);
+    let model_name = get_model_for_language_from_config(config, &params.language);
 
     // Verify model exists (optional check)
     match llm_service.model_exists(&model_name).await {

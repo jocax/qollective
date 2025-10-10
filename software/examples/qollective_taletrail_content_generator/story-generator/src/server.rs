@@ -11,12 +11,14 @@ use serde::{Deserialize, Serialize};
 /// - `generate_structure`: Creates DAG structure with convergence points
 /// - `generate_nodes`: Generates narrative content nodes (~400 words each with 3 choices)
 /// - `validate_paths`: Ensures DAG path validity
+#[allow(dead_code)]
 pub struct StoryGeneratorServer {
     // Configuration will be added in Phase 2
 }
 
 impl StoryGeneratorServer {
     /// Create a new Story Generator MCP Server
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {}
     }

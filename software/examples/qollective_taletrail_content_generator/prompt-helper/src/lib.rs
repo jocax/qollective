@@ -5,12 +5,12 @@
 //! `PromptHelperHandler` which implements `EnvelopeHandler<McpData, McpData>`.
 
 pub mod config;
-pub mod handlers;
+pub mod tool_handlers;
 pub mod llm;
 pub mod mcp_tools;
 pub mod server;
 pub mod templates;
-pub mod handler;
+pub mod envelope_handlers;
 
 // Re-export MCP tool functions for external use
 pub use mcp_tools::{
@@ -22,7 +22,7 @@ pub use mcp_tools::{
 };
 
 // Re-export handler functions for external use
-pub use handlers::{
+pub use tool_handlers::{
     handle_generate_constraint_prompts,
     handle_generate_story_prompts,
     handle_generate_validation_prompts,
@@ -30,7 +30,11 @@ pub use handlers::{
 };
 
 // Re-export LLM service for external use
-pub use llm::RigLlmService;
+pub use llm::SharedLlmService;
 
 // Re-export envelope handler for external use
-pub use handler::PromptHelperHandler;
+pub use envelope_handlers::PromptHelperHandler;
+
+// Test helpers module - always compiled so unit tests in modules can use it
+#[cfg(test)]
+pub(crate) mod test_helpers;

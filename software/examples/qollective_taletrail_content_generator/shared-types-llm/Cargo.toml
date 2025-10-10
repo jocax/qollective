@@ -1,0 +1,37 @@
+[package]
+name = "shared-types-llm"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Mocking feature for test support
+mocking = ["mockall"]
+
+[dependencies]
+# Core LLM integration
+rig-core = { workspace = true }
+
+# Async support
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Configuration management
+figment = { version = "0.10", features = ["toml", "env"] }
+toml = { version = "0.8" }
+dotenvy = "0.15"
+
+# Logging and tracing
+tracing = { workspace = true }
+
+# Optional dependencies (enabled by features)
+mockall = { workspace = true, optional = true }
+
+[dev-dependencies]
+mockall = { workspace = true }

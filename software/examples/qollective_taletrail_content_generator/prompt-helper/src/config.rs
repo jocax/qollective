@@ -2,15 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 use shared_types::*;
-use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
-use std::collections::HashMap;
+use shared_types_llm::LlmConfig as SharedLlmConfig;
+use figment::{Figment, providers::{Env, Format, Toml}};
 
 /// Prompt Helper configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptHelperConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
-    pub llm: LlmConfig,
+    pub llm: SharedLlmConfig,
     pub prompt: PromptConfig,
 }
 
@@ -44,28 +44,7 @@ pub struct TlsConfig {
     pub client_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
-    pub base_url: String,
-    pub default_model: String,
-    #[serde(default)]
-    pub models: HashMap<String, String>,
-}
-
-impl LlmConfig {
-    /// Get the appropriate model for a given language
-    pub fn get_model_for_language(&self, language: &Language) -> String {
-        let lang_code = match language {
-            Language::De => "de",
-            Language::En => "en",
-        };
-
-        self.models
-            .get(lang_code)
-            .cloned()
-            .unwrap_or_else(|| self.default_model.clone())
-    }
-}
+// LlmConfig removed - now using shared-types-llm::LlmConfig
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptConfig {
@@ -117,19 +96,7 @@ impl Default for TlsConfig {
     }
 }
 
-impl Default for LlmConfig {
-    fn default() -> Self {
-        let mut models = HashMap::new();
-        models.insert("de".to_string(), "leolm-70b-chat".to_string());
-        models.insert("en".to_string(), "meta-llama-3-8b-instruct".to_string());
-
-        Self {
-            base_url: "http://127.0.0.1:1234/v1".to_string(),
-            default_model: "meta-llama-3-8b-instruct".to_string(),
-            models,
-        }
-    }
-}
+// LlmConfig::default() removed - now using shared-types-llm::LlmConfig
 
 impl Default for NatsConfig {
     fn default() -> Self {
@@ -177,29 +144,20 @@ impl Default for PromptConfig {
     }
 }
 
-impl Default for PromptHelperConfig {
-    fn default() -> Self {
-        Self {
-            service: ServiceConfig::default(),
-            nats: NatsConfig::default(),
-            llm: LlmConfig::default(),
-            prompt: PromptConfig::default(),
-        }
-    }
-}
+// PromptHelperConfig::default() removed - LlmConfig is now loaded from TOML
 
 impl PromptHelperConfig {
     /// Load configuration using Figment merge strategy
-    /// Priority (lowest to highest): Defaults → config.toml → Environment variables
+    /// Priority (lowest to highest): .env file → config.toml → Environment variables
     pub fn load() -> Result<Self> {
-        let config: Self = Figment::new()
-            // Layer 1: Hardcoded defaults (fallback)
-            .merge(Serialized::defaults(Self::default()))
+        // Load .env file from current directory (lowest priority)
+        dotenvy::dotenv().ok();
 
-            // Layer 2: config.toml file (overrides defaults)
+        let config: Self = Figment::new()
+            // Layer 1: config.toml file
             .merge(Toml::file("prompt-helper/config.toml"))
 
-            // Layer 3: Environment variables (highest priority)
+            // Layer 2: Environment variables (highest priority)
             .merge(Env::prefixed("PROMPT_HELPER_"))
 
             .extract()
@@ -209,55 +167,4 @@ impl PromptHelperConfig {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_model_for_language_returns_german_model() {
-        let config = LlmConfig::default();
-        let model = config.get_model_for_language(&Language::De);
-        assert_eq!(model, "leolm-70b-chat");
-    }
-
-    #[test]
-    fn test_get_model_for_language_returns_english_model() {
-        let config = LlmConfig::default();
-        let model = config.get_model_for_language(&Language::En);
-        assert_eq!(model, "meta-llama-3-8b-instruct");
-    }
-
-    #[test]
-    fn test_get_model_for_language_falls_back_to_default() {
-        let mut config = LlmConfig::default();
-        config.models.clear(); // Remove all language mappings
-        let model_de = config.get_model_for_language(&Language::De);
-        let model_en = config.get_model_for_language(&Language::En);
-        assert_eq!(model_de, config.default_model);
-        assert_eq!(model_en, config.default_model);
-    }
-
-    #[test]
-    fn test_llm_config_loads_custom_models() {
-        let mut models = HashMap::new();
-        models.insert("de".to_string(), "test-german-model".to_string());
-        models.insert("en".to_string(), "test-english-model".to_string());
-
-        let config = LlmConfig {
-            base_url: "http://test".to_string(),
-            default_model: "test-default".to_string(),
-            models,
-        };
-
-        assert_eq!(config.get_model_for_language(&Language::De), "test-german-model");
-        assert_eq!(config.get_model_for_language(&Language::En), "test-english-model");
-    }
-
-    #[test]
-    fn test_llm_config_default_has_language_models() {
-        let config = LlmConfig::default();
-        assert!(config.models.contains_key("de"), "Should have German model mapping");
-        assert!(config.models.contains_key("en"), "Should have English model mapping");
-        assert_eq!(config.models.len(), 2, "Should have exactly 2 language mappings");
-    }
-}
+// Tests removed - LlmConfig tests now in shared-types-llm crate

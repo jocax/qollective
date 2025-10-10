@@ -34,19 +34,19 @@
 use qollective::server::nats::NatsServer;
 use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
 use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
-use tracing::{info, error};
+use tracing::info;
 
 mod config;
-mod handlers;
+mod tool_handlers;
 mod llm;
 mod mcp_tools;
 mod server;
 mod templates;
-mod handler;
+mod envelope_handlers;
 
 use config::PromptHelperConfig;
-use llm::RigLlmService;
-use handler::PromptHelperHandler;
+use llm::SharedLlmService;
+use envelope_handlers::PromptHelperHandler;
 use shared_types::*;
 
 #[tokio::main]
@@ -67,17 +67,15 @@ async fn main() -> Result<()> {
     info!("  NATS URL: {}", app_config.nats.url);
     info!("  NATS Subject: {}", app_config.nats.subject);
     info!("  NATS Queue Group: {}", app_config.nats.queue_group);
-    info!("  LLM Base URL: {}", app_config.llm.base_url);
-    info!("  LLM Model: {}", app_config.llm.default_model);
+    info!("  LLM Provider: {:?}", app_config.llm.provider.provider_type);
+    info!("  LLM URL: {}", app_config.llm.provider.url);
+    info!("  LLM Default Model: {}", app_config.llm.provider.default_model);
     info!("  Supported Languages: {:?}", app_config.prompt.supported_languages);
     info!("");
 
     // Create LLM service
-    let llm_service = RigLlmService::new(
-        &app_config.llm.base_url,
-        &app_config.llm.default_model,
-    )?;
-    info!("✅ Created LLM service with base URL: {}", app_config.llm.base_url);
+    let llm_service = SharedLlmService::new(app_config.llm.clone())?;
+    info!("✅ Created LLM service with provider: {:?}", app_config.llm.provider.provider_type);
 
     // Create Qollective NATS config with NKey authentication
     let nats_config = NatsConfig {

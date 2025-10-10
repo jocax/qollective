@@ -1,0 +1,651 @@
+//! LLM service implementation for story content generation using shared-types-llm
+//!
+//! This module provides LLM-based content generation for narrative nodes using shared-types-llm
+//! for dynamic multi-provider support.
+
+use shared_types::{
+    constants::CONCURRENT_BATCHES,
+    traits::llm_service::NodeContext,
+    Choice, Content, ContentNode, DAG, GenerationRequest, PromptPackage,
+    TaleTrailError,
+};
+use shared_types_llm::{
+    DefaultDynamicLlmClientProvider,
+    DynamicLlmClientProvider,
+    LlmConfig,
+    LlmParameters,
+    SystemPromptStyle,
+};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::{debug, error, info, info_span, warn, Instrument};
+
+/// Story LLM client for content generation using shared-types-llm
+#[derive(Clone)]
+pub struct StoryLlmClient {
+    provider: Arc<DefaultDynamicLlmClientProvider>,
+}
+
+impl std::fmt::Debug for StoryLlmClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StoryLlmClient").finish()
+    }
+}
+
+impl StoryLlmClient {
+    /// Create new LLM client from configuration
+    pub fn new(config: LlmConfig) -> Result<Self, TaleTrailError> {
+        let provider = DefaultDynamicLlmClientProvider::new(config);
+
+        Ok(Self {
+            provider: Arc::new(provider),
+        })
+    }
+
+    /// Generate content using prompt package and node context
+    pub async fn generate_with_prompts(
+        &self,
+        prompt_package: &PromptPackage,
+        node_context: &NodeContext,
+    ) -> Result<String, TaleTrailError> {
+        let span = info_span!(
+            "story_content_generation",
+            node_position = node_context.node_position,
+            total_nodes = node_context.total_nodes,
+        );
+
+        async move {
+            let start_time = std::time::Instant::now();
+
+            info!(
+                "Generating story content at node {}/{}",
+                node_context.node_position, node_context.total_nodes
+            );
+
+            // Build content generation prompt
+            let full_prompt = Self::build_content_prompt(prompt_package, node_context);
+
+            debug!("Sending content prompt to LLM (length: {} chars)", full_prompt.len());
+
+            // Get language code for model selection
+            let language_code = match prompt_package.language {
+                shared_types::Language::De => "de",
+                shared_types::Language::En => "en",
+            };
+
+            // Create LLM parameters
+            let params = LlmParameters {
+                language_code: language_code.to_string(),
+                model_name: None,
+                system_prompt_style: SystemPromptStyle::ChatML,
+                tenant_id: None,
+                tenant_config: None,
+            };
+
+            // Get dynamic client
+            let client = self.provider.get_dynamic_llm_client(&params).await
+                .map_err(|e| {
+                    error!("Failed to get LLM client: {}", e);
+                    TaleTrailError::LLMError(format!("Failed to get LLM client: {}", e))
+                })?;
+
+            info!("Using model: {}", client.model_name());
+
+            // Send prompt and get response
+            let content = client.prompt(&full_prompt).await
+                .map_err(|e| {
+                    error!("LLM content generation failed: {}", e);
+                    TaleTrailError::LLMError(format!("Content generation failed: {}", e))
+                })?;
+
+            if content.trim().is_empty() {
+                warn!("LLM returned empty content");
+                return Err(TaleTrailError::GenerationError(
+                    "LLM returned empty content".to_string(),
+                ));
+            }
+
+            let duration_ms = start_time.elapsed().as_millis();
+            info!(
+                "Story content generated in {}ms (length: {} chars)",
+                duration_ms,
+                content.len()
+            );
+
+            Ok(content)
+        }
+        .instrument(span)
+        .await
+    }
+
+    /// Build content generation prompt with node context
+    pub fn build_content_prompt(prompt_package: &PromptPackage, node_context: &NodeContext) -> String {
+        let mut prompt = format!(
+            "System: {}\n\nUser: {}\n\n",
+            prompt_package.system_prompt, prompt_package.user_prompt
+        );
+
+        // Add node context
+        prompt.push_str(&format!(
+            "Context:\n- Node position: {}/{}\n",
+            node_context.node_position, node_context.total_nodes
+        ));
+
+        if let Some(ref prev_content) = node_context.previous_content {
+            prompt.push_str(&format!("- Previous content: {}\n", prev_content));
+        }
+
+        if !node_context.choices_made.is_empty() {
+            prompt.push_str(&format!(
+                "- Choices made: {}\n",
+                node_context.choices_made.join(" → ")
+            ));
+        }
+
+        prompt.push_str("\nPlease generate:\n");
+        prompt.push_str("1. Narrative text (~400 words)\n");
+        prompt.push_str("2. Three choice options (each ~20 words)\n");
+        prompt.push_str("3. Optional educational content if requested\n");
+
+        prompt
+    }
+
+    /// Parse LLM response to extract narrative, choices, and educational content
+    pub fn parse_content_response(
+        response: &str,
+    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
+        // Try JSON parsing first
+        if let Ok(json_result) = Self::try_parse_json_response(response) {
+            return Ok(json_result);
+        }
+
+        // Fall back to text-based parsing
+        Self::parse_text_response(response)
+    }
+
+    /// Attempt to parse JSON-structured response
+    pub fn try_parse_json_response(
+        response: &str,
+    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
+        let json: serde_json::Value = serde_json::from_str(response).map_err(|e| {
+            TaleTrailError::LLMError(format!("JSON parse failed: {}", e))
+        })?;
+
+        let narrative = json
+            .get("narrative")
+            .or_else(|| json.get("text"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| TaleTrailError::LLMError("Missing narrative field".to_string()))?
+            .to_string();
+
+        let choices = json
+            .get("choices")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+            })
+            .ok_or_else(|| TaleTrailError::LLMError("Missing choices field".to_string()))?;
+
+        let educational = json
+            .get("educational_content")
+            .or_else(|| json.get("educational"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        Ok((narrative, choices, educational))
+    }
+
+    /// Parse text-based response with delimiters
+    pub fn parse_text_response(
+        response: &str,
+    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
+        let sections: Vec<&str> = response.split("---").collect();
+
+        if sections.len() < 2 {
+            // Fallback: treat entire response as narrative, extract choices if present
+            return Self::extract_from_unstructured(response);
+        }
+
+        let narrative = sections[0].trim().to_string();
+
+        // Extract choices from second section
+        let choices_section = sections[1].trim();
+        let choices = Self::extract_choices(choices_section);
+
+        // Extract educational content if present
+        let educational = if sections.len() > 2 {
+            Some(sections[2].trim().to_string())
+        } else {
+            None
+        };
+
+        Ok((narrative, choices, educational))
+    }
+
+    /// Extract from unstructured response (fallback)
+    fn extract_from_unstructured(
+        response: &str,
+    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
+        // Look for common patterns
+        let lines: Vec<&str> = response.lines().collect();
+
+        let mut narrative_lines = Vec::new();
+        let mut choice_lines = Vec::new();
+        let mut in_choices = false;
+
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Detect choice section markers
+            if trimmed.to_lowercase().contains("choice")
+                || trimmed.starts_with("1.")
+                || trimmed.starts_with("2.")
+                || trimmed.starts_with("3.")
+            {
+                in_choices = true;
+            }
+
+            if in_choices {
+                if !trimmed.is_empty() {
+                    choice_lines.push(trimmed);
+                }
+            } else {
+                if !trimmed.is_empty() {
+                    narrative_lines.push(trimmed);
+                }
+            }
+        }
+
+        let narrative = narrative_lines.join(" ");
+        let choices = Self::extract_choices(&choice_lines.join("\n"));
+
+        Ok((narrative, choices, None))
+    }
+
+    /// Extract individual choices from choice section text
+    pub fn extract_choices(text: &str) -> Vec<String> {
+        let lines: Vec<&str> = text.lines().collect();
+        let mut choices = Vec::new();
+
+        for line in lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            // Remove numbering/bullets (e.g., "1. ", "- ", "• ")
+            let cleaned = trimmed
+                .trim_start_matches(|c: char| c.is_numeric() || c == '.' || c == '-' || c == '•')
+                .trim();
+
+            if !cleaned.is_empty() && cleaned.len() > 5 {
+                // Reasonable choice length
+                choices.push(cleaned.to_string());
+            }
+        }
+
+        // Ensure we have exactly 3 choices (pad or truncate)
+        while choices.len() < 3 {
+            choices.push(format!("Choice {}", choices.len() + 1));
+        }
+        choices.truncate(3);
+
+        choices
+    }
+}
+
+/// Generate content for a single node
+pub async fn generate_node_content(
+    llm_client: &StoryLlmClient,
+    node_id: &str,
+    node_context: NodeContext,
+    prompt_package: &PromptPackage,
+    _generation_request: &GenerationRequest,
+    dag: &DAG,
+) -> Result<ContentNode, TaleTrailError> {
+    debug!("Generating content for node: {}", node_id);
+
+    // Call LLM to generate content
+    let llm_response = llm_client
+        .generate_with_prompts(prompt_package, &node_context)
+        .await?;
+
+    // Parse LLM response
+    let (narrative, choice_texts, educational_text) =
+        StoryLlmClient::parse_content_response(&llm_response)?;
+
+    // Get DAG node to retrieve structural information
+    let dag_node = dag.nodes.get(node_id).ok_or_else(|| {
+        TaleTrailError::ValidationError(format!("Node {} not found in DAG", node_id))
+    })?;
+
+    // Build Choice objects from parsed text
+    let choices: Vec<Choice> = choice_texts
+        .iter()
+        .enumerate()
+        .map(|(idx, text)| Choice {
+            id: format!("choice_{}_{}", node_id, idx),
+            text: text.clone(),
+            next_node_id: dag_node
+                .content
+                .next_nodes
+                .get(idx)
+                .cloned()
+                .unwrap_or_default(),
+            metadata: None,
+        })
+        .collect();
+
+    // Build educational content if present
+    let educational_content = educational_text.map(|text| shared_types::EducationalContent {
+        topic: Some("Story Context".to_string()),
+        learning_objective: Some(text.clone()),
+        educational_facts: Some(vec![text.clone()]),
+        vocabulary_words: None,
+    });
+
+    // Build Content structure
+    let content = Content {
+        r#type: "interactive_story_node".to_string(),
+        node_id: node_id.to_string(),
+        text: narrative,
+        choices,
+        convergence_point: dag_node.content.convergence_point,
+        next_nodes: dag_node.content.next_nodes.clone(),
+        educational_content,
+    };
+
+    // Build generation metadata
+    let mut metadata = HashMap::new();
+    metadata.insert(
+        "generated_at".to_string(),
+        serde_json::json!(chrono::Utc::now().to_rfc3339()),
+    );
+    metadata.insert(
+        "model".to_string(),
+        serde_json::json!(prompt_package.llm_model),
+    );
+    metadata.insert(
+        "node_position".to_string(),
+        serde_json::json!(node_context.node_position),
+    );
+    metadata.insert(
+        "total_nodes".to_string(),
+        serde_json::json!(node_context.total_nodes),
+    );
+
+    // Build ContentNode
+    let content_node = ContentNode {
+        id: node_id.to_string(),
+        content,
+        incoming_edges: dag_node.incoming_edges,
+        outgoing_edges: dag_node.outgoing_edges,
+        generation_metadata: Some(metadata),
+    };
+
+    debug!(
+        "Successfully generated content for node {} (narrative: {} chars, choices: {})",
+        node_id,
+        content_node.content.text.len(),
+        content_node.content.choices.len()
+    );
+
+    Ok(content_node)
+}
+
+/// Generate content for multiple nodes in parallel batches
+pub async fn generate_nodes_batch(
+    llm_client: &StoryLlmClient,
+    node_ids: Vec<String>,
+    dag: &DAG,
+    prompt_package: &PromptPackage,
+    generation_request: &GenerationRequest,
+) -> Result<Vec<ContentNode>, TaleTrailError> {
+    info!(
+        "Starting batch generation for {} nodes with concurrency {}",
+        node_ids.len(),
+        CONCURRENT_BATCHES
+    );
+
+    let mut generated_nodes = Vec::new();
+    let mut errors = Vec::new();
+
+    // Process nodes in concurrent batches
+    let mut tasks = Vec::new();
+
+    for node_id in node_ids {
+        // Build node context from DAG
+        let node_context = build_node_context(&node_id, dag)?;
+
+        // Clone necessary data for the task
+        let llm_client_clone = llm_client.clone();
+        let node_id_clone = node_id.clone();
+        let prompt_package_clone = prompt_package.clone();
+        let generation_request_clone = generation_request.clone();
+        let dag_clone = dag.clone();
+
+        // Spawn task for this node
+        let task = tokio::spawn(async move {
+            generate_node_content(
+                &llm_client_clone,
+                &node_id_clone,
+                node_context,
+                &prompt_package_clone,
+                &generation_request_clone,
+                &dag_clone,
+            )
+            .await
+        });
+
+        tasks.push((node_id, task));
+
+        // Limit concurrent tasks
+        if tasks.len() >= CONCURRENT_BATCHES {
+            // Wait for current batch to complete
+            for (node_id, task) in tasks.drain(..) {
+                match task.await {
+                    Ok(Ok(content_node)) => {
+                        generated_nodes.push(content_node);
+                    }
+                    Ok(Err(e)) => {
+                        error!("Failed to generate content for node {}: {}", node_id, e);
+                        errors.push((node_id, e));
+                    }
+                    Err(e) => {
+                        error!("Task panicked for node {}: {}", node_id, e);
+                        errors.push((
+                            node_id,
+                            TaleTrailError::GenerationError(format!("Task panic: {}", e)),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Wait for remaining tasks
+    for (node_id, task) in tasks {
+        match task.await {
+            Ok(Ok(content_node)) => {
+                generated_nodes.push(content_node);
+            }
+            Ok(Err(e)) => {
+                error!("Failed to generate content for node {}: {}", node_id, e);
+                errors.push((node_id, e));
+            }
+            Err(e) => {
+                error!("Task panicked for node {}: {}", node_id, e);
+                errors.push((
+                    node_id,
+                    TaleTrailError::GenerationError(format!("Task panic: {}", e)),
+                ));
+            }
+        }
+    }
+
+    info!(
+        "Batch generation completed: {} successful, {} failed",
+        generated_nodes.len(),
+        errors.len()
+    );
+
+    if generated_nodes.is_empty() && !errors.is_empty() {
+        return Err(TaleTrailError::GenerationError(format!(
+            "All {} node generations failed",
+            errors.len()
+        )));
+    }
+
+    Ok(generated_nodes)
+}
+
+/// Build NodeContext from DAG structure
+pub fn build_node_context(node_id: &str, dag: &DAG) -> Result<NodeContext, TaleTrailError> {
+    // Verify node exists
+    let node = dag.nodes.get(node_id).ok_or_else(|| {
+        TaleTrailError::ValidationError(format!("Node {} not found in DAG", node_id))
+    })?;
+
+    // Find position in DAG (simplified: parse node ID if it's numeric)
+    let node_position = node_id
+        .parse::<usize>()
+        .unwrap_or(0);
+
+    let total_nodes = dag.nodes.len();
+
+    // Extract previous content from incoming nodes
+    let previous_content = if node.incoming_edges > 0 {
+        // Find predecessor nodes
+        let predecessors = find_predecessor_nodes(node_id, dag);
+
+        if !predecessors.is_empty() {
+            // Get content from first predecessor (simplified)
+            let pred_id = &predecessors[0];
+            dag.nodes
+                .get(pred_id)
+                .and_then(|n| {
+                    if !n.content.text.is_empty() {
+                        Some(n.content.text.clone())
+                    } else {
+                        None
+                    }
+                })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Extract choices made (simplified: extract from edges)
+    let choices_made = vec![]; // TODO: Track actual choices if needed
+
+    Ok(NodeContext {
+        previous_content,
+        choices_made,
+        node_position,
+        total_nodes,
+    })
+}
+
+/// Find predecessor nodes in DAG
+fn find_predecessor_nodes(node_id: &str, dag: &DAG) -> Vec<String> {
+    let mut predecessors = Vec::new();
+
+    for edge in &dag.edges {
+        if edge.to_node_id == node_id {
+            predecessors.push(edge.from_node_id.clone());
+        }
+    }
+
+    predecessors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared_types::{AgeGroup, Language};
+
+    #[test]
+    fn test_extract_choices() {
+        let text = "1. Go left\n2. Go right\n3. Stay here";
+        let choices = StoryLlmClient::extract_choices(text);
+
+        assert_eq!(choices.len(), 3);
+        assert_eq!(choices[0], "Go left");
+        assert_eq!(choices[1], "Go right");
+        assert_eq!(choices[2], "Stay here");
+    }
+
+    #[test]
+    fn test_extract_choices_with_bullets() {
+        let text = "- Choice one\n- Choice two\n- Choice three";
+        let choices = StoryLlmClient::extract_choices(text);
+
+        assert_eq!(choices.len(), 3);
+        assert_eq!(choices[0], "Choice one");
+    }
+
+    #[test]
+    fn test_parse_json_response() {
+        let response = r#"{
+            "narrative": "This is the story text",
+            "choices": ["Choice 1", "Choice 2", "Choice 3"],
+            "educational_content": "Educational information"
+        }"#;
+
+        let result = StoryLlmClient::try_parse_json_response(response);
+        assert!(result.is_ok());
+
+        let (narrative, choices, educational) = result.unwrap();
+        assert_eq!(narrative, "This is the story text");
+        assert_eq!(choices.len(), 3);
+        assert!(educational.is_some());
+    }
+
+    #[test]
+    fn test_build_content_prompt() {
+        let prompt_package = PromptPackage {
+            system_prompt: "System instructions".to_string(),
+            user_prompt: "User template".to_string(),
+            language: Language::En,
+            llm_model: "test-model".to_string(),
+            llm_config: shared_types::LLMConfig {
+                temperature: 0.7,
+                max_tokens: 500,
+                top_p: 1.0,
+                frequency_penalty: 0.0,
+                presence_penalty: 0.0,
+                stop_sequences: vec![],
+            },
+            prompt_metadata: shared_types::PromptMetadata {
+                theme_context: "Adventure".to_string(),
+                age_group_context: AgeGroup::_9To11,
+                language_context: Language::En,
+                service_target: shared_types::MCPServiceType::StoryGenerator,
+                generation_method: shared_types::PromptGenerationMethod::LLMGenerated,
+                template_version: "1.0".to_string(),
+                generated_at: "2024-01-01T00:00:00Z".to_string(),
+            },
+            fallback_used: false,
+        };
+
+        let node_context = NodeContext {
+            previous_content: Some("Beginning of story".to_string()),
+            choices_made: vec!["Choice 1".to_string()],
+            node_position: 2,
+            total_nodes: 16,
+        };
+
+        let prompt = StoryLlmClient::build_content_prompt(&prompt_package, &node_context);
+
+        assert!(prompt.contains("System: System instructions"));
+        assert!(prompt.contains("User: User template"));
+        assert!(prompt.contains("Node position: 2/16"));
+        assert!(prompt.contains("Previous content: Beginning of story"));
+        assert!(prompt.contains("Choices made: Choice 1"));
+    }
+}

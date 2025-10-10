@@ -63,6 +63,7 @@ pub struct GetModelForLanguageParams {
 ///
 /// This tool generates system and user prompts for story content generation,
 /// tailored to the specified theme, age group, language, and educational goals.
+#[allow(dead_code)]
 pub fn create_generate_story_prompts_tool() -> Tool {
     let schema = schema_for!(GenerateStoryPromptsParams);
     let schema_value = serde_json::to_value(schema)
@@ -90,6 +91,7 @@ pub fn create_generate_story_prompts_tool() -> Tool {
 /// This tool generates prompts for quality control validation,
 /// ensuring content meets age-appropriateness, language quality,
 /// and educational value standards.
+#[allow(dead_code)]
 pub fn create_generate_validation_prompts_tool() -> Tool {
     let schema = schema_for!(GenerateValidationPromptsParams);
     let schema_value = serde_json::to_value(schema)
@@ -117,6 +119,7 @@ pub fn create_generate_validation_prompts_tool() -> Tool {
 /// This tool generates prompts for constraint enforcement,
 /// ensuring vocabulary levels, required story elements,
 /// and theme consistency are maintained.
+#[allow(dead_code)]
 pub fn create_generate_constraint_prompts_tool() -> Tool {
     let schema = schema_for!(GenerateConstraintPromptsParams);
     let schema_value = serde_json::to_value(schema)
@@ -144,6 +147,7 @@ pub fn create_generate_constraint_prompts_tool() -> Tool {
 /// This tool retrieves the appropriate LLM model identifier
 /// for a specific language, ensuring language-specific models
 /// are used for content generation.
+#[allow(dead_code)]
 pub fn create_get_model_for_language_tool() -> Tool {
     let schema = schema_for!(GetModelForLanguageParams);
     let schema_value = serde_json::to_value(schema)
@@ -170,6 +174,7 @@ pub fn create_get_model_for_language_tool() -> Tool {
 ///
 /// Returns a vector of all 4 tool definitions for registration
 /// with the MCP server.
+#[allow(dead_code)]
 pub fn get_all_tools() -> Vec<Tool> {
     vec![
         create_generate_story_prompts_tool(),

@@ -43,7 +43,7 @@
 //! use prompt_helper::config::PromptHelperConfig;
 //! use shared_types::{MCPServiceType, Language, AgeGroup, VocabularyLevel};
 //!
-//! let config = PromptHelperConfig::default();
+//! let config = crate::test_helpers::test_prompt_helper_config();
 //! let template = get_template(
 //!     MCPServiceType::StoryGenerator,
 //!     Language::En,
@@ -131,6 +131,7 @@ pub fn load_templates_from_config(
 /// # Returns
 ///
 /// * `(String, String)` - Tuple of (system_prompt, user_prompt) with variables replaced
+#[allow(dead_code)]
 pub fn apply_template(template: &Template, context: &TemplateContext) -> (String, String) {
     let system = substitute_variables(&template.system_prompt, context);
     let user = substitute_variables(&template.user_prompt, context);
@@ -161,6 +162,7 @@ pub fn apply_template(template: &Template, context: &TemplateContext) -> (String
 ///
 /// * `Ok(Template)` - Template for the requested service and language
 /// * `Err(String)` - Service type not supported
+#[allow(dead_code)]
 pub fn get_template(
     service: MCPServiceType,
     language: Language,
@@ -197,6 +199,7 @@ pub fn get_template(
 // ============================================================================
 
 /// Substitute all variables in template string with context values
+#[allow(dead_code)]
 fn substitute_variables(template_str: &str, context: &TemplateContext) -> String {
     let mut result = template_str.to_string();
 
@@ -233,6 +236,7 @@ fn substitute_variables(template_str: &str, context: &TemplateContext) -> String
 }
 
 /// Format age group as human-readable string
+#[allow(dead_code)]
 fn format_age_group(age_group: &AgeGroup) -> String {
     match age_group {
         AgeGroup::_6To8 => "6-8".to_string(),
@@ -244,6 +248,7 @@ fn format_age_group(age_group: &AgeGroup) -> String {
 }
 
 /// Format language as two-letter code
+#[allow(dead_code)]
 fn format_language(language: &Language) -> String {
     match language {
         Language::En => "en".to_string(),
@@ -252,6 +257,7 @@ fn format_language(language: &Language) -> String {
 }
 
 /// Format vocabulary level as human-readable string
+#[allow(dead_code)]
 fn format_vocabulary_level(level: &VocabularyLevel) -> String {
     match level {
         VocabularyLevel::Basic => "Basic".to_string(),
@@ -261,6 +267,7 @@ fn format_vocabulary_level(level: &VocabularyLevel) -> String {
 }
 
 /// Format list of strings as comma-separated string
+#[allow(dead_code)]
 fn format_list(items: &[String]) -> String {
     items.join(", ")
 }
@@ -268,6 +275,7 @@ fn format_list(items: &[String]) -> String {
 /// Get hardcoded fallback template for service and language
 ///
 /// Provides comprehensive fallback templates when config.toml doesn't have templates.
+#[allow(dead_code)]
 fn get_fallback_template(service: MCPServiceType, language: Language) -> Template {
     match (service, language) {
         // ========================================================================
@@ -344,6 +352,38 @@ fn get_fallback_template(service: MCPServiceType, language: Language) -> Templat
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shared_types_llm::LlmConfig;
+    use crate::config::{ServiceConfig, NatsConfig, PromptConfig, PromptHelperConfig};
+
+    /// Create a test LlmConfig using TOML configuration
+    fn test_llm_config() -> LlmConfig {
+        let toml = r#"
+[llm]
+type = "shimmy"
+url = "http://localhost:11434/v1"
+default_model = "test-model"
+use_default_model_fallback = true
+max_tokens = 4096
+temperature = 0.7
+timeout_secs = 60
+system_prompt_style = "native"
+
+[llm.models]
+en = "test-model-en"
+de = "test-model-de"
+        "#;
+        LlmConfig::from_toml_str(toml).expect("Failed to create test LLM config")
+    }
+
+    /// Create a test PromptHelperConfig for testing
+    fn test_prompt_helper_config() -> PromptHelperConfig {
+        PromptHelperConfig {
+            service: ServiceConfig::default(),
+            nats: NatsConfig::default(),
+            llm: test_llm_config(),
+            prompt: PromptConfig::default(),
+        }
+    }
 
     fn create_test_context() -> TemplateContext {
         TemplateContext {
@@ -490,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_get_template_uses_fallback() {
-        let config = PromptHelperConfig::default();
+        let config = test_prompt_helper_config();
         let template = get_template(
             MCPServiceType::StoryGenerator,
             Language::En,
@@ -503,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_get_template_all_service_types() {
-        let config = PromptHelperConfig::default();
+        let config = test_prompt_helper_config();
         let services = vec![
             MCPServiceType::StoryGenerator,
             MCPServiceType::QualityControl,
@@ -522,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_get_template_both_languages() {
-        let config = PromptHelperConfig::default();
+        let config = test_prompt_helper_config();
 
         let en_template = get_template(
             MCPServiceType::StoryGenerator,
@@ -542,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_complete_workflow() {
-        let config = PromptHelperConfig::default();
+        let config = test_prompt_helper_config();
 
         // Get template
         let template = get_template(

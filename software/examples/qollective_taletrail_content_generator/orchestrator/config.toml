@@ -21,7 +21,7 @@ nkey_file = "./nkeys/orchestrator.nk"
 ca_cert = "./certs/ca.pem"
 
 [llm]
-url = "http://127.0.0.1:1234"
+url = "http://127.0.0.1:1234/v1"
 model_name = "local-model"
 
 [pipeline]
