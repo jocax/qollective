@@ -67,7 +67,10 @@ pub const MCP_QUALITY_VALIDATE: &str = "mcp.quality.validate";
 /// MCP constraint enforcement subject
 pub const MCP_CONSTRAINT_ENFORCE: &str = "mcp.constraint.enforce";
 
-/// MCP event publishing subject
+/// MCP event publishing subject prefix
+pub const MCP_EVENTS_PREFIX: &str = "mcp.events";
+
+/// MCP event publishing subject (alias for backward compatibility)
 pub const MCP_EVENTS: &str = "mcp.events";
 
 // ============================================================================

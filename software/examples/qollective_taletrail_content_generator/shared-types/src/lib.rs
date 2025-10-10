@@ -52,6 +52,9 @@ pub use traits::{
     ValidationService,
 };
 
+// NOTE: MCPServiceType is now only from the generated types (shared_types_generated::MCPServiceType)
+// The manual version in types/mod.rs is deprecated and should not be used
+
 // Re-export mock types when mocking feature is enabled
 #[cfg(any(test, feature = "mocking"))]
 pub use traits::{

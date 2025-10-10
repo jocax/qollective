@@ -160,6 +160,15 @@ pub enum TaleTrailError {
     /// - Ensure tenant_id is present in JWT
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
+
+    /// Pipeline orchestration errors (phase transitions, state management)
+    ///
+    /// # Debugging
+    /// - Check pipeline phase progression in orchestrator logs
+    /// - Verify all phases complete before advancing
+    /// - Review state machine logic for invalid transitions
+    #[error("Pipeline error: {0}")]
+    PipelineError(String),
 }
 
 impl TaleTrailError {
@@ -183,7 +192,7 @@ impl TaleTrailError {
             Self::ConfigError(_) => "configuration",
             Self::ValidationError(_) | Self::InvalidRequest(_) => "validation",
             Self::GenerationError(_) | Self::LLMError(_) => "generation",
-            Self::QollectiveError(_) => "framework",
+            Self::QollectiveError(_) | Self::PipelineError(_) => "framework",
             Self::TlsCertificateError(_) => "security",
             Self::TimeoutError | Self::RetryExhausted => "reliability",
             Self::SerializationError(_) => "serialization",

@@ -1,3 +1,16 @@
-//! TaleTrail data types (stubs for Phase 0)
+//! TaleTrail data types
 
-// Will be implemented in Phase 1
+use serde::{Deserialize, Serialize};
+
+/// MCP service types in the TaleTrail pipeline
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MCPServiceType {
+    /// Prompt helper service for generating prompts
+    PromptHelper,
+    /// Story generator service for creating content
+    StoryGenerator,
+    /// Quality control service for validating content quality
+    QualityControl,
+    /// Constraint enforcer service for checking constraints
+    ConstraintEnforcer,
+}
