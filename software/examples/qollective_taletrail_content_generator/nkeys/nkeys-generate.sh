@@ -155,7 +155,7 @@ users: [
     nkey: "$(cat story-generator.pub)"
     permissions: {
       publish: {
-        allow: ["mcp.story.response.>", "mcp.events.story.>"]
+        allow: ["mcp.story.response.>", "mcp.events.story.>", "_INBOX.>"]
       }
       subscribe: {
         allow: ["mcp.story.generate", "mcp.orchestrator.story.>"]
@@ -168,7 +168,7 @@ users: [
     nkey: "$(cat quality-control.pub)"
     permissions: {
       publish: {
-        allow: ["mcp.quality.response.>", "mcp.events.quality.>"]
+        allow: ["mcp.quality.response.>", "mcp.events.quality.>", "_INBOX.>"]
       }
       subscribe: {
         allow: ["mcp.quality.validate", "mcp.orchestrator.quality.>"]
@@ -181,7 +181,7 @@ users: [
     nkey: "$(cat constraint-enforcer.pub)"
     permissions: {
       publish: {
-        allow: ["mcp.constraint.response.>", "mcp.events.constraint.>"]
+        allow: ["mcp.constraint.response.>", "mcp.events.constraint.>", "_INBOX.>"]
       }
       subscribe: {
         allow: ["mcp.constraint.enforce", "mcp.orchestrator.constraint.>"]
@@ -194,7 +194,7 @@ users: [
     nkey: "$(cat prompt-helper.pub)"
     permissions: {
       publish: {
-        allow: ["mcp.prompt.response.>", "mcp.events.prompt.>"]
+        allow: ["mcp.prompt.response.>", "mcp.events.prompt.>", "_INBOX.>"]
       }
       subscribe: {
         allow: ["mcp.prompt.helper", "mcp.orchestrator.prompt.>"]

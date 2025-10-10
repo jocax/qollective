@@ -32,7 +32,10 @@ pub struct NatsConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
-    pub nkey_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_seed: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +84,8 @@ impl Default for ServiceConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
-            nkey_file: "./nkeys/prompt-helper.nk".to_string(),
+            nkey_file: Some("./nkeys/prompt-helper.nk".to_string()),
+            nkey_seed: None,
         }
     }
 }
@@ -148,18 +152,56 @@ impl Default for PromptConfig {
 
 impl PromptHelperConfig {
     /// Load configuration using Figment merge strategy
-    /// Priority (lowest to highest): .env file → config.toml → Environment variables
+    ///
+    /// Configuration priority (lowest to highest):
+    /// 1. config.toml file (lowest priority - base defaults)
+    /// 2. .env file (middle priority - environment-specific config)
+    /// 3. System environment variables (highest priority - runtime secrets)
+    ///
+    /// The priority is achieved through dotenvy's behavior:
+    /// - dotenvy loads .env file into process environment
+    /// - dotenvy does NOT override existing environment variables
+    /// - Therefore system env vars automatically take precedence over .env vars
+    /// - Figment then merges: TOML → Environment (which contains .env + system vars)
     pub fn load() -> Result<Self> {
-        // Load .env file from current directory (lowest priority)
+        // Load .env file from current directory
+        // dotenvy loads .env vars into environment but does NOT override existing system env vars
+        // This ensures: system env vars (highest) > .env vars (middle) > TOML (lowest)
         dotenvy::dotenv().ok();
 
         let config: Self = Figment::new()
-            // Layer 1: config.toml file
+            // Layer 1: Base config from TOML file (lowest priority)
             .merge(Toml::file("prompt-helper/config.toml"))
+            // Layer 2: LLM-specific environment variables (map to nested llm.provider and llm.models sections)
+            // Env::prefixed("LLM_") strips the "LLM_" prefix automatically
+            // So LLM_TYPE becomes TYPE, LLM_MODELS_EN becomes MODELS_EN, LLM_GOOGLE_API_KEY becomes GOOGLE_API_KEY, etc.
+            .merge(
+                Env::prefixed("LLM_")
+                    .map(|key| {
+                        let key_str = key.as_str();
 
-            // Layer 2: Environment variables (highest priority)
+                        // Handle language-specific models: MODELS_EN -> llm.models.en, MODELS_DE -> llm.models.de
+                        if let Some(lang) = key_str.strip_prefix("MODELS_") {
+                            return format!("llm.models.{}", lang.to_lowercase()).into();
+                        }
+
+                        // Handle provider-level config
+                        // Strip provider-specific prefixes (GOOGLE_, OPENAI_, ANTHROPIC_) to get generic field names
+                        let generic_key = if let Some(suffix) = key_str.strip_prefix("GOOGLE_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("OPENAI_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("ANTHROPIC_") {
+                            suffix
+                        } else {
+                            key_str
+                        };
+                        // Transform to llm.provider.{field}: GOOGLE_API_KEY -> llm.provider.api_key, TYPE -> llm.provider.type
+                        format!("llm.provider.{}", generic_key.to_lowercase()).into()
+                    })
+            )
+            // Layer 3: PROMPT_HELPER-specific environment variables (includes .env + system, system takes precedence)
             .merge(Env::prefixed("PROMPT_HELPER_"))
-
             .extract()
             .map_err(|e| TaleTrailError::ConfigError(format!("Config error: {}", e)))?;
 

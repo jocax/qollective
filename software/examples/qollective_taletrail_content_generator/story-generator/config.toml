@@ -14,7 +14,12 @@ queue_group = "story-generator"
 
 [nats.auth]
 # NKey authentication (replaces mTLS client certificates)
+# Option 1: Use NKey file (development/local)
 nkey_file = "./nkeys/story-generator.nk"
+
+# Option 2: Use NKey seed value directly (production - from env var)
+# nkey_seed = "SUACGT..."  # Usually set via STORY_GENERATOR_NATS_AUTH_NKEY_SEED env var
+# Priority: nkey_seed (highest) > nkey_file (fallback)
 
 [nats.tls]
 # TLS for encryption (no client cert needed with NKey auth)

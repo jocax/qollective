@@ -57,7 +57,11 @@ pub struct NatsConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// NKey file path for authentication
-    pub nkey_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_file: Option<String>,
+    /// NKey seed value for authentication (alternative to nkey_file)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_seed: Option<String>,
 }
 
 /// TLS configuration
@@ -98,7 +102,8 @@ impl Default for ServiceConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
-            nkey_file: "./nkeys/story-generator.nk".to_string(),
+            nkey_file: Some("./nkeys/story-generator.nk".to_string()),
+            nkey_seed: None,
         }
     }
 }
@@ -138,18 +143,28 @@ impl Default for GenerationConfig {
 
 impl StoryGeneratorConfig {
     /// Load configuration using Figment merge strategy
-    /// Priority (lowest to highest): .env file → config.toml → Environment variables
+    ///
+    /// Configuration priority (lowest to highest):
+    /// 1. config.toml file (lowest priority - base defaults)
+    /// 2. .env file (middle priority - environment-specific config)
+    /// 3. System environment variables (highest priority - runtime secrets)
+    ///
+    /// The priority is achieved through dotenvy's behavior:
+    /// - dotenvy loads .env file into process environment
+    /// - dotenvy does NOT override existing environment variables
+    /// - Therefore system env vars automatically take precedence over .env vars
+    /// - Figment then merges: TOML → Environment (which contains .env + system vars)
     pub fn load() -> Result<Self> {
-        // Load .env file from current directory (lowest priority)
+        // Load .env file from current directory
+        // dotenvy loads .env vars into environment but does NOT override existing system env vars
+        // This ensures: system env vars (highest) > .env vars (middle) > TOML (lowest)
         dotenvy::dotenv().ok();
 
         let config: Self = Figment::new()
-            // Layer 1: config.toml file
+            // Layer 1: Base config from TOML file (lowest priority)
             .merge(Toml::file("story-generator/config.toml"))
-
-            // Layer 2: Environment variables (highest priority)
+            // Layer 2: Environment variables (includes .env + system, system takes precedence)
             .merge(Env::prefixed("STORY_GENERATOR_"))
-
             .extract()?;
 
         Ok(config)

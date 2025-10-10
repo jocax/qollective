@@ -83,9 +83,13 @@ async fn main() -> Result<()> {
     let nats_config = NatsConfig {
         connection: NatsConnectionConfig {
             urls: vec![app_config.nats.url.clone()],
-            // Use Qollective's native NKey support!
-            nkey_file: Some(app_config.nats.auth.nkey_file.clone().into()),
-            nkey_seed: None,
+            // Use Qollective's native NKey support with priority: nkey_seed > nkey_file
+            nkey_file: if app_config.nats.auth.nkey_seed.is_some() {
+                None  // If seed is set, ignore file
+            } else {
+                app_config.nats.auth.nkey_file.as_ref().map(|p| p.into())
+            },
+            nkey_seed: app_config.nats.auth.nkey_seed.clone(),
             tls: QollectiveTlsConfig {
                 enabled: true,
                 ca_cert_path: Some(app_config.nats.tls.ca_cert.clone().into()),

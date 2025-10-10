@@ -264,12 +264,20 @@ impl DefaultDynamicLlmClientProvider {
                     ))
                 })?;
 
-                debug!(
+                info!(
                     provider = %resolved.provider_type,
                     base_url = %resolved.base_url,
-                    "Building native Google Gemini client"
+                    "Building native Google Gemini client - enable RUST_LOG=reqwest=trace for HTTP request/response logging"
                 );
 
+                // Use default client without customization
+                // To see raw HTTP requests and responses, set environment variable:
+                // RUST_LOG=reqwest=trace,rig_core=debug,shared_types_llm=debug
+                //
+                // This will log:
+                // - Full HTTP request method, URL, headers
+                // - Full HTTP response status, headers
+                // - Request and response bodies (as debug output)
                 let client = gemini::Client::new(api_key);
 
                 Ok(RigClientWrapper::Google(Arc::new(client)))

@@ -11,7 +11,7 @@ use crate::traits::DynamicLlmClient;
 use async_trait::async_trait;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 /// Concrete implementation of DynamicLlmClient using rig-core
 ///
@@ -131,8 +131,63 @@ impl DynamicLlmClient for RigDynamicLlmClient {
                 agent.prompt(prompt).await
             }
             RigClientWrapper::Google(client) => {
-                let agent = client.agent(&self.model).build();
-                agent.prompt(prompt).await
+                use rig::providers::gemini::completion::gemini_api_types::{AdditionalParameters, GenerationConfig};
+
+                // Log the prompt being sent to Google Gemini for debugging
+                info!(
+                    model = %self.model,
+                    prompt_length = prompt.len(),
+                    prompt_preview = %if prompt.len() > 200 { &prompt[..200] } else { prompt },
+                    "=== GOOGLE GEMINI REQUEST ==="
+                );
+                debug!(
+                    full_prompt = %prompt,
+                    "Full prompt to Google Gemini"
+                );
+
+                // Configure generation settings (required for proper API response format)
+                let gen_cfg = GenerationConfig::default();
+                let cfg = AdditionalParameters::default().with_config(gen_cfg);
+
+                // Serialize additional parameters for logging
+                let cfg_json = serde_json::to_value(&cfg).unwrap();
+                debug!(
+                    additional_params = %cfg_json,
+                    "Google Gemini generation config"
+                );
+
+                let agent = client.agent(&self.model)
+                    .additional_params(cfg_json)
+                    .build();
+
+                // Execute the prompt and capture any errors with detailed logging
+                let result = agent.prompt(prompt).await;
+
+                match &result {
+                    Ok(response) => {
+                        info!(
+                            response_length = response.len(),
+                            response_preview = %if response.len() > 200 { &response[..200] } else { response },
+                            "=== GOOGLE GEMINI RESPONSE (SUCCESS) ==="
+                        );
+                        debug!(
+                            full_response = %response,
+                            "Full response from Google Gemini"
+                        );
+                    }
+                    Err(e) => {
+                        info!(
+                            error = %e,
+                            "=== GOOGLE GEMINI RESPONSE (ERROR) ==="
+                        );
+                        debug!(
+                            error_debug = ?e,
+                            "Full error details from Google Gemini"
+                        );
+                    }
+                }
+
+                result
             }
         }
         .map_err(|e| {

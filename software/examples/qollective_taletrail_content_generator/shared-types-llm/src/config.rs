@@ -58,9 +58,15 @@ impl LlmConfig {
     /// Load configuration from a TOML file with environment variable overrides
     ///
     /// Configuration priority (lowest to highest):
-    /// 1. .env file (lowest priority)
-    /// 2. config.toml file (middle priority)
-    /// 3. System environment variables (highest priority)
+    /// 1. config.toml file (lowest priority - base defaults)
+    /// 2. .env file (middle priority - environment-specific config)
+    /// 3. System environment variables (highest priority - runtime secrets)
+    ///
+    /// The priority is achieved through dotenvy's behavior:
+    /// - dotenvy loads .env file into process environment
+    /// - dotenvy does NOT override existing environment variables
+    /// - Therefore system env vars automatically take precedence over .env vars
+    /// - Figment then merges: TOML → Environment (which contains .env + system vars)
     ///
     /// Environment variables are prefixed with `LLM_` and override TOML values.
     ///
@@ -81,11 +87,25 @@ impl LlmConfig {
     /// - `LLM_ANTHROPIC_API_KEY=sk-ant-...` - Anthropic-specific API key
     /// - `LLM_GOOGLE_API_KEY=AIza...` - Google-specific API key
     pub fn load(path: impl AsRef<Path>) -> Result<Self, LlmError> {
-        // Load .env file from current directory (lowest priority)
-        dotenvy::dotenv().ok();
+        // Load .env file from current directory
+        // dotenvy loads .env vars into environment but does NOT override existing system env vars
+        // This ensures: system env vars (highest) > .env vars (middle) > TOML (lowest)
+        match dotenvy::dotenv() {
+            Ok(path) => eprintln!("DEBUG: Loaded .env from: {:?}", path),
+            Err(e) => eprintln!("DEBUG: .env not loaded: {}", e),
+        }
+
+        // Debug: Check what LLM_TYPE env var contains
+        if let Ok(llm_type) = std::env::var("LLM_TYPE") {
+            eprintln!("DEBUG: LLM_TYPE env var = {}", llm_type);
+        } else {
+            eprintln!("DEBUG: LLM_TYPE env var not set");
+        }
 
         let config: LlmConfig = Figment::new()
+            // Layer 1: Base config from TOML file (lowest priority)
             .merge(Toml::file(path.as_ref()).nested())
+            // Layer 2: Environment variables (includes .env + system, system takes precedence)
             .merge(Env::prefixed(ENV_PREFIX_LLM))
             .select(CONFIG_KEY_LLM)
             .extract()

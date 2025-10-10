@@ -33,11 +33,17 @@ queue_group = "prompt-helper"
 
 [nats.auth]
 # NKey authentication - now natively supported by Qollective!
-nkey_file = "./nkeys/prompt-helper.nk"
+# Option 1: Use NKey file (development/local)
+nkey_file = "../nkeys/prompt-helper.nk"
+
+# Option 2: Use NKey seed value directly (production - from env var)
+# nkey_seed = "SUACGT..."  # Usually set via PROMPT_HELPER_NATS_AUTH_NKEY_SEED env var
+# Priority: nkey_seed (highest) > nkey_file (fallback)
+#nkey_seed = "dummy-invalid-nkey-seed"
 
 [nats.tls]
 # TLS for encryption (NKey handles authentication, no client certs needed)
-ca_cert = "./certs/ca.pem"
+ca_cert = "../certs/ca.pem"
 
 [prompt]
 # Supported languages for prompt validation
