@@ -2,14 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 use shared_types::*;
-use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
+use shared_types_llm::LlmConfig as SharedLlmConfig;
+use figment::{Figment, providers::{Env, Format, Toml}};
 
 /// Orchestrator configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
-    pub llm: LlmConfig,
+    pub llm: SharedLlmConfig,
     pub pipeline: PipelineConfig,
     pub batch: BatchConfig,
     pub dag: DagConfig,
@@ -36,12 +37,6 @@ pub struct TlsConfig {
     pub ca_cert: String,
     pub client_cert: String,
     pub client_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
-    pub url: String,
-    pub model_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,15 +99,6 @@ impl Default for NatsConfig {
     }
 }
 
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            url: "http://127.0.0.1:1234/v1".to_string(),
-            model_name: "local-model".to_string(),
-        }
-    }
-}
-
 impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
@@ -154,37 +140,517 @@ impl Default for NegotiationConfig {
     }
 }
 
-impl Default for OrchestratorConfig {
-    fn default() -> Self {
-        Self {
-            service: ServiceConfig::default(),
-            nats: NatsConfig::default(),
-            llm: LlmConfig::default(),
-            pipeline: PipelineConfig::default(),
-            batch: BatchConfig::default(),
-            dag: DagConfig::default(),
-            negotiation: NegotiationConfig::default(),
-        }
-    }
-}
-
 impl OrchestratorConfig {
     /// Load configuration using Figment merge strategy
-    /// Priority (lowest to highest): Defaults → config.toml → Environment variables
+    ///
+    /// Configuration priority (lowest to highest):
+    /// 1. config.toml file (lowest priority - base defaults)
+    /// 2. .env file (middle priority - environment-specific config)
+    /// 3. System environment variables (highest priority - runtime secrets)
+    ///
+    /// The priority is achieved through dotenvy's behavior:
+    /// - dotenvy loads .env file into process environment
+    /// - dotenvy does NOT override existing environment variables
+    /// - Therefore system env vars automatically take precedence over .env vars
+    /// - Figment then merges: TOML → Environment (which contains .env + system vars)
     pub fn load() -> Result<Self> {
-        let config: Self = Figment::new()
-            // Layer 1: Hardcoded defaults (fallback)
-            .merge(Serialized::defaults(Self::default()))
+        use tracing::debug;
 
-            // Layer 2: config.toml file (overrides defaults)
-            .merge(Toml::file("orchestrator/config.toml"))
+        // Load .env file from current directory
+        match dotenvy::dotenv() {
+            Ok(path) => debug!(
+                path = ?path,
+                "✅ Loaded .env file"
+            ),
+            Err(_) => debug!("ℹ️  No .env file found in current directory"),
+        }
 
-            // Layer 3: Environment variables (highest priority)
-            .merge(Env::prefixed("ORCHESTRATOR_"))
+        let figment = Figment::new()
+            // Layer 1: Base config from TOML file (lowest priority)
+            .merge(Toml::file("orchestrator/config.toml"));
 
+        debug!("📄 Layer 1: Loaded base config from orchestrator/config.toml");
+
+        let figment = figment
+            // Layer 2: LLM-specific environment variables (map to nested llm.provider and llm.models sections)
+            .merge(
+                Env::prefixed("LLM_")
+                    .map(|key| {
+                        let key_str = key.as_str();
+
+                        // Handle language-specific models: MODELS_EN -> llm.models.en
+                        if let Some(lang) = key_str.strip_prefix("MODELS_") {
+                            return format!("llm.models.{}", lang.to_lowercase()).into();
+                        }
+
+                        // Handle provider-level config
+                        let generic_key = if let Some(suffix) = key_str.strip_prefix("GOOGLE_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("OPENAI_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("ANTHROPIC_") {
+                            suffix
+                        } else {
+                            key_str
+                        };
+
+                        let field_name = if generic_key == "TYPE" {
+                            "type"
+                        } else {
+                            &generic_key.to_lowercase()
+                        };
+
+                        format!("llm.{}", field_name).into()
+                    })
+            );
+
+        debug!("🔧 Layer 2: Applied LLM_* environment variable overrides");
+
+        let config: Self = figment
+            // Layer 3: ORCHESTRATOR-specific environment variables (includes .env + system, system takes precedence)
+            .merge(Env::prefixed("ORCHESTRATOR_").split("__"))
             .extract()
             .map_err(|e| TaleTrailError::ConfigError(format!("Config error: {}", e)))?;
 
+        debug!("🔧 Layer 3: Applied ORCHESTRATOR_* environment variable overrides");
+
+        debug!(
+            provider_type = ?config.llm.provider.provider_type,
+            url = %config.llm.provider.url,
+            default_model = %config.llm.provider.default_model,
+            models_count = config.llm.provider.models.len(),
+            "✅ Final merged configuration"
+        );
+
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+    use lazy_static::lazy_static;
+
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+    lazy_static! {
+        static ref ORIGINAL_DIR: PathBuf = env::current_dir()
+            .expect("Failed to get current directory at module initialization");
+    }
+
+    struct EnvGuard {
+        vars: Vec<String>,
+    }
+
+    impl EnvGuard {
+        fn new(vars: Vec<&str>) -> Self {
+            Self {
+                vars: vars.iter().map(|s| s.to_string()).collect(),
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for var in &self.vars {
+                env::remove_var(var);
+            }
+        }
+    }
+
+    fn create_temp_config_dir(content: &str) -> TempDir {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let orch_dir = temp_dir.path().join("orchestrator");
+        fs::create_dir(&orch_dir).expect("Failed to create orchestrator dir");
+        let config_path = orch_dir.join("config.toml");
+        let mut file = fs::File::create(&config_path).expect("Failed to create config file");
+        file.write_all(content.as_bytes()).expect("Failed to write to config file");
+        file.flush().expect("Failed to flush config file");
+        temp_dir
+    }
+
+    fn restore_original_dir() {
+        let _ = env::set_current_dir("/");
+        env::set_current_dir(ORIGINAL_DIR.as_path()).expect("Failed to restore dir");
+    }
+
+    #[test]
+    fn test_default_toml_loading() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["LLM_TYPE", "ORCHESTRATOR_NATS_URL"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "lmstudio"
+url = "http://localhost:1234/v1"
+default_model = "default-model"
+
+[llm.models]
+en = "model-en-default"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.service.name, "test-service");
+        assert_eq!(config.nats.url, "nats://localhost:5222");
+        assert_eq!(config.llm.provider.provider_type.to_string(), "lmstudio");
+        assert_eq!(config.pipeline.generation_timeout_secs, 60);
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_env_var_override_type() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["LLM_TYPE"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "lmstudio"
+url = "http://localhost:1234/v1"
+default_model = "default-model"
+
+[llm.models]
+en = "model-en"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+        env::set_var("LLM_TYPE", "google");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.llm.provider.provider_type.to_string(), "google");
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_env_var_override_url() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["LLM_URL"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "lmstudio"
+url = "http://localhost:1234/v1"
+default_model = "default-model"
+
+[llm.models]
+en = "model-en"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+        env::set_var("LLM_URL", "https://custom.url/v1");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.llm.provider.url, "https://custom.url/v1");
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_env_var_provider_specific_api_key() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["LLM_GOOGLE_API_KEY"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "google"
+url = "https://generativelanguage.googleapis.com/v1"
+default_model = "gemini-pro"
+
+[llm.models]
+en = "model-en"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+        env::set_var("LLM_GOOGLE_API_KEY", "test-api-key-12345");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.llm.provider.api_key, Some("test-api-key-12345".to_string()));
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_env_var_models_override() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["LLM_MODELS_EN"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "google"
+url = "https://generativelanguage.googleapis.com/v1"
+default_model = "gemini-pro"
+
+[llm.models]
+en = "old-model-en"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+        env::set_var("LLM_MODELS_EN", "gemini-1.5-flash");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.llm.provider.models.get("en"), Some(&"gemini-1.5-flash".to_string()));
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_orchestrator_env_var_override() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec!["ORCHESTRATOR_NATS__URL"]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[llm]
+type = "lmstudio"
+url = "http://localhost:1234/v1"
+default_model = "default-model"
+
+[llm.models]
+en = "model-en"
+
+[pipeline]
+generation_timeout_secs = 60
+validation_timeout_secs = 10
+retry_max_attempts = 3
+retry_base_delay_secs = 1
+retry_max_delay_secs = 30
+
+[batch]
+size_min = 4
+size_max = 6
+concurrent_batches = 3
+concurrent_batches_max = 5
+
+[dag]
+default_node_count = 16
+convergence_point_ratio = 0.25
+max_depth = 10
+
+[negotiation]
+max_rounds = 3
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+        env::set_var("ORCHESTRATOR_NATS__URL", "nats://override:4222");
+
+        let config = OrchestratorConfig::load().expect("Failed to load config");
+
+        assert_eq!(config.nats.url, "nats://override:4222");
+
+        restore_original_dir();
     }
 }

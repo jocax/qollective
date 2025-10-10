@@ -21,7 +21,9 @@ async fn main() -> Result<()> {
     info!("Configuration:");
     info!("  NATS URL: {}", config.nats.url);
     info!("  NATS Subject: {}", config.nats.subject);
-    info!("  LM Studio URL: {}", config.llm.url);
+    info!("  LLM Provider: {}", config.llm.provider.provider_type);
+    info!("  LLM URL: {}", config.llm.provider.url);
+    info!("  LLM Model: {}", config.llm.provider.default_model);
     info!("  Generation timeout: {}s", config.pipeline.generation_timeout_secs);
     info!("  Validation timeout: {}s", config.pipeline.validation_timeout_secs);
     info!("  Retry max attempts: {}", config.pipeline.retry_max_attempts);

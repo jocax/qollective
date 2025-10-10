@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 shared-types = { path = "../shared-types" }
+shared-types-llm = { path = "../shared-types-llm" }
 qollective = { workspace = true, features = [
     "mcp-client",  # MCP client to communicate with MCP servers
     "nats",        # NATS transport layer
@@ -25,3 +26,7 @@ tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
 dotenvy = { workspace = true }
 figment = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+lazy_static = { workspace = true }

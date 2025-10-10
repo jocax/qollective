@@ -1,6 +1,18 @@
 # Orchestrator MCP Client Configuration
-# All values can be overridden by environment variables with ORCHESTRATOR_ prefix
-# Example: ORCHESTRATOR_NATS_URL=nats://production:4222
+#
+# Configuration Priority (lowest to highest):
+# 1. config.toml file (base defaults)
+# 2. .env file (environment-specific config)
+# 3. System environment variables (runtime secrets)
+#
+# All orchestrator-specific values can be overridden by environment variables with ORCHESTRATOR_ prefix
+# Example: ORCHESTRATOR_NATS__URL=nats://production:4222
+#
+# LLM configuration can be overridden with LLM_* prefix:
+# - LLM_TYPE=google
+# - LLM_URL=https://generativelanguage.googleapis.com/v1
+# - LLM_GOOGLE_API_KEY=your-api-key
+# - LLM_MODELS_EN=gemini-1.5-flash
 
 [service]
 name = "orchestrator"
@@ -21,8 +33,17 @@ nkey_file = "./nkeys/orchestrator.nk"
 ca_cert = "./certs/ca.pem"
 
 [llm]
+type = "lmstudio"
 url = "http://127.0.0.1:1234/v1"
-model_name = "local-model"
+default_model = "local-model"
+use_default_model_fallback = true
+max_tokens = 4096
+temperature = 0.7
+timeout_secs = 60
+system_prompt_style = "native"
+
+[llm.models]
+en = "local-model"
 
 [pipeline]
 generation_timeout_secs = 60

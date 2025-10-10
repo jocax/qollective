@@ -30,3 +30,7 @@ dotenvy = { workspace = true }
 figment = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+lazy_static = { workspace = true }
