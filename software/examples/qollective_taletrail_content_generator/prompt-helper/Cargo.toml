@@ -19,13 +19,11 @@ qollective = { workspace = true, features = [
     "tracing"         # Observability
 ]}
 rmcp = { workspace = true }
-rmcp-macros = { workspace = true }
 async-nats = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }
@@ -33,17 +31,14 @@ dotenvy = { workspace = true }
 figment = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
-rig-core = { workspace = true }
-reqwest = "0.12"
-nkeys = "0.4"
 chrono = { workspace = true }
-futures-util = "0.3"
+futures-util ={ workspace = true }
 
 [dev-dependencies]
 shared-types = { path = "../shared-types", features = ["mocking"] }
 qollective = { workspace = true, features = [
     "nats-client",    # For NatsClient in integration tests
 ]}
-mockall = { workspace = true }
-futures-util = "0.3"
+futures-util =  { workspace = true }
 uuid = { workspace = true }
+tempfile = { workspace = true }

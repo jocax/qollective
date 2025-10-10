@@ -73,3 +73,9 @@ dotenvy = "0.15"
 
 # Lazy static initialization
 lazy_static = "1.5"
+
+# futures utils
+futures-util = "0.3"
+
+# temp file
+tempfile = "3.23"

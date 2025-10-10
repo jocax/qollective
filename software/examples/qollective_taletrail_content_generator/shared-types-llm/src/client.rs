@@ -131,8 +131,6 @@ impl DynamicLlmClient for RigDynamicLlmClient {
                 agent.prompt(prompt).await
             }
             RigClientWrapper::Google(client) => {
-                use rig::providers::gemini::completion::gemini_api_types::{AdditionalParameters, GenerationConfig};
-
                 // Log the prompt being sent to Google Gemini for debugging
                 info!(
                     model = %self.model,
@@ -145,29 +143,36 @@ impl DynamicLlmClient for RigDynamicLlmClient {
                     "Full prompt to Google Gemini"
                 );
 
-                // Configure generation settings (required for proper API response format)
-                let gen_cfg = GenerationConfig::default();
-                let cfg = AdditionalParameters::default().with_config(gen_cfg);
+                // Use completion_model() with completion_request() and send()
+                // This avoids the 'missing field tools' JSON parsing error with Google Gemini
+                use rig::completion::CompletionModel;
+                let completion_model = client.completion_model(&self.model);
+                let response_result = completion_model
+                    .completion_request(prompt)
+                    .send()
+                    .await;
 
-                // Serialize additional parameters for logging
-                let cfg_json = serde_json::to_value(&cfg).unwrap();
-                debug!(
-                    additional_params = %cfg_json,
-                    "Google Gemini generation config"
-                );
-
-                let agent = client.agent(&self.model)
-                    .additional_params(cfg_json)
-                    .build();
-
-                // Execute the prompt and capture any errors with detailed logging
-                let result = agent.prompt(prompt).await;
+                let result = response_result
+                    .map(|completion_response| {
+                        // Extract text from the first choice
+                        use rig::completion::AssistantContent;
+                        match completion_response.choice.first() {
+                            AssistantContent::Text(text) => text.text.clone(),
+                            AssistantContent::ToolCall(_) => {
+                                String::from("Unexpected tool call in simple completion")
+                            }
+                            AssistantContent::Reasoning(_) => {
+                                String::from("Unexpected reasoning in simple completion")
+                            }
+                        }
+                    })
+                    .map_err(|e| rig::completion::PromptError::CompletionError(e));
 
                 match &result {
                     Ok(response) => {
                         info!(
                             response_length = response.len(),
-                            response_preview = %if response.len() > 200 { &response[..200] } else { response },
+                            response_preview = %if response.len() > 200 { &prompt[..200] } else { response },
                             "=== GOOGLE GEMINI RESPONSE (SUCCESS) ==="
                         );
                         debug!(
