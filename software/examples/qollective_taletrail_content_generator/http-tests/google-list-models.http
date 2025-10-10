@@ -1,0 +1,19 @@
+### Google Gemini - List All Available Models
+# Lists all Gemini models with their capabilities and supported methods
+# API Key is loaded from .env file: LLM_GOOGLE_API_KEY
+
+@baseUrl = https://generativelanguage.googleapis.com/v1beta
+
+###
+GET {{baseUrl}}/models?key={{apiKey}}
+Content-Type: application/json
+
+###
+# Get specific model details
+GET {{baseUrl}}/models/gemini-1.5-flash-latest?key={{apiKey}}
+Content-Type: application/json
+
+###
+# Get specific model details  - Pro version
+GET {{baseUrl}}/models/gemini-1.5-pro-latest?key={{apiKey}}
+Content-Type: application/json

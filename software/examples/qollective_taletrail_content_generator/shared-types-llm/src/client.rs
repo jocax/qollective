@@ -11,7 +11,8 @@ use crate::traits::DynamicLlmClient;
 use async_trait::async_trait;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
-use tracing::{debug, info, trace};
+use rig::providers::gemini::completion::gemini_api_types::{AdditionalParameters, GenerationConfig};
+use tracing::{debug, error, info, trace};
 
 /// Concrete implementation of DynamicLlmClient using rig-core
 ///
@@ -131,69 +132,46 @@ impl DynamicLlmClient for RigDynamicLlmClient {
                 agent.prompt(prompt).await
             }
             RigClientWrapper::Google(client) => {
-                // Log the prompt being sent to Google Gemini for debugging
                 info!(
                     model = %self.model,
                     prompt_length = prompt.len(),
-                    prompt_preview = %if prompt.len() > 200 { &prompt[..200] } else { prompt },
                     "=== GOOGLE GEMINI REQUEST ==="
                 );
-                debug!(
-                    full_prompt = %prompt,
-                    "Full prompt to Google Gemini"
-                );
 
-                // Use completion_model() with completion_request() and send()
-                // This avoids the 'missing field tools' JSON parsing error with Google Gemini
-                use rig::completion::CompletionModel;
-                let completion_model = client.completion_model(&self.model);
-                let response_result = completion_model
-                    .completion_request(prompt)
-                    .send()
-                    .await;
+                // Create GenerationConfig (required by Gemini API)
+                let gen_cfg = GenerationConfig {
+                    top_k: Some(1),
+                    top_p: Some(0.95),
+                    candidate_count: Some(1),
+                    temperature: Some(self.temperature as f64),
+                    max_output_tokens: Some(self.max_tokens as u64),
+                    ..Default::default()
+                };
+                let cfg = AdditionalParameters::default().with_config(gen_cfg);
 
-                let result = response_result
-                    .map(|completion_response| {
-                        // Extract text from the first choice
-                        use rig::completion::AssistantContent;
-                        match completion_response.choice.first() {
-                            AssistantContent::Text(text) => text.text.clone(),
-                            AssistantContent::ToolCall(_) => {
-                                String::from("Unexpected tool call in simple completion")
-                            }
-                            AssistantContent::Reasoning(_) => {
-                                String::from("Unexpected reasoning in simple completion")
-                            }
-                        }
-                    })
-                    .map_err(|e| rig::completion::PromptError::CompletionError(e));
+                // Build agent with additional_params containing GenerationConfig
+                let agent = client
+                    .agent(&self.model)
+                    .temperature(self.temperature as f64)
+                    .additional_params(serde_json::to_value(cfg)
+                        .expect("Failed to serialize GenerationConfig"))
+                    .build();
 
-                match &result {
+                match agent.prompt(prompt).await {
                     Ok(response) => {
                         info!(
                             response_length = response.len(),
-                            response_preview = %if response.len() > 200 { &prompt[..200] } else { response },
                             "=== GOOGLE GEMINI RESPONSE (SUCCESS) ==="
                         );
-                        debug!(
-                            full_response = %response,
-                            "Full response from Google Gemini"
-                        );
+                        Ok(response)
                     }
                     Err(e) => {
-                        info!(
-                            error = %e,
-                            "=== GOOGLE GEMINI RESPONSE (ERROR) ==="
-                        );
-                        debug!(
-                            error_debug = ?e,
-                            "Full error details from Google Gemini"
-                        );
+                        error!(error = %e, "=== GOOGLE GEMINI RESPONSE (ERROR) ===");
+                        Err(e)
                     }
                 }
-
-                result
             }
+
         }
         .map_err(|e| {
             LlmError::request_failed(format!("LLM request failed: {}", e))
