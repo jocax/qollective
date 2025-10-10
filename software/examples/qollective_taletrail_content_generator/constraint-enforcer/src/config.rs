@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use shared_types::*;
 use figment::{Figment, providers::{Env, Format, Toml}};
+use std::collections::HashMap;
 
 /// Constraint Enforcer configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,6 +11,9 @@ pub struct ConstraintEnforcerConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
     pub constraints: ConstraintsConfig,
+    pub vocabulary: VocabularyConfig,
+    pub themes: ThemesConfig,
+    pub required_elements: RequiredElementsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +44,48 @@ pub struct ConstraintsConfig {
     pub theme_consistency_enabled: bool,
     pub required_elements_check_enabled: bool,
     pub vocabulary_levels: Vec<String>,
+}
+
+/// Vocabulary configuration for multiple languages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabularyConfig {
+    pub english: LanguageVocabulary,
+    pub german: LanguageVocabulary,
+}
+
+/// Language-specific vocabulary organized by complexity level
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanguageVocabulary {
+    pub basic: VocabularyLevel,
+    pub intermediate: VocabularyLevel,
+    pub advanced: VocabularyLevel,
+}
+
+/// Vocabulary level with list of words
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabularyLevel {
+    pub words: Vec<String>,
+}
+
+/// Theme consistency configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThemesConfig {
+    pub min_consistency_score: f32,
+    pub keywords: HashMap<String, ThemeKeywords>,
+}
+
+/// Keywords for a specific theme
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThemeKeywords {
+    pub keywords: Vec<String>,
+}
+
+/// Required elements configuration for different story types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequiredElementsConfig {
+    pub moral_keywords: Vec<String>,
+    pub science_keywords: Vec<String>,
+    pub educational_keywords: Vec<String>,
 }
 
 impl Default for ServiceConfig {
@@ -85,6 +131,48 @@ impl Default for ConstraintsConfig {
 }
 
 impl ConstraintEnforcerConfig {
+    /// Get vocabulary for a specific language
+    pub fn get_vocabulary_for_language(&self, language: &Language) -> &LanguageVocabulary {
+        match language {
+            Language::En => &self.vocabulary.english,
+            Language::De => &self.vocabulary.german,
+        }
+    }
+
+    /// Get keywords for a specific theme
+    pub fn get_theme_keywords(&self, theme: &str) -> Vec<String> {
+        self.themes.keywords
+            .get(theme)
+            .map(|t| t.keywords.clone())
+            .unwrap_or_default()
+    }
+
+    /// Get vocabulary words for a specific language and level
+    pub fn get_vocabulary_words(&self, language: &Language, level: &str) -> Vec<String> {
+        let lang_vocab = self.get_vocabulary_for_language(language);
+        match level {
+            "basic" => lang_vocab.basic.words.clone(),
+            "intermediate" => lang_vocab.intermediate.words.clone(),
+            "advanced" => lang_vocab.advanced.words.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Check if theme consistency is enabled
+    pub fn is_theme_consistency_enabled(&self) -> bool {
+        self.constraints.theme_consistency_enabled
+    }
+
+    /// Check if vocabulary check is enabled
+    pub fn is_vocabulary_check_enabled(&self) -> bool {
+        self.constraints.vocabulary_check_enabled
+    }
+
+    /// Check if required elements check is enabled
+    pub fn is_required_elements_check_enabled(&self) -> bool {
+        self.constraints.required_elements_check_enabled
+    }
+
     /// Load configuration using Figment merge strategy
     ///
     /// Configuration priority (lowest to highest):
@@ -228,6 +316,35 @@ vocabulary_check_enabled = true
 theme_consistency_enabled = true
 required_elements_check_enabled = true
 vocabulary_levels = ["basic", "intermediate"]
+
+[vocabulary.english.basic]
+words = ["test", "word"]
+
+[vocabulary.english.intermediate]
+words = ["intermediate"]
+
+[vocabulary.english.advanced]
+words = ["advanced"]
+
+[vocabulary.german.basic]
+words = ["test", "wort"]
+
+[vocabulary.german.intermediate]
+words = ["mittel"]
+
+[vocabulary.german.advanced]
+words = ["fortgeschritten"]
+
+[themes]
+min_consistency_score = 0.6
+
+[themes.keywords.test]
+keywords = ["test", "keyword"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -268,6 +385,29 @@ vocabulary_check_enabled = true
 theme_consistency_enabled = true
 required_elements_check_enabled = true
 vocabulary_levels = ["basic"]
+
+[vocabulary.english.basic]
+words = ["test"]
+[vocabulary.english.intermediate]
+words = ["test"]
+[vocabulary.english.advanced]
+words = ["test"]
+[vocabulary.german.basic]
+words = ["test"]
+[vocabulary.german.intermediate]
+words = ["test"]
+[vocabulary.german.advanced]
+words = ["test"]
+
+[themes]
+min_consistency_score = 0.6
+[themes.keywords.test]
+keywords = ["test"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -308,6 +448,29 @@ vocabulary_check_enabled = true
 theme_consistency_enabled = true
 required_elements_check_enabled = true
 vocabulary_levels = ["advanced"]
+
+[vocabulary.english.basic]
+words = ["test"]
+[vocabulary.english.intermediate]
+words = ["test"]
+[vocabulary.english.advanced]
+words = ["test"]
+[vocabulary.german.basic]
+words = ["test"]
+[vocabulary.german.intermediate]
+words = ["test"]
+[vocabulary.german.advanced]
+words = ["test"]
+
+[themes]
+min_consistency_score = 0.6
+[themes.keywords.test]
+keywords = ["test"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -348,6 +511,29 @@ vocabulary_check_enabled = false
 theme_consistency_enabled = false
 required_elements_check_enabled = false
 vocabulary_levels = ["expert", "master"]
+
+[vocabulary.english.basic]
+words = ["test"]
+[vocabulary.english.intermediate]
+words = ["test"]
+[vocabulary.english.advanced]
+words = ["test"]
+[vocabulary.german.basic]
+words = ["test"]
+[vocabulary.german.intermediate]
+words = ["test"]
+[vocabulary.german.advanced]
+words = ["test"]
+
+[themes]
+min_consistency_score = 0.6
+[themes.keywords.test]
+keywords = ["test"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -389,6 +575,29 @@ vocabulary_check_enabled = true
 theme_consistency_enabled = true
 required_elements_check_enabled = true
 vocabulary_levels = ["basic"]
+
+[vocabulary.english.basic]
+words = ["test"]
+[vocabulary.english.intermediate]
+words = ["test"]
+[vocabulary.english.advanced]
+words = ["test"]
+[vocabulary.german.basic]
+words = ["test"]
+[vocabulary.german.intermediate]
+words = ["test"]
+[vocabulary.german.advanced]
+words = ["test"]
+
+[themes]
+min_consistency_score = 0.6
+[themes.keywords.test]
+keywords = ["test"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -398,6 +607,96 @@ vocabulary_levels = ["basic"]
         let config = ConstraintEnforcerConfig::load().expect("Failed to load config");
 
         assert_eq!(config.nats.url, "nats://override:4222");
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_vocabulary_helper_methods() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = EnvGuard::new(vec![]);
+
+        let config_content = r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[constraints]
+vocabulary_check_enabled = true
+theme_consistency_enabled = true
+required_elements_check_enabled = true
+vocabulary_levels = ["basic"]
+
+[vocabulary.english.basic]
+words = ["hello", "world"]
+[vocabulary.english.intermediate]
+words = ["adventure"]
+[vocabulary.english.advanced]
+words = ["sophisticated"]
+[vocabulary.german.basic]
+words = ["hallo", "welt"]
+[vocabulary.german.intermediate]
+words = ["abenteuer"]
+[vocabulary.german.advanced]
+words = ["ausgefeilt"]
+
+[themes]
+min_consistency_score = 0.7
+[themes.keywords.test]
+keywords = ["test", "keyword"]
+[themes.keywords.ocean]
+keywords = ["ocean", "water"]
+
+[required_elements]
+moral_keywords = ["moral"]
+science_keywords = ["science"]
+educational_keywords = ["education"]
+"#;
+
+        let _temp_dir = create_temp_config_dir(config_content);
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+
+        let config = ConstraintEnforcerConfig::load().expect("Failed to load config");
+
+        // Test get_vocabulary_for_language
+        let english_vocab = config.get_vocabulary_for_language(&Language::En);
+        assert_eq!(english_vocab.basic.words, vec!["hello", "world"]);
+
+        let german_vocab = config.get_vocabulary_for_language(&Language::De);
+        assert_eq!(german_vocab.basic.words, vec!["hallo", "welt"]);
+
+        // Test get_theme_keywords
+        let ocean_keywords = config.get_theme_keywords("ocean");
+        assert_eq!(ocean_keywords, vec!["ocean", "water"]);
+
+        let missing_keywords = config.get_theme_keywords("nonexistent");
+        assert!(missing_keywords.is_empty());
+
+        // Test get_vocabulary_words
+        let basic_words = config.get_vocabulary_words(&Language::En, "basic");
+        assert_eq!(basic_words, vec!["hello", "world"]);
+
+        let advanced_words = config.get_vocabulary_words(&Language::De, "advanced");
+        assert_eq!(advanced_words, vec!["ausgefeilt"]);
+
+        // Test boolean helper methods
+        assert!(config.is_vocabulary_check_enabled());
+        assert!(config.is_theme_consistency_enabled());
+        assert!(config.is_required_elements_check_enabled());
+
+        // Test theme consistency score
+        assert_eq!(config.themes.min_consistency_score, 0.7);
 
         restore_original_dir();
     }

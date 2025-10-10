@@ -24,3 +24,75 @@ ca_cert = "./certs/ca.pem"
 min_quality_score = 0.7
 timeout_secs = 10
 max_negotiation_rounds = 3
+
+# Age-specific rubrics for content validation
+[rubrics.age_6_8]
+max_sentence_length = 15
+vocabulary_level = "basic"
+allowed_themes = ["animals", "friendship", "colors", "shapes", "family", "adventure", "nature"]
+
+[rubrics.age_9_11]
+max_sentence_length = 20
+vocabulary_level = "intermediate"
+allowed_themes = ["adventure", "science", "nature", "teamwork", "exploration", "mystery", "history"]
+
+[rubrics.age_12_14]
+max_sentence_length = 25
+vocabulary_level = "intermediate"
+allowed_themes = ["mystery", "history", "environment", "technology", "culture", "science", "teamwork"]
+
+[rubrics.age_15_17]
+max_sentence_length = 30
+vocabulary_level = "advanced"
+allowed_themes = ["mystery", "history", "environment", "technology", "culture", "philosophy", "ethics"]
+
+[rubrics.age_18_plus]
+max_sentence_length = 35
+vocabulary_level = "advanced"
+allowed_themes = ["mystery", "history", "environment", "technology", "culture", "philosophy", "ethics", "complex-science"]
+
+# Safety keywords for content filtering
+[safety]
+violence_keywords = [
+    "sword", "fight", "blood", "weapon", "kill", "hurt",
+    "attack", "battle", "war", "gun", "knife", "stab",
+    "shoot", "wound", "injure", "harm"
+]
+fear_keywords = [
+    "scary", "monster", "nightmare", "dark cave", "ghost",
+    "haunted", "creepy", "frightening", "terror", "horror",
+    "scream", "panic", "dread"
+]
+inappropriate_keywords = [
+    "alcohol", "beer", "wine", "cigarette", "tobacco",
+    "drugs", "weapon", "violence"
+]
+
+# Educational criteria and keywords
+[educational]
+educational_keywords = [
+    "learn", "discover", "explore", "understand", "science",
+    "math", "nature", "history", "study", "investigate",
+    "experiment", "observe", "research", "analyze", "question"
+]
+
+[educational.goals]
+science = ["scientific method", "observation", "hypothesis", "experiment", "conclusion"]
+math = ["counting", "numbers", "patterns", "problem solving", "logic"]
+nature = ["animals", "plants", "ecosystems", "conservation", "biodiversity"]
+social = ["friendship", "teamwork", "empathy", "cooperation", "communication"]
+history = ["timeline", "culture", "civilization", "artifacts", "exploration"]
+technology = ["innovation", "invention", "engineering", "coding", "design"]
+
+# Validation thresholds for quality control
+[validation.thresholds]
+min_age_appropriate_score = 0.7
+min_educational_value_score = 0.6
+max_safety_violations = 0
+
+# Correction capability configuration
+[validation.correction]
+can_fix_locally_min_score = 0.6
+can_fix_locally_max_violations = 3
+needs_revision_min_score = 0.3
+needs_revision_max_violations = 6

@@ -1,13 +1,46 @@
-//! Constraint Enforcer MCP Server (Stub with TLS NATS Connection)
+//! Constraint Enforcer MCP Server with Qollective Infrastructure
+//!
+//! This server provides Model Context Protocol (MCP) tools for enforcing
+//! narrative constraints including vocabulary levels, theme consistency,
+//! and required story elements using Qollective's envelope-first architecture
+//! and NatsServer infrastructure.
+//!
+//! # Architecture
+//!
+//! - **Envelope-First**: All requests/responses wrapped in `Envelope<McpData>`
+//! - **NATS Infrastructure**: Uses `qollective::server::nats::NatsServer`
+//! - **Queue Groups**: Automatic load balancing across multiple instances
+//! - **TLS Security**: mTLS or NKey authentication with NATS server
+//! - **Tenant Isolation**: Tenant ID tracked in envelope metadata
+//! - **Distributed Tracing**: Request and trace IDs propagated
+//!
+//! # Message Flow
+//!
+//! 1. NatsServer receives NATS message on subject
+//! 2. Auto-decodes to `Envelope<McpData>`
+//! 3. Calls `ConstraintEnforcerHandler::handle(envelope)`
+//! 4. Handler extracts `CallToolRequest` from envelope
+//! 5. Routes to tool handler (enforce_constraints, suggest_corrections)
+//! 6. Wraps `CallToolResult` in response envelope
+//! 7. NatsServer auto-encodes and publishes to reply subject
+//!
+//! # Configuration
+//!
+//! Loaded from `config.toml` with environment variable overrides:
+//! - NATS connection (URL, subject, queue group)
+//! - TLS certificates (CA, client cert, client key) or NKey authentication
+//! - Constraint settings (vocabulary levels, theme consistency)
+//! - Required story elements configuration
+//! - Suggestion generation parameters
 
-use shared_types::*;
+use qollective::server::nats::NatsServer;
+use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
+use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
-use std::fs;
 
-mod config;
-mod server;
-
-use config::ConstraintEnforcerConfig;
+use constraint_enforcer::config::ConstraintEnforcerConfig;
+use constraint_enforcer::server::ConstraintEnforcerHandler;
+use shared_types::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,88 +52,77 @@ async fn main() -> Result<()> {
         .with_env_filter("info")
         .init();
 
-    // Load environment variables
-    dotenvy::dotenv().ok();
-
-    // Load configuration
-    let config = ConstraintEnforcerConfig::load()?;
+    // Load application config
+    let app_config = ConstraintEnforcerConfig::load()
+        .map_err(|e| TaleTrailError::ConfigError(format!("Failed to load config: {}", e)))?;
 
     info!("=== Constraint Enforcer MCP Server Starting ===");
     info!("Configuration:");
-    info!("  Service: {} v{}", config.service.name, config.service.version);
-    info!("  NATS URL: {}", config.nats.url);
-    info!("  NATS Subject: {}", config.nats.subject);
-    info!("  NATS Queue Group: {}", config.nats.queue_group);
-    info!("  Vocabulary Check: {}", config.constraints.vocabulary_check_enabled);
-    info!("  Theme Consistency: {}", config.constraints.theme_consistency_enabled);
-    info!("  Required Elements: {}", config.constraints.required_elements_check_enabled);
-    info!("  Vocabulary Levels: {:?}", config.constraints.vocabulary_levels);
+    info!("  NATS URL: {}", app_config.nats.url);
+    info!("  NATS Subject: {}", app_config.nats.subject);
+    info!("  NATS Queue Group: {}", app_config.nats.queue_group);
+    info!("  Vocabulary Check: {}", app_config.constraints.vocabulary_check_enabled);
+    info!("  Theme Consistency: {}", app_config.constraints.theme_consistency_enabled);
+    info!("  Required Elements: {}", app_config.constraints.required_elements_check_enabled);
     info!("");
 
-    // Load TLS certificates
-    info!("Loading TLS certificates...");
-    let ca_cert = load_cert(&config.nats.tls.ca_cert)?;
-    let client_cert = load_cert(&config.nats.tls.client_cert)?;
-    let client_key = load_key(&config.nats.tls.client_key)?;
+    // Create Qollective NATS config with TLS
+    let nats_config = NatsConfig {
+        connection: NatsConnectionConfig {
+            urls: vec![app_config.nats.url.clone()],
+            tls: QollectiveTlsConfig {
+                enabled: true,
+                ca_cert_path: Some(app_config.nats.tls.ca_cert.clone().into()),
+                cert_path: Some(app_config.nats.tls.client_cert.clone().into()),
+                key_path: Some(app_config.nats.tls.client_key.clone().into()),
+                verification_mode: qollective::config::tls::VerificationMode::CustomCa,
+            },
+            crypto_provider_strategy: Some(
+                qollective::crypto::CryptoProviderStrategy::Skip
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
-    info!("✅ TLS certificates loaded successfully");
+    // Create NATS server using Qollective infrastructure
+    let mut nats_server = NatsServer::new(nats_config).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to create NATS server: {}", e)))?;
+    info!("✅ Connected to NATS at {} with TLS", app_config.nats.url);
 
-    // Build TLS configuration
-    let mut root_cert_store = rustls::RootCertStore::empty();
-    root_cert_store.add(ca_cert).map_err(|e| {
-        TaleTrailError::TlsCertificateError(format!("Failed to add CA cert: {:?}", e))
-    })?;
+    // Create handler
+    let handler = ConstraintEnforcerHandler::new(app_config.clone());
+    info!("✅ Created ConstraintEnforcerHandler with envelope support");
 
-    let client_auth_config = rustls::ClientConfig::builder()
-        .with_root_certificates(root_cert_store)
-        .with_client_auth_cert(vec![client_cert], client_key)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to build TLS config: {}", e)))?;
+    // Subscribe to subject with queue group
+    nats_server.subscribe_queue_group(
+        &app_config.nats.subject,
+        &app_config.nats.queue_group,
+        handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe: {}", e)))?;
+    info!("✅ Subscribed to '{}' with queue group '{}'",
+        app_config.nats.subject, app_config.nats.queue_group);
+    info!("   Automatic envelope decoding/encoding enabled");
 
-    info!("✅ TLS configuration built successfully");
-
-    // Connect to NATS with TLS
-    info!("Connecting to NATS with TLS...");
-    let _nats_client = async_nats::ConnectOptions::new()
-        .tls_client_config(client_auth_config)
-        .connect(&config.nats.url)
-        .await
-        .map_err(|e| TaleTrailError::NatsError(format!("Failed to connect to NATS: {}", e)))?;
-
-    info!("✅ Connected to NATS with TLS");
+    // Start processing messages
+    nats_server.start().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to start NATS server: {}", e)))?;
     info!("");
-    info!("Constraint Enforcer MCP Server ready on {} (TLS enabled)", config.nats.subject);
-    info!("Listening for shutdown signal (Ctrl+C)...");
+    info!("Constraint Enforcer MCP Server is running. Press Ctrl+C to shutdown.");
+    info!("Architecture: Envelope-first with NatsServer infrastructure");
+    info!("Tools available: enforce_constraints, suggest_corrections");
+    info!("");
 
     // Wait for shutdown signal
-    tokio::signal::ctrl_c()
-        .await
-        .map_err(|e| TaleTrailError::ConfigError(format!("Failed to listen for Ctrl+C: {}", e)))?;
+    tokio::signal::ctrl_c().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to listen for Ctrl+C: {}", e)))?;
+    info!("Received shutdown signal");
 
-    info!("Received Ctrl+C, shutting down gracefully...");
+    // Graceful shutdown
+    nats_server.shutdown().await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to shutdown: {}", e)))?;
+    info!("✅ Shutdown complete");
+
     Ok(())
-}
-
-/// Load a certificate from PEM file
-fn load_cert(path: &str) -> Result<rustls::pki_types::CertificateDer<'static>> {
-    let cert_data = fs::read(path)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to read cert {}: {}", path, e)))?;
-
-    let mut cursor = std::io::Cursor::new(cert_data);
-    let certs = rustls_pemfile::certs(&mut cursor)
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to parse cert: {}", e)))?;
-
-    certs.into_iter().next()
-        .ok_or_else(|| TaleTrailError::TlsCertificateError(format!("No certificate found in {}", path)))
-}
-
-/// Load a private key from PEM file
-fn load_key(path: &str) -> Result<rustls::pki_types::PrivateKeyDer<'static>> {
-    let key_data = fs::read(path)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to read key {}: {}", path, e)))?;
-
-    let mut cursor = std::io::Cursor::new(key_data);
-    rustls_pemfile::private_key(&mut cursor)
-        .map_err(|e| TaleTrailError::TlsCertificateError(format!("Failed to parse key: {}", e)))?
-        .ok_or_else(|| TaleTrailError::TlsCertificateError(format!("No private key found in {}", path)))
 }

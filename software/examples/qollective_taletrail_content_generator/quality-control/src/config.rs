@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use shared_types::*;
 use figment::{Figment, providers::{Env, Format, Toml}};
+use std::collections::HashMap;
 
 /// Quality Control configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,6 +11,9 @@ pub struct QualityControlConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
     pub validation: ValidationConfig,
+    pub rubrics: RubricsConfig,
+    pub safety: SafetyConfig,
+    pub educational: EducationalConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +43,58 @@ pub struct ValidationConfig {
     pub min_quality_score: f32,
     pub timeout_secs: u64,
     pub max_negotiation_rounds: u32,
+    pub thresholds: ValidationThresholds,
+    pub correction: CorrectionConfig,
+}
+
+/// Age-specific rubrics configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RubricsConfig {
+    pub age_6_8: AgeGroupConfig,
+    pub age_9_11: AgeGroupConfig,
+    pub age_12_14: AgeGroupConfig,
+    pub age_15_17: AgeGroupConfig,
+    pub age_18_plus: AgeGroupConfig,
+}
+
+/// Configuration for a specific age group
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgeGroupConfig {
+    pub max_sentence_length: f32,
+    pub vocabulary_level: String,
+    pub allowed_themes: Vec<String>,
+}
+
+/// Safety keywords configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SafetyConfig {
+    pub violence_keywords: Vec<String>,
+    pub fear_keywords: Vec<String>,
+    pub inappropriate_keywords: Vec<String>,
+}
+
+/// Educational criteria configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EducationalConfig {
+    pub educational_keywords: Vec<String>,
+    pub goals: HashMap<String, Vec<String>>,
+}
+
+/// Validation thresholds
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationThresholds {
+    pub min_age_appropriate_score: f32,
+    pub min_educational_value_score: f32,
+    pub max_safety_violations: usize,
+}
+
+/// Correction capability configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrectionConfig {
+    pub can_fix_locally_min_score: f32,
+    pub can_fix_locally_max_violations: usize,
+    pub needs_revision_min_score: f32,
+    pub needs_revision_max_violations: usize,
 }
 
 impl Default for ServiceConfig {
@@ -78,6 +134,29 @@ impl Default for ValidationConfig {
             min_quality_score: 0.7,
             timeout_secs: 10,
             max_negotiation_rounds: 3,
+            thresholds: ValidationThresholds::default(),
+            correction: CorrectionConfig::default(),
+        }
+    }
+}
+
+impl Default for ValidationThresholds {
+    fn default() -> Self {
+        Self {
+            min_age_appropriate_score: 0.7,
+            min_educational_value_score: 0.6,
+            max_safety_violations: 0,
+        }
+    }
+}
+
+impl Default for CorrectionConfig {
+    fn default() -> Self {
+        Self {
+            can_fix_locally_min_score: 0.6,
+            can_fix_locally_max_violations: 3,
+            needs_revision_min_score: 0.3,
+            needs_revision_max_violations: 6,
         }
     }
 }
@@ -133,6 +212,26 @@ impl QualityControlConfig {
         );
 
         Ok(config)
+    }
+
+    /// Get age-specific configuration based on AgeGroup
+    pub fn get_age_config(&self, age_group: &AgeGroup) -> &AgeGroupConfig {
+        match age_group {
+            AgeGroup::_6To8 => &self.rubrics.age_6_8,
+            AgeGroup::_9To11 => &self.rubrics.age_9_11,
+            AgeGroup::_12To14 => &self.rubrics.age_12_14,
+            AgeGroup::_15To17 => &self.rubrics.age_15_17,
+            AgeGroup::Plus18 => &self.rubrics.age_18_plus,
+        }
+    }
+
+    /// Get all safety keywords combined
+    pub fn get_all_safety_keywords(&self) -> Vec<&str> {
+        self.safety.violence_keywords.iter()
+            .chain(self.safety.fear_keywords.iter())
+            .chain(self.safety.inappropriate_keywords.iter())
+            .map(|s| s.as_str())
+            .collect()
     }
 }
 
@@ -200,13 +299,66 @@ mod tests {
         env::set_current_dir(ORIGINAL_DIR.as_path()).expect("Failed to restore dir");
     }
 
+    /// Helper to get the standard test config sections (rubrics, safety, educational, validation.thresholds, validation.correction)
+    fn get_test_config_sections() -> &'static str {
+        r#"
+[rubrics.age_6_8]
+max_sentence_length = 15
+vocabulary_level = "basic"
+allowed_themes = ["animals", "friendship"]
+
+[rubrics.age_9_11]
+max_sentence_length = 20
+vocabulary_level = "intermediate"
+allowed_themes = ["adventure", "science"]
+
+[rubrics.age_12_14]
+max_sentence_length = 25
+vocabulary_level = "intermediate"
+allowed_themes = ["mystery", "history"]
+
+[rubrics.age_15_17]
+max_sentence_length = 30
+vocabulary_level = "advanced"
+allowed_themes = ["technology", "culture"]
+
+[rubrics.age_18_plus]
+max_sentence_length = 35
+vocabulary_level = "advanced"
+allowed_themes = ["philosophy", "ethics"]
+
+[safety]
+violence_keywords = ["sword", "fight"]
+fear_keywords = ["scary", "monster"]
+inappropriate_keywords = ["alcohol", "drugs"]
+
+[educational]
+educational_keywords = ["learn", "discover"]
+
+[educational.goals]
+science = ["observation", "experiment"]
+math = ["counting", "patterns"]
+
+[validation.thresholds]
+min_age_appropriate_score = 0.7
+min_educational_value_score = 0.6
+max_safety_violations = 0
+
+[validation.correction]
+can_fix_locally_min_score = 0.6
+can_fix_locally_max_violations = 3
+needs_revision_min_score = 0.3
+needs_revision_max_violations = 6
+"#
+    }
+
     #[test]
     fn test_default_toml_loading() {
         let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
         let _guard = EnvGuard::new(vec!["QUALITY_CONTROL_NATS_URL"]);
 
-        let config_content = r#"
+        let config_content = format!(r#"
 [service]
 name = "test-service"
 version = "1.0.0"
@@ -226,9 +378,9 @@ client_key = "./test-key.pem"
 min_quality_score = 0.7
 timeout_secs = 10
 max_negotiation_rounds = 3
-"#;
+{}"#, get_test_config_sections());
 
-        let _temp_dir = create_temp_config_dir(config_content);
+        let _temp_dir = create_temp_config_dir(&config_content);
 
         env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
 
@@ -247,7 +399,7 @@ max_negotiation_rounds = 3
 
         let _guard = EnvGuard::new(vec![]);
 
-        let config_content = r#"
+        let config_content = format!(r#"
 [service]
 name = "custom-service"
 version = "2.0.0"
@@ -267,9 +419,9 @@ client_key = "./test-key.pem"
 min_quality_score = 0.8
 timeout_secs = 15
 max_negotiation_rounds = 5
-"#;
+{}"#, get_test_config_sections());
 
-        let _temp_dir = create_temp_config_dir(config_content);
+        let _temp_dir = create_temp_config_dir(&config_content);
 
         env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
 
@@ -288,7 +440,7 @@ max_negotiation_rounds = 5
 
         let _guard = EnvGuard::new(vec![]);
 
-        let config_content = r#"
+        let config_content = format!(r#"
 [service]
 name = "test-service"
 version = "1.0.0"
@@ -308,9 +460,9 @@ client_key = "./custom-key.pem"
 min_quality_score = 0.7
 timeout_secs = 10
 max_negotiation_rounds = 3
-"#;
+{}"#, get_test_config_sections());
 
-        let _temp_dir = create_temp_config_dir(config_content);
+        let _temp_dir = create_temp_config_dir(&config_content);
 
         env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
 
@@ -329,7 +481,7 @@ max_negotiation_rounds = 3
 
         let _guard = EnvGuard::new(vec![]);
 
-        let config_content = r#"
+        let config_content = format!(r#"
 [service]
 name = "test-service"
 version = "1.0.0"
@@ -349,9 +501,9 @@ client_key = "./test-key.pem"
 min_quality_score = 0.9
 timeout_secs = 20
 max_negotiation_rounds = 10
-"#;
+{}"#, get_test_config_sections());
 
-        let _temp_dir = create_temp_config_dir(config_content);
+        let _temp_dir = create_temp_config_dir(&config_content);
 
         env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
 
@@ -372,7 +524,7 @@ max_negotiation_rounds = 10
         // QUALITY_CONTROL_NATS__URL maps to config.nats.url
         let _guard = EnvGuard::new(vec!["QUALITY_CONTROL_NATS__URL"]);
 
-        let config_content = r#"
+        let config_content = format!(r#"
 [service]
 name = "test-service"
 version = "1.0.0"
@@ -392,9 +544,9 @@ client_key = "./test-key.pem"
 min_quality_score = 0.7
 timeout_secs = 10
 max_negotiation_rounds = 3
-"#;
+{}"#, get_test_config_sections());
 
-        let _temp_dir = create_temp_config_dir(config_content);
+        let _temp_dir = create_temp_config_dir(&config_content);
 
         env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
         env::set_var("QUALITY_CONTROL_NATS__URL", "nats://override:4222");
@@ -402,6 +554,84 @@ max_negotiation_rounds = 3
         let config = QualityControlConfig::load().expect("Failed to load config");
 
         assert_eq!(config.nats.url, "nats://override:4222");
+
+        restore_original_dir();
+    }
+
+    #[test]
+    fn test_rubrics_and_safety_config_loading() {
+        let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
+        let _guard = EnvGuard::new(vec![]);
+
+        let config_content = format!(r#"
+[service]
+name = "test-service"
+version = "1.0.0"
+description = "Test Service"
+
+[nats]
+url = "nats://localhost:5222"
+subject = "test.subject"
+queue_group = "test-group"
+
+[nats.tls]
+ca_cert = "./test-ca.pem"
+client_cert = "./test-client.pem"
+client_key = "./test-key.pem"
+
+[validation]
+min_quality_score = 0.7
+timeout_secs = 10
+max_negotiation_rounds = 3
+{}"#, get_test_config_sections());
+
+        let _temp_dir = create_temp_config_dir(&config_content);
+
+        env::set_current_dir(_temp_dir.path()).expect("Failed to change dir");
+
+        let config = QualityControlConfig::load().expect("Failed to load config");
+
+        // Test rubrics configuration
+        assert_eq!(config.rubrics.age_6_8.max_sentence_length, 15.0);
+        assert_eq!(config.rubrics.age_6_8.vocabulary_level, "basic");
+        assert!(config.rubrics.age_6_8.allowed_themes.contains(&"animals".to_string()));
+
+        assert_eq!(config.rubrics.age_9_11.max_sentence_length, 20.0);
+        assert_eq!(config.rubrics.age_9_11.vocabulary_level, "intermediate");
+
+        assert_eq!(config.rubrics.age_18_plus.max_sentence_length, 35.0);
+        assert_eq!(config.rubrics.age_18_plus.vocabulary_level, "advanced");
+
+        // Test safety configuration
+        assert!(config.safety.violence_keywords.contains(&"sword".to_string()));
+        assert!(config.safety.fear_keywords.contains(&"scary".to_string()));
+        assert!(config.safety.inappropriate_keywords.contains(&"alcohol".to_string()));
+
+        // Test educational configuration
+        assert!(config.educational.educational_keywords.contains(&"learn".to_string()));
+        assert!(config.educational.goals.contains_key("science"));
+        assert!(config.educational.goals.contains_key("math"));
+
+        // Test validation thresholds
+        assert_eq!(config.validation.thresholds.min_age_appropriate_score, 0.7);
+        assert_eq!(config.validation.thresholds.min_educational_value_score, 0.6);
+        assert_eq!(config.validation.thresholds.max_safety_violations, 0);
+
+        // Test correction config
+        assert_eq!(config.validation.correction.can_fix_locally_min_score, 0.6);
+        assert_eq!(config.validation.correction.can_fix_locally_max_violations, 3);
+        assert_eq!(config.validation.correction.needs_revision_min_score, 0.3);
+        assert_eq!(config.validation.correction.needs_revision_max_violations, 6);
+
+        // Test helper methods
+        let age_config = config.get_age_config(&AgeGroup::_6To8);
+        assert_eq!(age_config.max_sentence_length, 15.0);
+
+        let all_safety = config.get_all_safety_keywords();
+        assert!(all_safety.contains(&"sword"));
+        assert!(all_safety.contains(&"scary"));
+        assert!(all_safety.contains(&"alcohol"));
 
         restore_original_dir();
     }
