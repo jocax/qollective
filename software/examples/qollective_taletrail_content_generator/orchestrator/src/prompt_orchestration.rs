@@ -19,25 +19,42 @@
 //! - **Constraint prompts**: Best effort - failure logs warning, continues
 
 use crate::config::OrchestratorConfig;
-use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam, CallToolResult, Extensions};
+use crate::mcp_client::McpEnvelopeClient;
+use qollective::envelope::Meta;
+use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam, Extensions};
 use shared_types::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, instrument, warn};
+use uuid::Uuid;
+
+/// Helper function to create TracingMeta with minimal fields
+fn create_tracing_meta(trace_id: String) -> qollective::envelope::meta::TracingMeta {
+    qollective::envelope::meta::TracingMeta {
+        trace_id: Some(trace_id),
+        span_id: None,
+        parent_span_id: None,
+        baggage: std::collections::HashMap::new(),
+        sampling_rate: None,
+        sampled: Some(true),
+        trace_state: None,
+        operation_name: None,
+        span_kind: None,
+        span_status: None,
+        tags: std::collections::HashMap::new(),
+    }
+}
 
 /// Orchestrates prompt generation for all MCP services
 pub struct PromptOrchestrator {
-    /// Qollective transport client for MCP communication
-    transport: Arc<async_nats::Client>,
+    /// MCP envelope client for envelope-first communication
+    mcp_client: McpEnvelopeClient,
 
     /// NATS subjects for each prompt type (from constants)
     story_subject: String,
     validation_subject: String,
     constraint_subject: String,
     model_subject: String,
-
-    /// Timeout for prompt generation (from config)
-    timeout_secs: u64,
 }
 
 impl PromptOrchestrator {
@@ -63,14 +80,45 @@ impl PromptOrchestrator {
     /// # }
     /// ```
     pub fn new(transport: Arc<async_nats::Client>, config: &OrchestratorConfig) -> Self {
-        Self {
+        let mcp_client = McpEnvelopeClient::new(
             transport,
+            config.pipeline.generation_timeout_secs,
+        );
+
+        Self {
+            mcp_client,
             story_subject: MCP_PROMPT_STORY.to_string(),
             validation_subject: MCP_PROMPT_VALIDATION.to_string(),
             constraint_subject: MCP_PROMPT_CONSTRAINT.to_string(),
             model_subject: MCP_PROMPT_MODEL.to_string(),
-            timeout_secs: config.pipeline.generation_timeout_secs,
         }
+    }
+
+    /// Create metadata for MCP requests
+    ///
+    /// Constructs envelope metadata with tenant_id, request_id, and trace_id.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - Generation request containing tenant_id
+    ///
+    /// # Returns
+    ///
+    /// Meta struct populated with tenant and tracing information
+    fn create_meta(&self, request: &GenerationRequest) -> Meta {
+        let mut meta = Meta::default();
+
+        // Set tenant ID for multi-tenancy isolation
+        meta.tenant = Some(format!("tenant-{}", request.tenant_id));
+
+        // Generate a request ID for this prompt generation
+        meta.request_id = Some(Uuid::new_v4());
+
+        // Set trace ID for distributed tracing
+        let request_id_str = meta.request_id.map(|id| id.to_string()).unwrap_or_default();
+        meta.tracing = Some(create_tracing_meta(request_id_str));
+
+        meta
     }
 
     /// Generate prompts for all MCP services in parallel
@@ -178,8 +226,11 @@ impl PromptOrchestrator {
             extensions: Extensions::default(),
         };
 
-        // Call MCP service via NATS
-        self.call_mcp_tool(&self.story_subject, tool_request).await
+        // Create metadata for this request
+        let meta = self.create_meta(request);
+
+        // Call MCP service via NATS with envelope
+        self.mcp_client.call_tool(&self.story_subject, tool_request, meta).await
     }
 
     /// Generate validation prompts via MCP tool call
@@ -209,8 +260,11 @@ impl PromptOrchestrator {
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&self.validation_subject, tool_request)
-            .await
+        // Create metadata for this request
+        let meta = self.create_meta(request);
+
+        // Call MCP service via NATS with envelope
+        self.mcp_client.call_tool(&self.validation_subject, tool_request, meta).await
     }
 
     /// Generate constraint prompts via MCP tool call
@@ -240,149 +294,11 @@ impl PromptOrchestrator {
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&self.constraint_subject, tool_request)
-            .await
-    }
+        // Create metadata for this request
+        let meta = self.create_meta(request);
 
-    /// Call MCP tool via NATS transport
-    ///
-    /// Sends an MCP tool call request via NATS and waits for the response.
-    /// Applies timeout from configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `subject` - NATS subject to send request to
-    /// * `request` - MCP CallToolRequest to send
-    ///
-    /// # Returns
-    ///
-    /// PromptPackage containing the generated prompts
-    ///
-    /// # Errors
-    ///
-    /// - `TimeoutError` if request exceeds timeout
-    /// - `SerializationError` if request/response serialization fails
-    /// - `NetworkError` if NATS communication fails
-    /// - `GenerationError` if MCP tool returns error
-    async fn call_mcp_tool(
-        &self,
-        subject: &str,
-        request: CallToolRequest,
-    ) -> Result<PromptPackage> {
-        // Serialize request to JSON
-        let request_json = serde_json::to_vec(&request)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        // Send via NATS and wait for response (with timeout)
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(self.timeout_secs),
-            self.transport.request(subject.to_string(), request_json.into()),
-        )
-        .await
-        .map_err(|_| {
-            TaleTrailError::TimeoutError
-        })?
-        .map_err(|e| TaleTrailError::NetworkError(e.to_string()))?;
-
-        // Deserialize response
-        let tool_result: CallToolResult = serde_json::from_slice(&response.payload)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        // Check for MCP error
-        if tool_result.is_error == Some(true) {
-            return Err(TaleTrailError::GenerationError(format!(
-                "MCP tool error: {:?}",
-                tool_result.content
-            )));
-        }
-
-        // Extract PromptPackage from result content
-        // The content field is Vec<Content>, where Content is Annotated<RawContent>
-        let first_content = tool_result
-            .content
-            .first()
-            .ok_or_else(|| TaleTrailError::GenerationError("Empty MCP response".to_string()))?;
-
-        // Extract text from Content - the raw field contains RawContent::Text tuple variant
-        let json_str = match &first_content.raw {
-            rmcp::model::RawContent::Text(text_content) => &text_content.text,
-            _ => {
-                return Err(TaleTrailError::GenerationError(
-                    "Expected text content in MCP response".to_string(),
-                ))
-            }
-        };
-
-        // Parse JSON string to PromptPackage
-        let prompt_package: PromptPackage = serde_json::from_str(json_str)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        Ok(prompt_package)
-    }
-
-    /// Get model for language via MCP tool call
-    ///
-    /// Calls the `get_model_for_language` tool on the prompt-helper service.
-    /// This is a utility method for future use.
-    #[instrument(skip(self))]
-    #[allow(dead_code)]
-    async fn get_model_for_language(&self, language: Language) -> Result<String> {
-        info!(?language, "Getting LLM model for language");
-
-        let arguments = serde_json::json!({
-            "language": language,
-        });
-
-        let arguments_map = arguments.as_object().cloned();
-
-        let tool_request = CallToolRequest {
-            method: CallToolRequestMethod,
-            params: CallToolRequestParam {
-                name: "get_model_for_language".into(),
-                arguments: arguments_map,
-            },
-            extensions: Extensions::default(),
-        };
-
-        let request_json = serde_json::to_vec(&tool_request)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(self.timeout_secs),
-            self.transport
-                .request(self.model_subject.clone(), request_json.into()),
-        )
-        .await
-        .map_err(|_| TaleTrailError::TimeoutError)?
-        .map_err(|e| TaleTrailError::NetworkError(e.to_string()))?;
-
-        let tool_result: CallToolResult = serde_json::from_slice(&response.payload)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        if tool_result.is_error == Some(true) {
-            return Err(TaleTrailError::GenerationError(format!(
-                "MCP tool error: {:?}",
-                tool_result.content
-            )));
-        }
-
-        // Extract model name from response
-        let first_content = tool_result
-            .content
-            .first()
-            .ok_or_else(|| TaleTrailError::GenerationError("Empty MCP response".to_string()))?;
-
-        // Extract text from Content
-        let model_name = match &first_content.raw {
-            rmcp::model::RawContent::Text(text_content) => text_content.text.clone(),
-            _ => {
-                return Err(TaleTrailError::GenerationError(
-                    "Expected text content in MCP response".to_string(),
-                ))
-            }
-        };
-
-        Ok(model_name)
+        // Call MCP service via NATS with envelope
+        self.mcp_client.call_tool(&self.constraint_subject, tool_request, meta).await
     }
 }
 

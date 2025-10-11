@@ -37,13 +37,8 @@ use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
 use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
-mod config;
-mod rubrics;
-mod server;
-mod validation;
-
-use config::QualityControlConfig;
-use server::QualityControlHandler;
+use quality_control::config::QualityControlConfig;
+use quality_control::QualityControlHandler;
 use shared_types::*;
 
 #[tokio::main]

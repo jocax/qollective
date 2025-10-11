@@ -30,25 +30,47 @@
 use crate::{
     config::OrchestratorConfig,
     events::{EventPublisher, PipelineEvent},
+    mcp_client::McpEnvelopeClient,
     negotiation::Negotiator,
     pipeline::PipelineState,
     prompt_orchestration::PromptOrchestrator,
 };
 use async_nats::Client as NatsClient;
+use qollective::envelope::Meta;
 use rmcp::model::{
-    CallToolRequest, CallToolRequestMethod, CallToolRequestParam, CallToolResult, Extensions,
-    RawContent,
+    CallToolRequest, CallToolRequestMethod, CallToolRequestParam, Extensions,
 };
 use shared_types::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, instrument};
+use uuid::Uuid;
+
+/// Helper function to create TracingMeta with minimal fields
+fn create_tracing_meta(trace_id: String) -> qollective::envelope::meta::TracingMeta {
+    qollective::envelope::meta::TracingMeta {
+        trace_id: Some(trace_id),
+        span_id: None,
+        parent_span_id: None,
+        baggage: std::collections::HashMap::new(),
+        sampling_rate: None,
+        sampled: Some(true),
+        trace_state: None,
+        operation_name: None,
+        span_kind: None,
+        span_status: None,
+        tags: std::collections::HashMap::new(),
+    }
+}
 
 /// Main orchestrator coordinating all MCP services
 pub struct Orchestrator {
     /// NATS client for MCP communication
     nats_client: Arc<NatsClient>,
+
+    /// MCP envelope client for envelope-first communication
+    mcp_client: McpEnvelopeClient,
 
     /// Configuration
     config: OrchestratorConfig,
@@ -97,6 +119,12 @@ impl Orchestrator {
 
         let negotiator = Negotiator::new(&config);
 
+        // Create MCP envelope client with timeout from config
+        let mcp_client = McpEnvelopeClient::new(
+            Arc::clone(&nats_client),
+            config.pipeline.generation_timeout_secs,
+        );
+
         // Initial state will be created when orchestrate_generation is called
         // Create a minimal dummy request - will be replaced on first call
         let dummy_request = GenerationRequest {
@@ -116,6 +144,7 @@ impl Orchestrator {
 
         Self {
             nats_client,
+            mcp_client,
             config,
             state,
             event_publisher,
@@ -166,12 +195,12 @@ impl Orchestrator {
 
         // Phase 2: Generate Content (batched)
         dag = self
-            .phase_generate_content(dag, &prompts, &request_id)
+            .phase_generate_content(dag, &request, &prompts, &request_id)
             .await?;
 
         // Phase 3-4: Validate and Negotiate (iterative)
         dag = self
-            .phase_validate_and_negotiate(dag, &prompts, &request_id)
+            .phase_validate_and_negotiate(dag, &request, &prompts, &request_id)
             .await?;
 
         // Phase 5: Assemble and Return
@@ -255,6 +284,9 @@ impl Orchestrator {
             .get(&MCPServiceType::StoryGenerator)
             .ok_or_else(|| TaleTrailError::GenerationError("Missing story prompts".to_string()))?;
 
+        // Create metadata for this request
+        let meta = self.create_meta(request, request_id);
+
         // Call story-generator MCP tool: generate_structure
         let tool_request = CallToolRequest {
             method: CallToolRequestMethod::default(),
@@ -279,7 +311,7 @@ impl Orchestrator {
         };
 
         let dag: DAG = self
-            .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request)
+            .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
             .await?;
 
         // Publish event
@@ -304,10 +336,11 @@ impl Orchestrator {
     ///
     /// Processes nodes in batches with limited concurrency, calling story-generator
     /// to populate node content.
-    #[instrument(skip(self, dag, prompts))]
+    #[instrument(skip(self, dag, prompts, request))]
     async fn phase_generate_content(
         &self,
         mut dag: DAG,
+        request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
     ) -> Result<DAG> {
@@ -355,6 +388,9 @@ impl Orchestrator {
 
             let start = std::time::Instant::now();
 
+            // Create metadata for this batch
+            let meta = self.create_meta(request, request_id);
+
             // Call story-generator MCP tool: generate_nodes
             let tool_request = CallToolRequest {
                 method: CallToolRequestMethod::default(),
@@ -384,7 +420,7 @@ impl Orchestrator {
             };
 
             let generated_nodes: Vec<ContentNode> = self
-                .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request)
+                .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
                 .await?;
 
             // Update DAG with generated content
@@ -419,10 +455,11 @@ impl Orchestrator {
     ///
     /// Validates all nodes through quality-control and constraint-enforcer services.
     /// For now, validation only; negotiation will be implemented in next iteration.
-    #[instrument(skip(self, dag, prompts))]
+    #[instrument(skip(self, dag, prompts, request))]
     async fn phase_validate_and_negotiate(
         &self,
         dag: DAG,
+        request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
     ) -> Result<DAG> {
@@ -441,11 +478,11 @@ impl Orchestrator {
         // Validate all nodes
         for node in dag.nodes.values() {
             // Call quality-control
-            let quality_result = self.validate_quality(node, prompts, request_id).await?;
+            let quality_result = self.validate_quality(node, request, prompts, request_id).await?;
 
             // Call constraint-enforcer
             let constraint_result = self
-                .validate_constraints(node, prompts, request_id)
+                .validate_constraints(node, request, prompts, request_id)
                 .await?;
 
             // Log validation results
@@ -466,10 +503,14 @@ impl Orchestrator {
     async fn validate_quality(
         &self,
         node: &ContentNode,
+        request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
-        _request_id: &str,
+        request_id: &str,
     ) -> Result<ValidationResult> {
         let validation_prompts = prompts.get(&MCPServiceType::QualityControl);
+
+        // Create metadata for this validation
+        let meta = self.create_meta(request, request_id);
 
         let tool_request = CallToolRequest {
             method: CallToolRequestMethod::default(),
@@ -495,7 +536,7 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&constants::MCP_QUALITY_VALIDATE, tool_request)
+        self.call_mcp_tool(&constants::MCP_QUALITY_VALIDATE, tool_request, meta)
             .await
     }
 
@@ -505,10 +546,14 @@ impl Orchestrator {
     async fn validate_constraints(
         &self,
         node: &ContentNode,
+        request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
-        _request_id: &str,
+        request_id: &str,
     ) -> Result<ConstraintResult> {
         let constraint_prompts = prompts.get(&MCPServiceType::ConstraintEnforcer);
+
+        // Create metadata for this validation
+        let meta = self.create_meta(request, request_id);
 
         let tool_request = CallToolRequest {
             method: CallToolRequestMethod::default(),
@@ -534,7 +579,7 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&constants::MCP_CONSTRAINT_ENFORCE, tool_request)
+        self.call_mcp_tool(&constants::MCP_CONSTRAINT_ENFORCE, tool_request, meta)
             .await
     }
 
@@ -630,14 +675,46 @@ impl Orchestrator {
         Ok(response)
     }
 
-    /// Generic MCP tool call helper
+    /// Create metadata for MCP requests
     ///
-    /// Serializes request, sends via NATS with timeout, deserializes response.
+    /// Constructs envelope metadata with tenant_id, request_id, and trace_id
+    /// from the orchestrator context.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - Generation request containing tenant_id
+    /// * `request_id` - Request ID for correlation
+    ///
+    /// # Returns
+    ///
+    /// Meta struct populated with tenant and tracing information
+    fn create_meta(&self, request: &GenerationRequest, request_id: &str) -> Meta {
+        let mut meta = Meta::default();
+
+        // Set tenant ID for multi-tenancy isolation
+        meta.tenant = Some(format!("tenant-{}", request.tenant_id));
+
+        // Set request ID for correlation
+        if let Ok(uuid) = Uuid::parse_str(request_id) {
+            meta.request_id = Some(uuid);
+        }
+
+        // Set trace ID for distributed tracing (same as request_id for now)
+        meta.tracing = Some(create_tracing_meta(request_id.to_string()));
+
+        meta
+    }
+
+    /// Generic MCP tool call helper with envelope wrapping
+    ///
+    /// Wraps request in Envelope<McpData>, sends via NATS, unwraps response.
+    /// This method now uses the McpEnvelopeClient for envelope-first communication.
     ///
     /// # Arguments
     ///
     /// * `subject` - NATS subject for the MCP service
     /// * `request` - MCP tool call request
+    /// * `meta` - Envelope metadata (tenant_id, request_id, trace_id)
     ///
     /// # Type Parameters
     ///
@@ -654,54 +731,8 @@ impl Orchestrator {
         &self,
         subject: &str,
         request: CallToolRequest,
+        meta: Meta,
     ) -> Result<T> {
-        // Serialize request
-        let request_bytes = serde_json::to_vec(&request)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        // Send via NATS with timeout
-        let timeout_duration =
-            std::time::Duration::from_secs(self.config.pipeline.generation_timeout_secs);
-
-        let response_bytes = tokio::time::timeout(
-            timeout_duration,
-            self.nats_client
-                .request(subject.to_string(), request_bytes.into()),
-        )
-        .await
-        .map_err(|_| TaleTrailError::TimeoutError)?
-        .map_err(|e| TaleTrailError::NatsError(e.to_string()))?;
-
-        // Deserialize response
-        let tool_result: CallToolResult = serde_json::from_slice(&response_bytes.payload)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        // Check for errors
-        if tool_result.is_error == Some(true) {
-            return Err(TaleTrailError::GenerationError(format!(
-                "MCP tool error: {:?}",
-                tool_result.content
-            )));
-        }
-
-        // Extract result from content
-        let first_content = tool_result
-            .content
-            .first()
-            .ok_or_else(|| TaleTrailError::GenerationError("Empty MCP response".to_string()))?;
-
-        let json_str = match &first_content.raw {
-            RawContent::Text(text_content) => &text_content.text,
-            _ => {
-                return Err(TaleTrailError::GenerationError(
-                    "Unexpected content type".to_string(),
-                ))
-            }
-        };
-
-        let result: T = serde_json::from_str(json_str)
-            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?;
-
-        Ok(result)
+        self.mcp_client.call_tool(subject, request, meta).await
     }
 }
