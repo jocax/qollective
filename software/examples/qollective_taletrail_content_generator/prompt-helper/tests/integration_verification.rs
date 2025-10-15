@@ -32,10 +32,11 @@ use uuid::Uuid;
 // Helper Functions
 // ============================================================================
 
-/// Create Qollective NATS client with TLS
+/// Create Qollective NATS client with TLS and authentication
 ///
-/// Creates a NatsClient using Qollective's configuration system with TLS
-/// and mTLS authentication from certificates in the `../certs/` directory.
+/// Creates a NatsClient using Qollective's configuration system with:
+/// - TLS encryption from certificates in the `../certs/` directory
+/// - Username/password authentication (test user: "test"/"test")
 ///
 /// # Returns
 /// Connected Qollective NatsClient or error
@@ -45,12 +46,14 @@ async fn create_nats_client() -> Result<NatsClient, Box<dyn std::error::Error>> 
 
     info!("Creating Qollective NatsClient with TLS from: {}", certs_dir.display());
 
-    // Create NATS config using Qollective
-    // NOTE: Authorization is temporarily disabled in NATS server for integration testing
-    // TODO: Add NKey authentication support to Qollective
+    // Create NATS config using Qollective with test user credentials
+    // Using username/password authentication for integration testing
+    // Test user "test"/"test" is defined in nkeys/users.conf with full permissions
     let nats_config = NatsConfig {
         connection: NatsConnectionConfig {
             urls: vec!["nats://localhost:5222".to_string()],
+            username: Some("test".to_string()),
+            password: Some("test".to_string()),
             tls: TlsConfig {
                 enabled: true,
                 ca_cert_path: Some(certs_dir.join("ca.pem")),
@@ -232,8 +235,8 @@ async fn test_generate_story_prompts_english() -> Result<(), Box<dyn std::error:
         "educational_goals": ["teamwork", "problem-solving"]
     });
 
-    // Call tool
-    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 10).await?;
+    // Call tool (20s timeout for LLM processing)
+    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 20).await?;
 
     // Verify no error
     assert!(
@@ -295,8 +298,8 @@ async fn test_generate_story_prompts_german() -> Result<(), Box<dyn std::error::
         "educational_goals": ["Teamarbeit", "Problemlösung"]
     });
 
-    // Call tool
-    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 10).await?;
+    // Call tool (20s timeout for LLM processing)
+    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 20).await?;
 
     // Verify no error
     assert!(
@@ -358,8 +361,8 @@ async fn test_generate_validation_prompts() -> Result<(), Box<dyn std::error::Er
         "content_type": "story"
     });
 
-    // Call tool
-    let result = call_mcp_tool(&client, "generate_validation_prompts", arguments, 10).await?;
+    // Call tool (20s timeout for LLM processing)
+    let result = call_mcp_tool(&client, "generate_validation_prompts", arguments, 20).await?;
 
     // Verify no error
     assert!(
@@ -413,8 +416,8 @@ async fn test_generate_constraint_prompts() -> Result<(), Box<dyn std::error::Er
         "required_elements": ["moral lesson", "science fact"]
     });
 
-    // Call tool
-    let result = call_mcp_tool(&client, "generate_constraint_prompts", arguments, 10).await?;
+    // Call tool (20s timeout for LLM processing)
+    let result = call_mcp_tool(&client, "generate_constraint_prompts", arguments, 20).await?;
 
     // Verify no error
     assert!(
@@ -467,7 +470,7 @@ async fn test_get_model_for_language() -> Result<(), Box<dyn std::error::Error>>
         "language": "en"
     });
 
-    let result_en = call_mcp_tool(&client, "get_model_for_language", arguments_en, 5).await?;
+    let result_en = call_mcp_tool(&client, "get_model_for_language", arguments_en, 20).await?;
 
     assert!(
         result_en.is_error.is_none() || result_en.is_error == Some(false),
@@ -488,7 +491,7 @@ async fn test_get_model_for_language() -> Result<(), Box<dyn std::error::Error>>
         "language": "de"
     });
 
-    let result_de = call_mcp_tool(&client, "get_model_for_language", arguments_de, 5).await?;
+    let result_de = call_mcp_tool(&client, "get_model_for_language", arguments_de, 20).await?;
 
     assert!(
         result_de.is_error.is_none() || result_de.is_error == Some(false),
@@ -533,8 +536,8 @@ async fn test_template_fallback() -> Result<(), Box<dyn std::error::Error>> {
         "educational_goals": ["marine biology", "conservation"]
     });
 
-    // Call tool
-    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 10).await?;
+    // Call tool (20s timeout for LLM processing)
+    let result = call_mcp_tool(&client, "generate_story_prompts", arguments, 20).await?;
 
     // Verify no error (fallback should still produce valid prompts)
     assert!(
@@ -590,7 +593,7 @@ async fn test_unknown_tool_error() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Call unknown tool
-    let result = call_mcp_tool(&client, "unknown_tool", arguments, 5).await?;
+    let result = call_mcp_tool(&client, "unknown_tool", arguments, 20).await?;
 
     // Verify error response
     assert_eq!(

@@ -1,0 +1,196 @@
+# ============================================================================
+# Nextest Configuration for TaleTrail Content Generator
+# ============================================================================
+# Documentation: https://nexte.st/book/configuration.html
+#
+# This configuration defines multiple test profiles for different scenarios:
+# - default: Fast unit tests (no infrastructure required)
+# - infra: Integration tests requiring NATS, API keys, TLS certificates
+# - ci: Optimized for CI/CD pipelines (fast tests only)
+# - all: Run everything when full infrastructure is available
+#
+# ============================================================================
+# Test Naming Conventions
+# ============================================================================
+# Follow these prefixes to ensure tests run in the correct profile:
+#
+# - infra_*     : Tests requiring infrastructure (NATS, API keys, TLS)
+#                 Examples: infra_nats_connection_test()
+#                          infra_llm_api_call_test()
+#                          infra_orchestrator_pipeline_test()
+#
+# - slow_*      : Tests that take > 30 seconds to complete
+#                 Examples: slow_full_pipeline_test()
+#                          slow_multiple_story_generation_test()
+#
+# - unit_*      : Unit tests (optional prefix, this is the default)
+#                 Examples: unit_validation_test() or validation_test()
+#                          unit_prompt_parsing_test() or prompt_parsing_test()
+#
+# ============================================================================
+# Profile Usage Examples
+# ============================================================================
+#
+# Run unit tests only (default):
+#   cargo nextest run
+#
+# Run infrastructure tests:
+#   cargo nextest run --profile infra
+#
+# Run CI tests (no infra, no slow tests):
+#   cargo nextest run --profile ci
+#
+# Run all tests (requires infrastructure):
+#   ENABLE_INFRA_TESTS=1 cargo nextest run --profile all
+#
+# Run specific test:
+#   cargo nextest run --profile infra infra_nats_connection_test
+#
+# Run all tests in a package:
+#   cargo nextest run -p orchestrator --profile infra
+#
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Default Profile: Unit Tests Only
+# ----------------------------------------------------------------------------
+# Purpose: Fast feedback loop for local development
+# Filters: Excludes all infrastructure-dependent tests
+# Parallelism: Maximum (uses all available cores)
+# Timeout: 60 seconds per test
+# Usage: cargo nextest run
+# ----------------------------------------------------------------------------
+[profile.default]
+default-filter = "not test(infra_)"
+test-threads = "num-cpus"  # Use all available cores
+status-level = "fail"  # Show output for failures
+
+# Report slow tests (unit tests should be fast)
+[profile.default.slow-timeout]
+period = "60s"
+terminate-after = 3  # Grace period after SIGTERM before SIGKILL
+
+# ----------------------------------------------------------------------------
+# Infrastructure Profile: Integration Tests
+# ----------------------------------------------------------------------------
+# Purpose: Run tests requiring NATS, API keys, TLS certificates
+# Filters: Only runs tests with infra_ prefix
+# Parallelism: Serial (test-threads = 1) to prevent NATS race conditions
+# Timeout: 120 seconds per test (API calls can be slow)
+# Prerequisites: Run ./test_integration.sh to validate infrastructure setup
+# Usage: cargo nextest run --profile infra
+# ----------------------------------------------------------------------------
+[profile.infra]
+default-filter = "test(infra_)"
+test-threads = 1  # Serial execution prevents NATS subject conflicts
+status-level = "all"  # Always show output for infra tests (useful for debugging)
+retries = 1  # Retry once on failure (handles transient network issues)
+
+# Infrastructure tests need more time
+[profile.infra.slow-timeout]
+period = "120s"
+terminate-after = 5  # Longer grace period for cleanup
+
+# ----------------------------------------------------------------------------
+# CI/CD Profile: Fast Tests for Continuous Integration
+# ----------------------------------------------------------------------------
+# Purpose: Optimized for CI/CD pipelines where infrastructure isn't available
+# Filters: Excludes infrastructure tests AND slow tests
+# Parallelism: Maximum (uses all available cores)
+# Timeout: 60 seconds per test
+# Usage: cargo nextest run --profile ci
+# ----------------------------------------------------------------------------
+[profile.ci]
+default-filter = "not test(infra_) and not test(slow_)"
+test-threads = "num-cpus"  # Maximum parallelism for CI efficiency
+status-level = "fail"  # Minimal output for CI logs
+retries = 0  # No retries in CI (want to catch flaky tests)
+
+# CI should fail fast
+[profile.ci.slow-timeout]
+period = "60s"
+terminate-after = 2  # Shorter grace period for CI
+
+# ----------------------------------------------------------------------------
+# All Tests Profile: Complete Test Suite
+# ----------------------------------------------------------------------------
+# Purpose: Run absolutely everything when full infrastructure is available
+# Filters: None (runs all tests including infra and slow tests)
+# Parallelism: Serial (test-threads = 1) for safety
+# Timeout: 120 seconds per test
+# Prerequisites: Full infrastructure setup required
+# Usage: ENABLE_INFRA_TESTS=1 cargo nextest run --profile all
+# ----------------------------------------------------------------------------
+[profile.all]
+default-filter = "all()"
+test-threads = 1  # Serial execution for safety with infrastructure
+status-level = "all"  # Show everything when running full suite
+retries = 1  # Retry infrastructure tests in all profile
+
+# Long timeout for slow tests
+[profile.all.slow-timeout]
+period = "120s"
+terminate-after = 5
+
+# ============================================================================
+# JUnit XML Output Configuration
+# ============================================================================
+# Generate JUnit XML reports for CI/CD integration
+# These can be consumed by Jenkins, GitLab CI, GitHub Actions, etc.
+# ============================================================================
+
+[profile.default.junit]
+path = "target/nextest/default/junit.xml"
+store-success-output = false
+store-failure-output = true
+
+[profile.infra.junit]
+path = "target/nextest/infra/junit.xml"
+store-success-output = true  # Keep output for infrastructure tests
+store-failure-output = true
+
+[profile.ci.junit]
+path = "target/nextest/ci/junit.xml"
+store-success-output = false
+store-failure-output = true
+
+[profile.all.junit]
+path = "target/nextest/all/junit.xml"
+store-success-output = true
+store-failure-output = true
+
+# ============================================================================
+# Global Test Settings
+# ============================================================================
+
+# Test groups configuration (if needed in the future)
+# [test-groups]
+# Example: Group integration tests together
+# integration = { max-threads = 1 }
+
+# ============================================================================
+# Notes for Contributors
+# ============================================================================
+#
+# 1. Infrastructure Prerequisites:
+#    - NATS server running (via docker-compose or ./start-nats.sh)
+#    - Environment variables set (ANTHROPIC_API_KEY, etc.)
+#    - TLS certificates in certs/ directory
+#    - Run ./test_integration.sh to validate setup
+#
+# 2. Adding New Tests:
+#    - Prefix with infra_ if it needs NATS/API keys/TLS
+#    - Prefix with slow_ if it takes > 30 seconds
+#    - No prefix needed for unit tests
+#
+# 3. Debugging Test Failures:
+#    - Run with --no-capture to see stdout: cargo nextest run --no-capture
+#    - Run specific test: cargo nextest run <test_name>
+#    - Check JUnit XML in target/nextest/ for detailed reports
+#
+# 4. Performance Tuning:
+#    - Adjust test-threads based on your system (0 = all cores)
+#    - Adjust slow-timeout if tests legitimately take longer
+#    - Use --profile ci locally for fast feedback
+#
+# ============================================================================

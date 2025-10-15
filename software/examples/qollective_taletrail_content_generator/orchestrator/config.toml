@@ -26,11 +26,11 @@ queue_group = "orchestrator"
 
 [nats.auth]
 # NKey authentication (replaces mTLS client certificates)
-nkey_file = "./nkeys/orchestrator.nk"
+nkey_file = "../nkeys/orchestrator.nk"
 
 [nats.tls]
 # TLS for encryption (no client cert needed with NKey auth)
-ca_cert = "./certs/ca.pem"
+ca_cert = "../certs/ca.pem"
 
 [llm]
 type = "lmstudio"

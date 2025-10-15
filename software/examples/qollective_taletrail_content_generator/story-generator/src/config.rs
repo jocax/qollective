@@ -69,6 +69,10 @@ pub struct AuthConfig {
 pub struct TlsConfig {
     /// CA certificate path
     pub ca_cert: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_key: Option<String>,
 }
 
 /// Content generation settings
@@ -112,6 +116,8 @@ impl Default for TlsConfig {
     fn default() -> Self {
         Self {
             ca_cert: "./certs/ca.pem".to_string(),
+            client_cert: None,
+            client_key: None,
         }
     }
 }

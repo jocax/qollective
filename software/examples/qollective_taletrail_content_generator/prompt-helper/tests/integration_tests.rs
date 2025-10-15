@@ -14,15 +14,19 @@
 //!
 //! # Running Tests
 //!
-//! Tests that don't require a running NATS server:
+//! Tests without infrastructure requirements:
 //! ```bash
-//! cargo test --test integration_tests
+//! cargo nextest run -p prompt-helper
 //! ```
 //!
-//! Tests that require a running NATS server (marked with #[ignore]):
+//! Tests requiring NATS infrastructure:
 //! ```bash
-//! cargo test --test integration_tests -- --ignored
+//! ENABLE_INFRA_TESTS=1 cargo nextest run -p prompt-helper --profile infra
 //! ```
+
+#[path = "../../tests/common/mod.rs"]
+mod common;
+use common::*;
 
 use async_nats::{ConnectOptions, ServerAddr};
 use futures_util::stream::StreamExt; // For .next() on streams
@@ -39,22 +43,12 @@ use rustls::{ClientConfig, RootCertStore};
 use rustls_pemfile;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Once;
 use tokio;
 
 // ============================================================================
 // Test Setup - Rustls Crypto Provider Initialization
 // ============================================================================
-
-static INIT: Once = Once::new();
-
-/// Initialize rustls crypto provider once for all tests
-fn init_rustls() {
-    INIT.call_once(|| {
-        // Install ring crypto provider for rustls
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    });
-}
+// Note: Using init_rustls() from common module
 
 // ============================================================================
 // Test Helpers
@@ -160,8 +154,11 @@ const TEST_CLIENT_KEY: &str = "../../../tests/certs/client-key.pem";
 // ============================================================================
 
 #[tokio::test]
-#[ignore] // Requires running NATS server with TLS
-async fn test_nats_connection_with_tls_succeeds() {
+async fn infra_nats_connection_with_tls_succeeds() {
+    skip_if_no_infra!();
+    init_rustls();
+    init_test_tracing();
+
     // Load configuration
     let config = create_test_config_with_certs(TEST_CA_CERT, TEST_CLIENT_CERT, TEST_CLIENT_KEY);
 
@@ -173,8 +170,9 @@ async fn test_nats_connection_with_tls_succeeds() {
     )
     .expect("Failed to build TLS config");
 
-    // Create NATS connection options with TLS
+    // Create NATS connection options with TLS and authentication
     let connect_opts = ConnectOptions::new()
+        .user_and_password("test".to_string(), "test".to_string())
         .tls_client_config(tls_config)
         .name(&config.service.name);
 
@@ -411,8 +409,11 @@ async fn test_tool_input_schemas_have_required_structure() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore] // Requires running NATS server with TLS and proper subject setup
-async fn test_nats_message_routing_to_handler() {
+async fn infra_nats_message_routing_to_handler() {
+    skip_if_no_infra!();
+    init_rustls();
+    init_test_tracing();
+
     // This test verifies full end-to-end NATS message routing
     // Prerequisites:
     // - NATS server running with TLS on localhost:5222
@@ -429,8 +430,9 @@ async fn test_nats_message_routing_to_handler() {
     )
     .expect("Failed to build TLS config");
 
-    // Connect to NATS
+    // Connect to NATS with authentication
     let connect_opts = ConnectOptions::new()
+        .user_and_password("test".to_string(), "test".to_string())
         .tls_client_config(tls_config)
         .name("test-client");
 
@@ -489,8 +491,11 @@ async fn test_nats_message_routing_to_handler() {
 }
 
 #[tokio::test]
-#[ignore] // Requires running NATS server
-async fn test_graceful_shutdown_drains_subscriptions() {
+async fn infra_graceful_shutdown_drains_subscriptions() {
+    skip_if_no_infra!();
+    init_rustls();
+    init_test_tracing();
+
     // This test verifies that shutdown properly drains all subscriptions
     // Prerequisites: NATS server running with TLS
 
@@ -504,8 +509,9 @@ async fn test_graceful_shutdown_drains_subscriptions() {
     )
     .expect("Failed to build TLS config");
 
-    // Connect to NATS
+    // Connect to NATS with authentication
     let connect_opts = ConnectOptions::new()
+        .user_and_password("test".to_string(), "test".to_string())
         .tls_client_config(tls_config)
         .name("shutdown-test-client");
 

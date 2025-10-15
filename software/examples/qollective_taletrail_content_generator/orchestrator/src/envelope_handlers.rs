@@ -306,6 +306,11 @@ mod tests {
     use rmcp::model::{CallToolRequestParam, CallToolRequestMethod};
     use uuid::Uuid;
 
+    /// Check if infrastructure tests should run
+    fn should_run_infra_tests() -> bool {
+        std::env::var("ENABLE_INFRA_TESTS").is_ok()
+    }
+
     /// Create a test OrchestratorConfig for testing
     fn test_orchestrator_config() -> OrchestratorConfig {
         let llm_toml = r#"
@@ -372,8 +377,12 @@ de = "test-model-de"
     }
 
     #[tokio::test]
-    #[ignore] // Requires NATS connection - run with `cargo test -- --ignored`
-    async fn test_orchestrator_handler_unknown_tool() {
+    async fn infra_orchestrator_handler_unknown_tool() {
+        if !should_run_infra_tests() {
+            eprintln!("Skipping: Set ENABLE_INFRA_TESTS=1 to run infrastructure tests");
+            return;
+        }
+
         // ARRANGE: Create handler with mock orchestrator
         let config = test_orchestrator_config();
         let nats_client = Arc::new(
@@ -420,8 +429,12 @@ de = "test-model-de"
     }
 
     #[tokio::test]
-    #[ignore] // Requires NATS connection - run with `cargo test -- --ignored`
-    async fn test_orchestrator_handler_missing_tool_call() {
+    async fn infra_orchestrator_handler_missing_tool_call() {
+        if !should_run_infra_tests() {
+            eprintln!("Skipping: Set ENABLE_INFRA_TESTS=1 to run infrastructure tests");
+            return;
+        }
+
         // ARRANGE: Create handler with mock orchestrator
         let config = test_orchestrator_config();
         let nats_client = Arc::new(
@@ -442,7 +455,7 @@ de = "test-model-de"
 
         let mut meta = Meta::default();
         meta.tenant = Some("test-tenant".to_string());
-        meta.request_id = Some(Uuid::new_v4());
+        meta.request_id = Some(Uuid::now_v7());
 
         let envelope = Envelope::new(meta, mcp_data);
 

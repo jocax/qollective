@@ -7,6 +7,23 @@ name = "constraint-enforcer"
 version = "0.1.0"
 description = "TaleTrail Constraint Enforcer MCP Server - Enforces vocabulary and theme constraints"
 
+# LLM Configuration
+# Base URL for LLM API endpoint (compatible with OpenAI API format)
+[llm]
+type = "google"
+url = "https://generativelanguage.googleapis.com"
+default_model = "gemini-2.0-flash-lite"
+use_default_model_fallback = true
+timeout_secs = 180
+max_tokens = 4096
+temperature = 0.7
+system_prompt_style = "chatml"
+
+# Language-specific LLM models
+[llm.models]
+en = "gemini-2.0-flash-lite"
+de = "gemini-2.0-flash-lite"
+
 [nats]
 url = "nats://localhost:5222"
 subject = "mcp.constraint.enforce"
@@ -14,11 +31,11 @@ queue_group = "constraint-enforcer"
 
 [nats.auth]
 # NKey authentication (replaces mTLS client certificates)
-nkey_file = "./nkeys/constraint-enforcer.nk"
+nkey_file = "../nkeys/constraint-enforcer.nk"
 
 [nats.tls]
 # TLS for encryption (no client cert needed with NKey auth)
-ca_cert = "./certs/ca.pem"
+ca_cert = "../certs/ca.pem"
 
 [constraints]
 vocabulary_check_enabled = true

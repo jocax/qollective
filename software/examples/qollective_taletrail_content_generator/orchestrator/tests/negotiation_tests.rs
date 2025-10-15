@@ -36,10 +36,14 @@ fn create_test_config() -> OrchestratorConfig {
             url: "nats://localhost:4222".to_string(),
             subject: "test.subject".to_string(),
             queue_group: "test-group".to_string(),
+            auth: orchestrator::config::AuthConfig {
+                nkey_file: Some("./nkeys/orchestrator.nk".to_string()),
+                nkey_seed: None,
+            },
             tls: orchestrator::config::TlsConfig {
                 ca_cert: "./certs/ca.pem".to_string(),
-                client_cert: "./certs/client-cert.pem".to_string(),
-                client_key: "./certs/client-key.pem".to_string(),
+                client_cert: None,
+                client_key: None,
             },
         },
         llm: create_test_llm_config(),

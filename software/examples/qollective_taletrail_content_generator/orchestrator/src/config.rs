@@ -29,14 +29,25 @@ pub struct NatsConfig {
     pub url: String,
     pub subject: String,
     pub queue_group: String,
+    pub auth: AuthConfig,
     pub tls: TlsConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_seed: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TlsConfig {
     pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,12 +89,21 @@ impl Default for ServiceConfig {
     }
 }
 
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            nkey_file: Some("./nkeys/orchestrator.nk".to_string()),
+            nkey_seed: None,
+        }
+    }
+}
+
 impl Default for TlsConfig {
     fn default() -> Self {
         Self {
             ca_cert: "./certs/ca.pem".to_string(),
-            client_cert: "./certs/client-cert.pem".to_string(),
-            client_key: "./certs/client-key.pem".to_string(),
+            client_cert: None,
+            client_key: None,
         }
     }
 }
@@ -94,6 +114,7 @@ impl Default for NatsConfig {
             url: "nats://localhost:5222".to_string(),
             subject: "mcp.orchestrator.request".to_string(),
             queue_group: "orchestrator".to_string(),
+            auth: AuthConfig::default(),
             tls: TlsConfig::default(),
         }
     }
@@ -296,10 +317,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "lmstudio"
@@ -360,10 +382,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "lmstudio"
@@ -422,10 +445,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "lmstudio"
@@ -484,10 +508,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "google"
@@ -546,10 +571,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "google"
@@ -608,10 +634,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [llm]
 type = "lmstudio"

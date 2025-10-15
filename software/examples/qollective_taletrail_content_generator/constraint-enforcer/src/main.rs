@@ -61,20 +61,30 @@ async fn main() -> Result<()> {
     info!("  NATS URL: {}", app_config.nats.url);
     info!("  NATS Subject: {}", app_config.nats.subject);
     info!("  NATS Queue Group: {}", app_config.nats.queue_group);
+    info!("  LLM Provider: {:?}", app_config.llm.provider.provider_type);
+    info!("  LLM URL: {}", app_config.llm.provider.url);
+    info!("  LLM Default Model: {}", app_config.llm.provider.default_model);
     info!("  Vocabulary Check: {}", app_config.constraints.vocabulary_check_enabled);
     info!("  Theme Consistency: {}", app_config.constraints.theme_consistency_enabled);
     info!("  Required Elements: {}", app_config.constraints.required_elements_check_enabled);
     info!("");
 
-    // Create Qollective NATS config with TLS
+    // Create Qollective NATS config with NKey authentication
     let nats_config = NatsConfig {
         connection: NatsConnectionConfig {
             urls: vec![app_config.nats.url.clone()],
+            // Use Qollective's native NKey support with priority: nkey_seed > nkey_file
+            nkey_file: if app_config.nats.auth.nkey_seed.is_some() {
+                None  // If seed is set, ignore file
+            } else {
+                app_config.nats.auth.nkey_file.as_ref().map(|p| p.into())
+            },
+            nkey_seed: app_config.nats.auth.nkey_seed.clone(),
             tls: QollectiveTlsConfig {
                 enabled: true,
                 ca_cert_path: Some(app_config.nats.tls.ca_cert.clone().into()),
-                cert_path: Some(app_config.nats.tls.client_cert.clone().into()),
-                key_path: Some(app_config.nats.tls.client_key.clone().into()),
+                cert_path: None, // No client cert needed with NKey
+                key_path: None,  // No client key needed with NKey
                 verification_mode: qollective::config::tls::VerificationMode::CustomCa,
             },
             crypto_provider_strategy: Some(

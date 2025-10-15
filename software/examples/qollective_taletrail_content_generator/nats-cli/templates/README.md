@@ -109,6 +109,151 @@ nats-cli send --subject mcp.prompt.helper \
 **Arguments:**
 - `language` (string): Language code (e.g., "en", "es", "fr")
 
+### story-generator Server
+
+Templates for the `story-generator` MCP server:
+
+#### 1. generate_structure.json
+
+Generate the DAG (Directed Acyclic Graph) structure for an interactive story with nodes, edges, and convergence points.
+
+```bash
+nats-cli send --subject mcp.story.generate \
+  --template templates/story-generator/generate_structure.json
+```
+
+**Arguments:**
+- `generation_request` (object): Complete story generation request
+  - `theme` (string): Story theme (e.g., "Space Adventure")
+  - `age_group` (string): Target age group (e.g., "6-8")
+  - `language` (string): Language code (e.g., "en")
+  - `node_count` (number): Number of story nodes to generate
+  - `tenant_id` (number): Tenant identifier
+  - `educational_goals` (array): List of educational objectives
+  - `vocabulary_level` (string): Vocabulary complexity level (e.g., "basic", "intermediate")
+  - `required_elements` (array): Must-have content elements
+  - `prompt_packages` (object): LLM prompt configurations for each service
+
+#### 2. generate_nodes.json
+
+Generate actual story content for specific nodes in the DAG structure.
+
+```bash
+nats-cli send --subject mcp.story.generate \
+  --template templates/story-generator/generate_nodes.json
+```
+
+**Arguments:**
+- `dag` (object): Complete DAG structure with nodes and edges
+- `node_ids` (array): List of node IDs to generate content for
+- `generation_request` (object): Same as generate_structure.json
+
+### constraint-enforcer Server
+
+Templates for the `constraint-enforcer` MCP server:
+
+#### 1. enforce_constraints.json
+
+Enforce vocabulary, theme, and content constraints on a generated story node.
+
+```bash
+nats-cli send --subject mcp.constraint.enforce \
+  --template templates/constraint-enforcer/enforce_constraints.json
+```
+
+**Arguments:**
+- `content_node` (object): Story node to validate
+  - `node_id` (string): Unique node identifier
+  - `content` (string): Story text content
+  - `choices` (array): List of choice options
+  - `metadata` (object): Node metadata (word_count, reading_level, etc.)
+- `generation_request` (object): Original generation request with constraints
+  - `theme` (string): Story theme
+  - `age_group` (string): Target age group
+  - `language` (string): Language code
+  - `node_count` (number): Total nodes in story
+  - `tenant_id` (number): Tenant identifier
+  - `educational_goals` (array): Educational objectives
+  - `vocabulary_level` (string): Required vocabulary level
+  - `required_elements` (array): Must-have content elements
+
+#### 2. suggest_corrections.json
+
+Generate specific correction suggestions for content that violates constraints.
+
+```bash
+nats-cli send --subject mcp.constraint.enforce \
+  --template templates/constraint-enforcer/suggest_corrections.json
+```
+
+**Arguments:**
+- `content_node` (object): Story node with constraint violations
+  - `node_id` (string): Unique node identifier
+  - `content` (string): Story text content (potentially violating constraints)
+  - `choices` (array): List of choice options
+  - `metadata` (object): Node metadata
+- `generation_request` (object): Original generation request with constraints (same structure as enforce_constraints.json)
+
+### quality-control Server
+
+Templates for the `quality-control` MCP server:
+
+#### 1. validate_content.json
+
+Validate a single content node for age-appropriateness, safety, and educational value.
+
+```bash
+nats-cli send --subject mcp.quality.validate \
+  --template templates/quality-control/validate_content.json
+```
+
+**Arguments:**
+- `content_node` (object): Story node to validate
+  - `node_id` (string): Unique node identifier
+  - `content` (string): Story text content
+  - `choices` (array): List of choice options
+  - `metadata` (object): Node metadata (word_count, reading_level, etc.)
+- `age_group` (string): Target age group (e.g., "6-8", "9-11")
+- `educational_goals` (array): List of educational objectives to validate against
+
+#### 2. batch_validate.json
+
+Validate multiple content nodes efficiently in a single request.
+
+```bash
+nats-cli send --subject mcp.quality.validate \
+  --template templates/quality-control/batch_validate.json
+```
+
+**Arguments:**
+- `content_nodes` (array): List of story nodes to validate
+  - Each node contains: `node_id`, `content`, `choices`, `metadata`
+- `age_group` (string): Target age group
+- `educational_goals` (array): Educational objectives to validate against
+
+### orchestrator Server
+
+Templates for the `orchestrator` MCP server:
+
+#### 1. generate_story.json
+
+Orchestrate the complete story generation pipeline, coordinating all services.
+
+```bash
+nats-cli send --subject generation.request \
+  --template templates/orchestrator/generate_story.json
+```
+
+**Arguments:**
+- `theme` (string): Story theme (e.g., "Ocean Adventure", "Space Adventure")
+- `age_group` (string): Target age group (e.g., "6-8", "9-11")
+- `language` (string): Language code (e.g., "en")
+- `node_count` (number): Number of story nodes to generate
+- `tenant_id` (number): Tenant identifier
+- `educational_goals` (array): List of educational objectives
+- `vocabulary_level` (string): Vocabulary complexity level (e.g., "basic", "intermediate", "advanced")
+- `required_elements` (array): Must-have content elements (e.g., "moral lesson", "educational content")
+
 ## Creating Custom Templates
 
 To create a new template:

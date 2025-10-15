@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use shared_types::*;
+use shared_types_llm::LlmConfig as SharedLlmConfig;
 use figment::{Figment, providers::{Env, Format, Toml}};
 use std::collections::HashMap;
 
@@ -10,6 +11,7 @@ use std::collections::HashMap;
 pub struct ConstraintEnforcerConfig {
     pub service: ServiceConfig,
     pub nats: NatsConfig,
+    pub llm: SharedLlmConfig,
     pub constraints: ConstraintsConfig,
     pub vocabulary: VocabularyConfig,
     pub themes: ThemesConfig,
@@ -28,14 +30,25 @@ pub struct NatsConfig {
     pub url: String,
     pub subject: String,
     pub queue_group: String,
+    pub auth: AuthConfig,
     pub tls: TlsConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_seed: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TlsConfig {
     pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,12 +111,21 @@ impl Default for ServiceConfig {
     }
 }
 
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            nkey_file: Some("./nkeys/constraint-enforcer.nk".to_string()),
+            nkey_seed: None,
+        }
+    }
+}
+
 impl Default for TlsConfig {
     fn default() -> Self {
         Self {
             ca_cert: "./certs/ca.pem".to_string(),
-            client_cert: "./certs/client-cert.pem".to_string(),
-            client_key: "./certs/client-key.pem".to_string(),
+            client_cert: None,
+            client_key: None,
         }
     }
 }
@@ -114,6 +136,7 @@ impl Default for NatsConfig {
             url: "nats://localhost:5222".to_string(),
             subject: "mcp.constraint.enforce".to_string(),
             queue_group: "constraint-enforcer".to_string(),
+            auth: AuthConfig::default(),
             tls: TlsConfig::default(),
         }
     }
@@ -205,20 +228,63 @@ impl ConstraintEnforcerConfig {
 
         debug!("📄 Layer 1: Loaded base config from constraint-enforcer/config.toml");
 
+        let figment = figment
+            // Layer 2: LLM-specific environment variables (map to nested llm.provider and llm.models sections)
+            // Env::prefixed("LLM_") strips the "LLM_" prefix automatically
+            // So LLM_TYPE becomes TYPE, LLM_MODELS_EN becomes MODELS_EN, LLM_GOOGLE_API_KEY becomes GOOGLE_API_KEY, etc.
+            .merge(
+                Env::prefixed("LLM_")
+                    .map(|key| {
+                        let key_str = key.as_str();
+
+                        // Handle language-specific models: MODELS_EN -> llm.models.en, MODELS_DE -> llm.models.de
+                        if let Some(lang) = key_str.strip_prefix("MODELS_") {
+                            return format!("llm.models.{}", lang.to_lowercase()).into();
+                        }
+
+                        // Handle provider-level config
+                        // Strip provider-specific prefixes (GOOGLE_, OPENAI_, ANTHROPIC_) to get generic field names
+                        let generic_key = if let Some(suffix) = key_str.strip_prefix("GOOGLE_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("OPENAI_") {
+                            suffix
+                        } else if let Some(suffix) = key_str.strip_prefix("ANTHROPIC_") {
+                            suffix
+                        } else {
+                            key_str
+                        };
+
+                        // Special case for TYPE which maps to "type" (serde rename in ProviderConfig)
+                        let field_name = if generic_key == "TYPE" {
+                            "type"
+                        } else {
+                            &generic_key.to_lowercase()
+                        };
+
+                        // Transform to llm.{field}: GOOGLE_API_KEY -> llm.api_key, TYPE -> llm.type (provider fields are flattened)
+                        format!("llm.{}", field_name).into()
+                    })
+            );
+
+        debug!("🔧 Layer 2: Applied LLM_* environment variable overrides");
+
         let config: Self = figment
-            // Layer 2: CONSTRAINT_ENFORCER-specific environment variables (includes .env + system, system takes precedence)
+            // Layer 3: CONSTRAINT_ENFORCER-specific environment variables (includes .env + system, system takes precedence)
             // Use double underscore (__) as the delimiter for nested config paths
             // Example: CONSTRAINT_ENFORCER_NATS__URL maps to nats.url
             .merge(Env::prefixed("CONSTRAINT_ENFORCER_").split("__"))
             .extract()
             .map_err(|e| TaleTrailError::ConfigError(format!("Config error: {}", e)))?;
 
-        debug!("🔧 Layer 2: Applied CONSTRAINT_ENFORCER_* environment variable overrides");
+        debug!("🔧 Layer 3: Applied CONSTRAINT_ENFORCER_* environment variable overrides");
 
         debug!(
             service_name = %config.service.name,
             nats_url = %config.nats.url,
             vocabulary_check_enabled = config.constraints.vocabulary_check_enabled,
+            provider_type = ?config.llm.provider.provider_type,
+            llm_url = %config.llm.provider.url,
+            default_model = %config.llm.provider.default_model,
             "✅ Final merged configuration"
         );
 
@@ -306,10 +372,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [constraints]
 vocabulary_check_enabled = true
@@ -375,10 +442,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [constraints]
 vocabulary_check_enabled = true
@@ -438,10 +506,11 @@ url = "nats://custom:5222"
 subject = "custom.subject"
 queue_group = "custom-group"
 
+[nats.auth]
+nkey_file = "./custom.nk"
+
 [nats.tls]
 ca_cert = "./custom-ca.pem"
-client_cert = "./custom-client.pem"
-client_key = "./custom-key.pem"
 
 [constraints]
 vocabulary_check_enabled = true
@@ -501,10 +570,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [constraints]
 vocabulary_check_enabled = false
@@ -565,10 +635,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [constraints]
 vocabulary_check_enabled = true
@@ -627,10 +698,11 @@ url = "nats://localhost:5222"
 subject = "test.subject"
 queue_group = "test-group"
 
+[nats.auth]
+nkey_file = "./test.nk"
+
 [nats.tls]
 ca_cert = "./test-ca.pem"
-client_cert = "./test-client.pem"
-client_key = "./test-key.pem"
 
 [constraints]
 vocabulary_check_enabled = true
