@@ -240,19 +240,20 @@ Templates for the `orchestrator` MCP server:
 Orchestrate the complete story generation pipeline, coordinating all services.
 
 ```bash
-nats-cli send --subject generation.request \
+nats-cli send --subject mcp.orchestrator.request \
   --template templates/orchestrator/generate_story.json
 ```
 
 **Arguments:**
-- `theme` (string): Story theme (e.g., "Ocean Adventure", "Space Adventure")
-- `age_group` (string): Target age group (e.g., "6-8", "9-11")
-- `language` (string): Language code (e.g., "en")
-- `node_count` (number): Number of story nodes to generate
-- `tenant_id` (number): Tenant identifier
-- `educational_goals` (array): List of educational objectives
-- `vocabulary_level` (string): Vocabulary complexity level (e.g., "basic", "intermediate", "advanced")
-- `required_elements` (array): Must-have content elements (e.g., "moral lesson", "educational content")
+- `generation_request` (object): Complete story generation request
+  - `theme` (string): Story theme (e.g., "Ocean Adventure", "Space Adventure")
+  - `age_group` (string): Target age group (e.g., "6-8", "9-11")
+  - `language` (string): Language code (e.g., "en")
+  - `node_count` (number): Number of story nodes to generate
+  - `tenant_id` (number): Tenant identifier
+  - `educational_goals` (array): List of educational objectives
+  - `vocabulary_level` (string): Vocabulary complexity level (e.g., "basic", "intermediate", "advanced")
+  - `required_elements` (array): Must-have content elements (e.g., "moral lesson about protecting ocean life", "factual information about marine ecosystems")
 
 ## Creating Custom Templates
 

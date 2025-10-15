@@ -207,10 +207,10 @@ users: [
     nkey: "$(cat orchestrator.pub)"
     permissions: {
       publish: {
-        allow: ["mcp.orchestrator.>", "mcp.story.>", "mcp.quality.>", "mcp.constraint.>", "mcp.prompt.>"]
+        allow: ["mcp.orchestrator.>", "mcp.story.>", "mcp.quality.>", "mcp.constraint.>", "mcp.prompt.>", "mcp.events.>", "_INBOX.>"]
       }
       subscribe: {
-        allow: ["mcp.events.>", "mcp.*.response.>"]
+        allow: ["mcp.orchestrator.request", "mcp.events.>", "mcp.*.response.>", "_INBOX.>"]
       }
     }
   },

@@ -27,8 +27,8 @@ ca_cert = "../certs/ca.pem"
 
 [generation]
 timeout_secs = 180
-batch_size_min = 4
-batch_size_max = 6
+batch_size_min = 2
+batch_size_max = 2
 target_words_per_node = 400
 
 [llm]

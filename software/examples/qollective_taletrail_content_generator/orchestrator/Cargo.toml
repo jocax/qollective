@@ -10,6 +10,9 @@ path = "src/main.rs"
 [dependencies]
 shared-types = { path = "../shared-types" }
 shared-types-llm = { path = "../shared-types-llm" }
+story-generator = { path = "../story-generator" }
+quality-control = { path = "../quality-control" }
+constraint-enforcer = { path = "../constraint-enforcer" }
 qollective = { workspace = true, features = [
     "mcp-client",  # MCP client to communicate with MCP servers
     "nats",        # NATS transport layer

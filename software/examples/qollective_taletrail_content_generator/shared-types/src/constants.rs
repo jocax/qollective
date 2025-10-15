@@ -19,20 +19,39 @@ pub const NATS_TLS_CLIENT_KEY_PATH: &str = "./certs/client-key.pem";
 // ============================================================================
 // MCP PROMPT-HELPER SUBJECTS
 // ============================================================================
+//
+// ARCHITECTURAL NOTE: Single Subject Pattern
+//
+// The prompt-helper service uses a SINGLE NATS subject ("mcp.prompt.helper")
+// for all operations. Tool differentiation happens via the MCP `tool_name` field
+// in the envelope, not through different NATS subjects.
+//
+// This design:
+// - Simplifies service deployment (single subscription point)
+// - Enables proper MCP tool routing via envelope metadata
+// - Allows queue group load balancing across all tools
+// - Maintains backward compatibility through these named constants
+//
+// All MCP_PROMPT_* constants below point to the same subject for clarity
+// in calling code, but the actual routing is handled by the MCP tool_name.
+// ============================================================================
 
-/// MCP subject for story prompt generation
-pub const MCP_PROMPT_STORY: &str = "mcp.prompt.generate_story";
+/// MCP prompt-helper service base subject (all tools listen here)
+pub const MCP_PROMPT_HELPER: &str = "mcp.prompt.helper";
 
-/// MCP subject for validation prompt generation
-pub const MCP_PROMPT_VALIDATION: &str = "mcp.prompt.generate_validation";
+/// MCP subject for story prompt generation (routes to generate_story_prompt tool)
+pub const MCP_PROMPT_STORY: &str = "mcp.prompt.helper";
 
-/// MCP subject for constraint prompt generation
-pub const MCP_PROMPT_CONSTRAINT: &str = "mcp.prompt.generate_constraint";
+/// MCP subject for validation prompt generation (routes to generate_validation_prompt tool)
+pub const MCP_PROMPT_VALIDATION: &str = "mcp.prompt.helper";
 
-/// MCP subject for model-for-language lookup
-pub const MCP_PROMPT_MODEL: &str = "mcp.prompt.get_model";
+/// MCP subject for constraint prompt generation (routes to generate_constraint_prompt tool)
+pub const MCP_PROMPT_CONSTRAINT: &str = "mcp.prompt.helper";
 
-/// MCP subject for health checks (optional)
+/// MCP subject for model-for-language lookup (routes to get_model_for_language tool)
+pub const MCP_PROMPT_MODEL: &str = "mcp.prompt.helper";
+
+/// MCP subject for health checks (optional, routes to health tool if implemented)
 pub const MCP_PROMPT_HEALTH: &str = "mcp.prompt.health";
 
 // ============================================================================

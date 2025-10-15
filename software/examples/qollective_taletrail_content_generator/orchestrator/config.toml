@@ -46,8 +46,8 @@ system_prompt_style = "native"
 en = "local-model"
 
 [pipeline]
-generation_timeout_secs = 60
-validation_timeout_secs = 10
+generation_timeout_secs = 120
+validation_timeout_secs = 45
 retry_max_attempts = 3
 retry_base_delay_secs = 1
 retry_max_delay_secs = 30

@@ -3,10 +3,9 @@
 //! Main service entry point that listens for generation requests via NATS
 //! and orchestrates the complete content generation pipeline.
 
-use futures::stream::StreamExt;
-use orchestrator::{Orchestrator, OrchestratorConfig};
+use orchestrator::{Orchestrator, OrchestratorConfig, OrchestratorHandler};
 use shared_types::*;
-use tracing::{error, info, warn};
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -59,7 +58,7 @@ async fn main() -> Result<()> {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    // Connect to NATS with NKey authentication
+    // Connect to NATS with NKey authentication (needed for both server and orchestrator)
     let mut connect_options = async_nats::ConnectOptions::new();
 
     // Configure NKey authentication
@@ -96,78 +95,100 @@ async fn main() -> Result<()> {
 
     connect_options = connect_options.tls_client_config(tls_client);
 
+    // Configure request timeout for long-running MCP operations
+    connect_options = connect_options.request_timeout(Some(
+        std::time::Duration::from_secs(config.pipeline.generation_timeout_secs)
+    ));
+
     info!("Connecting to NATS at {} with NKey authentication and TLS...", config.nats.url);
     let nats_client = connect_options
         .connect(&config.nats.url)
         .await
         .map_err(|e| TaleTrailError::NatsError(format!("Failed to connect to NATS: {}", e)))?;
 
-    info!("✅ Connected to NATS with NKey authentication");
+    info!("✅ Connected to NATS with NKey authentication and TLS");
 
-    // Create orchestrator
+    // Create orchestrator with NATS client (orchestrator needs to call other MCP services)
     let orchestrator = std::sync::Arc::new(Orchestrator::new(
         std::sync::Arc::new(nats_client.clone()),
         config.clone(),
     ));
+    info!("✅ Created Orchestrator with envelope support");
 
-    // Subscribe to orchestrator requests
+    // Create handler
+    let handler = OrchestratorHandler::new(orchestrator);
+    info!("✅ Created OrchestratorHandler with envelope support");
+
+    // Subscribe to orchestrator requests using queue group
     let mut subscriber = nats_client
-        .subscribe(config.nats.subject.clone())
+        .queue_subscribe(config.nats.subject.clone(), config.nats.queue_group.clone())
         .await
         .map_err(|e| TaleTrailError::NatsError(e.to_string()))?;
 
-    info!("✅ Listening on {}", config.nats.subject);
-    info!("Orchestrator ready - waiting for requests...");
+    info!("✅ Subscribed to '{}' with queue group '{}'",
+        config.nats.subject, config.nats.queue_group);
+    info!("   Automatic envelope decoding/encoding enabled");
+    info!("");
+    info!("Orchestrator MCP Server is running. Press Ctrl+C to shutdown.");
+    info!("Architecture: Envelope-first with queue group load balancing");
+    info!("Tool available: orchestrate_generation");
+    info!("");
 
-    // Handle requests
+    // Handle requests using envelope-first pattern
+    use qollective::server::EnvelopeHandler;
+    use qollective::envelope::nats_codec::NatsEnvelopeCodec;
+    use qollective::types::mcp::McpData;
+    use qollective::envelope::Envelope;
+    use futures::stream::StreamExt;
+
     loop {
         tokio::select! {
             Some(message) = subscriber.next() => {
-                let orch = orchestrator.clone();
+                let handler_clone = handler.clone();
                 let nats = nats_client.clone();
 
                 tokio::spawn(async move {
-                    // Deserialize request
-                    let request: GenerationRequest = match serde_json::from_slice(&message.payload) {
-                        Ok(req) => req,
+                    // Decode envelope from NATS message
+                    let envelope: Envelope<McpData> = match NatsEnvelopeCodec::decode(&message.payload) {
+                        Ok(env) => env,
                         Err(e) => {
-                            error!("Failed to deserialize request: {}", e);
+                            tracing::error!("Failed to decode envelope: {}", e);
                             return;
                         }
                     };
 
-                    info!("Received generation request for theme: {}", request.theme);
-
-                    // Execute orchestration
-                    match orch.orchestrate_generation(request).await {
-                        Ok(response) => {
-                            // Send response
-                            if let Some(reply) = message.reply {
-                                let response_bytes = match serde_json::to_vec(&response) {
-                                    Ok(bytes) => bytes,
-                                    Err(e) => {
-                                        error!("Failed to serialize response: {}", e);
-                                        return;
+                    // Process with handler
+                    match handler_clone.handle(envelope).await {
+                        Ok(response_envelope) => {
+                            // Encode response envelope
+                            match NatsEnvelopeCodec::encode(&response_envelope) {
+                                Ok(response_bytes) => {
+                                    // Send response if reply subject exists
+                                    if let Some(reply) = message.reply {
+                                        if let Err(e) = nats.publish(reply, response_bytes.into()).await {
+                                            tracing::error!("Failed to send response: {}", e);
+                                        }
                                     }
-                                };
-
-                                if let Err(e) = nats.publish(reply, response_bytes.into()).await {
-                                    error!("Failed to send response: {}", e);
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to encode response: {}", e);
                                 }
                             }
                         }
                         Err(e) => {
-                            error!("Orchestration failed: {}", e);
+                            tracing::error!("Handler error: {}", e);
                         }
                     }
                 });
             }
             _ = tokio::signal::ctrl_c() => {
-                warn!("Received Ctrl+C, shutting down gracefully...");
+                info!("Received shutdown signal");
                 break;
             }
         }
     }
+
+    info!("✅ Shutdown complete");
 
     Ok(())
 }

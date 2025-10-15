@@ -188,9 +188,9 @@ impl OrchestratorConfig {
 
         let figment = Figment::new()
             // Layer 1: Base config from TOML file (lowest priority)
-            .merge(Toml::file("orchestrator/config.toml"));
+            .merge(Toml::file("config.toml"));
 
-        debug!("📄 Layer 1: Loaded base config from orchestrator/config.toml");
+        debug!("📄 Layer 1: Loaded base config from config.toml");
 
         let figment = figment
             // Layer 2: LLM-specific environment variables (map to nested llm.provider and llm.models sections)

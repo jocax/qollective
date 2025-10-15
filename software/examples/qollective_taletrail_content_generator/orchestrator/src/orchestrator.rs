@@ -41,6 +41,9 @@ use rmcp::model::{
     CallToolRequest, CallToolRequestMethod, CallToolRequestParam, Extensions,
 };
 use shared_types::*;
+use story_generator::mcp_tools::{GenerateStructureResponse, GenerateNodesResponse};
+use quality_control::envelope_handlers::ValidateContentResponse;
+use constraint_enforcer::envelope_handlers::EnforceConstraintsResponse;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -284,6 +287,10 @@ impl Orchestrator {
             .get(&MCPServiceType::StoryGenerator)
             .ok_or_else(|| TaleTrailError::GenerationError("Missing story prompts".to_string()))?;
 
+        // Create updated request with prompt packages following envelope-first architecture
+        let mut updated_request = request.clone();
+        updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
+
         // Create metadata for this request
         let meta = self.create_meta(request, request_id);
 
@@ -295,13 +302,8 @@ impl Orchestrator {
                 arguments: Some({
                     let mut map = serde_json::Map::new();
                     map.insert(
-                        "request".to_string(),
-                        serde_json::to_value(request)
-                            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
-                    );
-                    map.insert(
-                        "prompts".to_string(),
-                        serde_json::to_value(story_prompts)
+                        "generation_request".to_string(),
+                        serde_json::to_value(&updated_request)
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
                     map
@@ -310,16 +312,17 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        let dag: DAG = self
+        let response: GenerateStructureResponse = self
             .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
             .await?;
+        let dag = response.dag;
 
         // Publish event
         self.event_publisher
             .publish_event(PipelineEvent::StructureCreated {
                 request_id: request_id.to_string(),
                 node_count: dag.nodes.len(),
-                convergence_points: 0, // TODO: Calculate from DAG
+                convergence_points: response.convergence_point_count,
             })
             .await?;
 
@@ -388,6 +391,10 @@ impl Orchestrator {
 
             let start = std::time::Instant::now();
 
+            // Create updated request with prompt packages following envelope-first architecture
+            let mut updated_request = request.clone();
+            updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
+
             // Create metadata for this batch
             let meta = self.create_meta(request, request_id);
 
@@ -409,8 +416,8 @@ impl Orchestrator {
                                 .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                         );
                         map.insert(
-                            "prompts".to_string(),
-                            serde_json::to_value(story_prompts)
+                            "generation_request".to_string(),
+                            serde_json::to_value(&updated_request)
                                 .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                         );
                         map
@@ -419,9 +426,10 @@ impl Orchestrator {
                 extensions: Extensions::default(),
             };
 
-            let generated_nodes: Vec<ContentNode> = self
+            let response: GenerateNodesResponse = self
                 .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
                 .await?;
+            let generated_nodes = response.nodes;
 
             // Update DAG with generated content
             for gen_node in generated_nodes {
@@ -509,6 +517,10 @@ impl Orchestrator {
     ) -> Result<ValidationResult> {
         let validation_prompts = prompts.get(&MCPServiceType::QualityControl);
 
+        // Create updated request with prompt packages following envelope-first architecture
+        let mut updated_request = request.clone();
+        updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
+
         // Create metadata for this validation
         let meta = self.create_meta(request, request_id);
 
@@ -523,21 +535,21 @@ impl Orchestrator {
                         serde_json::to_value(node)
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
-                    if let Some(p) = validation_prompts {
-                        map.insert(
-                            "prompts".to_string(),
-                            serde_json::to_value(p)
-                                .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
-                        );
-                    }
+                    map.insert(
+                        "generation_request".to_string(),
+                        serde_json::to_value(&updated_request)
+                            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
+                    );
                     map
                 }),
             },
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&constants::MCP_QUALITY_VALIDATE, tool_request, meta)
-            .await
+        let response: ValidateContentResponse = self
+            .call_mcp_tool(&constants::MCP_QUALITY_VALIDATE, tool_request, meta)
+            .await?;
+        Ok(response.validation_result)
     }
 
     /// Validate node constraints
@@ -551,6 +563,10 @@ impl Orchestrator {
         request_id: &str,
     ) -> Result<ConstraintResult> {
         let constraint_prompts = prompts.get(&MCPServiceType::ConstraintEnforcer);
+
+        // Create updated request with prompt packages following envelope-first architecture
+        let mut updated_request = request.clone();
+        updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
 
         // Create metadata for this validation
         let meta = self.create_meta(request, request_id);
@@ -566,21 +582,21 @@ impl Orchestrator {
                         serde_json::to_value(node)
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
-                    if let Some(p) = constraint_prompts {
-                        map.insert(
-                            "prompts".to_string(),
-                            serde_json::to_value(p)
-                                .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
-                        );
-                    }
+                    map.insert(
+                        "generation_request".to_string(),
+                        serde_json::to_value(&updated_request)
+                            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
+                    );
                     map
                 }),
             },
             extensions: Extensions::default(),
         };
 
-        self.call_mcp_tool(&constants::MCP_CONSTRAINT_ENFORCE, tool_request, meta)
-            .await
+        let response: EnforceConstraintsResponse = self
+            .call_mcp_tool(&constants::MCP_CONSTRAINT_ENFORCE, tool_request, meta)
+            .await?;
+        Ok(response.constraint_result)
     }
 
     /// Phase 5: Assemble final response
@@ -673,6 +689,54 @@ impl Orchestrator {
         };
 
         Ok(response)
+    }
+
+    /// Convert prompt packages from internal format to GenerationRequest format
+    ///
+    /// Transforms HashMap<MCPServiceType, PromptPackage> into the nested Option
+    /// structure required by GenerationRequest.prompt_packages field.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompts` - HashMap of service types to prompt packages from Phase 0.5
+    ///
+    /// # Returns
+    ///
+    /// Option<Option<HashMap<String, serde_json::Value>>> for GenerationRequest
+    ///
+    /// # Errors
+    ///
+    /// Returns SerializationError if prompt package cannot be serialized
+    fn convert_prompts_to_request_format(
+        &self,
+        prompts: &HashMap<MCPServiceType, PromptPackage>,
+    ) -> Result<Option<Option<HashMap<String, serde_json::Value>>>> {
+        if prompts.is_empty() {
+            return Ok(None);
+        }
+
+        let mut prompt_map = HashMap::new();
+
+        for (service_type, prompt_package) in prompts {
+            // Convert enum to string key
+            let key = match service_type {
+                MCPServiceType::StoryGenerator => "story_generator",
+                MCPServiceType::QualityControl => "quality_control",
+                MCPServiceType::ConstraintEnforcer => "constraint_enforcer",
+                MCPServiceType::PromptHelper => "prompt_helper",
+                MCPServiceType::Orchestrator => "orchestrator",
+            };
+
+            // Serialize PromptPackage to JSON Value
+            let value = serde_json::to_value(prompt_package)
+                .map_err(|e| TaleTrailError::SerializationError(
+                    format!("Failed to serialize prompt package for {}: {}", key, e)
+                ))?;
+
+            prompt_map.insert(key.to_string(), value);
+        }
+
+        Ok(Some(Some(prompt_map)))
     }
 
     /// Create metadata for MCP requests
