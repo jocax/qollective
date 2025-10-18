@@ -3,6 +3,7 @@
 //! Provides orchestration logic for coordinating MCP services in the TaleTrail pipeline.
 
 pub mod config;
+pub mod discovery;
 pub mod envelope_handlers;
 pub mod events;
 pub mod mcp_client;
@@ -14,6 +15,7 @@ pub mod retry;
 
 // Re-export key types
 pub use config::OrchestratorConfig;
+pub use discovery::DiscoveryClient;
 pub use envelope_handlers::OrchestratorHandler;
 pub use events::{EventPublisher, PipelineEvent};
 pub use negotiation::{CorrectionPlan, Negotiator, NegotiationRound};

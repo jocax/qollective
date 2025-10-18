@@ -29,6 +29,7 @@
 
 use crate::{
     config::OrchestratorConfig,
+    discovery::DiscoveryClient,
     events::{EventPublisher, PipelineEvent},
     mcp_client::McpEnvelopeClient,
     negotiation::Negotiator,
@@ -89,6 +90,9 @@ pub struct Orchestrator {
 
     /// Negotiator for corrections
     negotiator: Negotiator,
+
+    /// Discovery client for service health checks
+    discovery_client: DiscoveryClient,
 }
 
 impl Orchestrator {
@@ -112,21 +116,24 @@ impl Orchestrator {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(nats_client: Arc<NatsClient>, config: OrchestratorConfig) -> Self {
+    pub async fn new(nats_client: Arc<NatsClient>, config: OrchestratorConfig) -> Result<Self> {
         let event_publisher = EventPublisher::new(
-            (*nats_client).clone(),
+            nats_client.as_ref().clone(),
             constants::MCP_EVENTS_PREFIX.to_string(),
         );
 
-        let prompt_orchestrator = PromptOrchestrator::new(Arc::clone(&nats_client), &config);
+        let prompt_orchestrator = PromptOrchestrator::new(nats_client.clone(), &config);
 
         let negotiator = Negotiator::new(&config);
 
         // Create MCP envelope client with timeout from config
         let mcp_client = McpEnvelopeClient::new(
-            Arc::clone(&nats_client),
+            nats_client.clone(),
             config.pipeline.generation_timeout_secs,
         );
+
+        // Create discovery client
+        let discovery_client = DiscoveryClient::new(nats_client.clone());
 
         // Initial state will be created when orchestrate_generation is called
         // Create a minimal dummy request - will be replaced on first call
@@ -145,7 +152,7 @@ impl Orchestrator {
         };
         let state = Arc::new(Mutex::new(PipelineState::new(dummy_request)));
 
-        Self {
+        let orchestrator = Self {
             nats_client,
             mcp_client,
             config,
@@ -153,7 +160,72 @@ impl Orchestrator {
             event_publisher,
             prompt_orchestrator,
             negotiator,
+            discovery_client,
+        };
+
+        // Run pre-flight check
+        orchestrator.pre_flight_check().await?;
+
+        Ok(orchestrator)
+    }
+
+    /// Run pre-flight discovery check
+    ///
+    /// Discovers all required MCP services and validates they expose the required tools
+    /// before starting orchestration. This prevents runtime failures due to missing services.
+    ///
+    /// # Errors
+    ///
+    /// Returns TaleTrailError if:
+    /// - Required service is not discoverable
+    /// - Required tool is missing from a service
+    async fn pre_flight_check(&self) -> Result<()> {
+        info!("Running pre-flight discovery check...");
+
+        let all_services = self.discovery_client.discover_all_services().await?;
+
+        // Define required tools per service
+        let required_tools = vec![
+            ("story-generator", vec!["generate_structure", "generate_nodes"]),
+            ("quality-control", vec!["validate_content"]),
+            ("constraint-enforcer", vec!["enforce_constraints"]),
+            ("prompt-helper", vec!["generate_story_prompts"]),
+        ];
+
+        for (service_name, required) in required_tools {
+            let tools = all_services.get(service_name).ok_or_else(|| {
+                TaleTrailError::DiscoveryError(format!(
+                    "Required service not found: {}",
+                    service_name
+                ))
+            })?;
+
+            for required_tool in required {
+                if !tools.iter().any(|t| t.tool_name == required_tool) {
+                    return Err(TaleTrailError::DiscoveryError(format!(
+                        "Missing required tool {} from service {}",
+                        required_tool, service_name
+                    )));
+                }
+            }
+
+            info!(
+                "✅ Discovered {} with {} tools: {:?}",
+                service_name,
+                tools.len(),
+                tools.iter().map(|t| &t.tool_name).collect::<Vec<_>>()
+            );
         }
+
+        // Log warnings for optional tools
+        if let Some(qc_tools) = all_services.get("quality-control") {
+            if !qc_tools.iter().any(|t| t.tool_name == "batch_validate") {
+                tracing::warn!("Optional tool batch_validate not available from quality-control");
+            }
+        }
+
+        info!("✅ Pre-flight discovery check passed");
+        Ok(())
     }
 
     /// Main orchestration method - coordinates complete pipeline

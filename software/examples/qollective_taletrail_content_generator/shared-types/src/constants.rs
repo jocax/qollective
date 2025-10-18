@@ -137,3 +137,20 @@ pub const DEFAULT_NODE_COUNT: usize = 16;
 
 /// Ratio for convergence point placement (0.0-1.0)
 pub const CONVERGENCE_POINT_RATIO: f64 = 0.5;
+
+// ============================================================================
+// MCP DISCOVERY PROTOCOL
+// ============================================================================
+
+/// MCP discovery subject for listing all tools
+pub const MCP_DISCOVERY_LIST_TOOLS: &str = "mcp.discovery.list_tools";
+
+/// MCP discovery subject for health checks
+pub const MCP_DISCOVERY_HEALTH: &str = "mcp.discovery.health";
+
+/// MCP discovery subject for service-specific info (append service name at runtime)
+/// Example: "mcp.discovery.service.story-generator"
+pub const MCP_DISCOVERY_SERVICE_INFO: &str = "mcp.discovery.service";
+
+/// Discovery cache TTL in seconds (5 minutes)
+pub const DISCOVERY_CACHE_TTL_SECS: u64 = 300;

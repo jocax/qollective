@@ -3,6 +3,7 @@
 //! Core functionality for the Story Generator MCP Server.
 
 pub mod config;
+pub mod discovery;
 pub mod envelope_handlers;
 pub mod tool_handlers;
 pub mod llm;

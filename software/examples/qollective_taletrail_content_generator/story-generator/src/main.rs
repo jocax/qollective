@@ -37,6 +37,7 @@ use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
 mod config;
+mod discovery;
 mod envelope_handlers;
 mod tool_handlers;
 mod llm;
@@ -48,6 +49,7 @@ mod structure;
 use config::StoryGeneratorConfig;
 use llm::StoryLlmClient;
 use envelope_handlers::StoryGeneratorHandler;
+use discovery::{DiscoveryHandler, HealthHandler};
 use shared_types::*;
 
 #[tokio::main]
@@ -124,6 +126,28 @@ async fn main() -> Result<()> {
     info!("✅ Subscribed to '{}' with queue group '{}'",
         app_config.nats.subject, app_config.nats.queue_group);
     info!("   Automatic envelope decoding/encoding enabled");
+
+    // Subscribe to discovery endpoint
+    let discovery_subject = format!("{}.{}", MCP_DISCOVERY_LIST_TOOLS, "story-generator");
+    let discovery_handler = DiscoveryHandler::new();
+    nats_server.subscribe_queue_group(
+        &discovery_subject,
+        &app_config.nats.queue_group,
+        discovery_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to discovery: {}", e)))?;
+    info!("✅ Subscribed to discovery endpoint: '{}'", discovery_subject);
+
+    // Subscribe to health endpoint
+    let health_subject = format!("{}.{}", MCP_DISCOVERY_HEALTH, "story-generator");
+    let health_handler = HealthHandler::new();
+    nats_server.subscribe_queue_group(
+        &health_subject,
+        &app_config.nats.queue_group,
+        health_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to health: {}", e)))?;
+    info!("✅ Subscribed to health endpoint: '{}'", health_subject);
 
     // Start processing messages
     nats_server.start().await

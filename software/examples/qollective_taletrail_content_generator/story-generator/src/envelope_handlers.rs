@@ -36,6 +36,9 @@ use crate::tool_handlers::{
     handle_generate_nodes,
     handle_validate_paths,
 };
+use shared_types::types::tool_registration::{ToolRegistration, ServiceCapabilities};
+use schemars::schema_for;
+use serde_json::json;
 
 /// Handler for story-generator MCP requests over NATS with envelope support
 ///
@@ -81,6 +84,40 @@ impl StoryGeneratorHandler {
             config: Arc::new(config),
             llm_client: Arc::new(llm_client),
         }
+    }
+
+    /// Get tool registrations for discovery protocol
+    ///
+    /// Returns metadata about all tools provided by this service including
+    /// JSON schemas, capabilities, and service version information.
+    ///
+    /// # Returns
+    ///
+    /// Vec<ToolRegistration> containing all available tools
+    pub fn get_tool_registrations() -> Vec<ToolRegistration> {
+        vec![
+            ToolRegistration::new(
+                "generate_structure",
+                json!(schema_for!(GenerateStructureParams)),
+                "story-generator",
+                "0.0.1",
+                vec![ServiceCapabilities::Batching, ServiceCapabilities::Retry],
+            ),
+            ToolRegistration::new(
+                "generate_nodes",
+                json!(schema_for!(GenerateNodesParams)),
+                "story-generator",
+                "0.0.1",
+                vec![ServiceCapabilities::Batching, ServiceCapabilities::Retry],
+            ),
+            ToolRegistration::new(
+                "validate_paths",
+                json!(schema_for!(ValidatePathsParams)),
+                "story-generator",
+                "0.0.1",
+                vec![ServiceCapabilities::Retry],
+            ),
+        ]
     }
 
     /// Route tool call to appropriate handler

@@ -39,6 +39,7 @@ use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
 use constraint_enforcer::config::ConstraintEnforcerConfig;
+use constraint_enforcer::discovery::{DiscoveryHandler, HealthHandler};
 use constraint_enforcer::server::ConstraintEnforcerHandler;
 use shared_types::*;
 
@@ -100,11 +101,13 @@ async fn main() -> Result<()> {
         .map_err(|e| TaleTrailError::NatsError(format!("Failed to create NATS server: {}", e)))?;
     info!("✅ Connected to NATS at {} with TLS", app_config.nats.url);
 
-    // Create handler
+    // Create handlers
     let handler = ConstraintEnforcerHandler::new(app_config.clone());
+    let discovery_handler = DiscoveryHandler::new();
+    let health_handler = HealthHandler::new();
     info!("✅ Created ConstraintEnforcerHandler with envelope support");
 
-    // Subscribe to subject with queue group
+    // Subscribe to main tool execution subject with queue group
     nats_server.subscribe_queue_group(
         &app_config.nats.subject,
         &app_config.nats.queue_group,
@@ -114,6 +117,24 @@ async fn main() -> Result<()> {
     info!("✅ Subscribed to '{}' with queue group '{}'",
         app_config.nats.subject, app_config.nats.queue_group);
     info!("   Automatic envelope decoding/encoding enabled");
+
+    // Subscribe to discovery subject
+    nats_server.subscribe_queue_group(
+        "mcp.discovery.list_tools.constraint-enforcer",
+        &app_config.nats.queue_group,
+        discovery_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to discovery: {}", e)))?;
+    info!("✅ Subscribed to discovery endpoint: mcp.discovery.list_tools.constraint-enforcer");
+
+    // Subscribe to health check subject
+    nats_server.subscribe_queue_group(
+        "mcp.discovery.health.constraint-enforcer",
+        &app_config.nats.queue_group,
+        health_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to health: {}", e)))?;
+    info!("✅ Subscribed to health endpoint: mcp.discovery.health.constraint-enforcer");
 
     // Start processing messages
     nats_server.start().await

@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod constraints;
+pub mod discovery;
 pub mod envelope_handlers;
 pub mod requirements;
 pub mod server;

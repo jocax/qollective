@@ -24,6 +24,7 @@ use qollective::server::EnvelopeHandler;
 use qollective::error::Result;
 use rmcp::model::{CallToolRequest, CallToolResult, Content as McpContent, Tool};
 use schemars::{schema_for, JsonSchema};
+use serde_json::json;
 use std::sync::Arc;
 use std::future::Future;
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::ConstraintEnforcerConfig;
 use crate::constraints::enforce_constraints;
 use shared_types::*;
+use shared_types::types::tool_registration::{ToolRegistration, ServiceCapabilities};
 
 /// Request parameters for enforce_constraints tool
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -99,6 +101,33 @@ impl ConstraintEnforcerHandler {
         Self {
             config: Arc::new(config),
         }
+    }
+
+    /// Get tool registrations for discovery protocol
+    ///
+    /// Returns metadata about all tools provided by this service including
+    /// JSON schemas, capabilities, and service version information.
+    ///
+    /// # Returns
+    ///
+    /// Vec<ToolRegistration> containing all available tools
+    pub fn get_tool_registrations() -> Vec<ToolRegistration> {
+        vec![
+            ToolRegistration::new(
+                "enforce_constraints",
+                json!(schema_for!(EnforceConstraintsParams)),
+                "constraint-enforcer",
+                "0.0.1",
+                vec![ServiceCapabilities::Batching, ServiceCapabilities::Retry],
+            ),
+            ToolRegistration::new(
+                "suggest_corrections",
+                json!(schema_for!(SuggestCorrectionsParams)),
+                "constraint-enforcer",
+                "0.0.1",
+                vec![ServiceCapabilities::Retry],
+            ),
+        ]
     }
 
     /// Route tool call to appropriate handler

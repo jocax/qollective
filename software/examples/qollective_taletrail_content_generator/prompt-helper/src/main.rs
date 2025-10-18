@@ -37,16 +37,18 @@ use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
 mod config;
-mod tool_handlers;
+mod discovery;
+mod envelope_handlers;
 mod llm;
 mod mcp_tools;
 mod server;
 mod templates;
-mod envelope_handlers;
+mod tool_handlers;
 
 use config::PromptHelperConfig;
-use llm::SharedLlmService;
+use discovery::{DiscoveryHandler, HealthHandler};
 use envelope_handlers::PromptHelperHandler;
+use llm::SharedLlmService;
 use shared_types::*;
 
 #[tokio::main]
@@ -108,11 +110,13 @@ async fn main() -> Result<()> {
         .map_err(|e| TaleTrailError::NatsError(format!("Failed to create NATS server: {}", e)))?;
     info!("✅ Connected to NATS at {} with TLS", app_config.nats.url);
 
-    // Create handler
+    // Create handlers
     let handler = PromptHelperHandler::new(app_config.clone(), llm_service);
+    let discovery_handler = DiscoveryHandler::new();
+    let health_handler = HealthHandler::new();
     info!("✅ Created PromptHelperHandler with envelope support");
 
-    // Subscribe to subject with queue group
+    // Subscribe to main tool execution subject with queue group
     nats_server.subscribe_queue_group(
         &app_config.nats.subject,
         &app_config.nats.queue_group,
@@ -122,6 +126,24 @@ async fn main() -> Result<()> {
     info!("✅ Subscribed to '{}' with queue group '{}'",
         app_config.nats.subject, app_config.nats.queue_group);
     info!("   Automatic envelope decoding/encoding enabled");
+
+    // Subscribe to discovery subject
+    nats_server.subscribe_queue_group(
+        "mcp.discovery.list_tools.prompt-helper",
+        &app_config.nats.queue_group,
+        discovery_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to discovery: {}", e)))?;
+    info!("✅ Subscribed to discovery endpoint: mcp.discovery.list_tools.prompt-helper");
+
+    // Subscribe to health check subject
+    nats_server.subscribe_queue_group(
+        "mcp.discovery.health.prompt-helper",
+        &app_config.nats.queue_group,
+        health_handler,
+    ).await
+        .map_err(|e| TaleTrailError::NatsError(format!("Failed to subscribe to health: {}", e)))?;
+    info!("✅ Subscribed to health endpoint: mcp.discovery.health.prompt-helper");
 
     // Start processing messages
     nats_server.start().await

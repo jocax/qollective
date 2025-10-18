@@ -5,12 +5,13 @@
 //! `PromptHelperHandler` which implements `EnvelopeHandler<McpData, McpData>`.
 
 pub mod config;
-pub mod tool_handlers;
+pub mod discovery;
+pub mod envelope_handlers;
 pub mod llm;
 pub mod mcp_tools;
 pub mod server;
 pub mod templates;
-pub mod envelope_handlers;
+pub mod tool_handlers;
 
 // Re-export MCP tool functions for external use
 pub use mcp_tools::{

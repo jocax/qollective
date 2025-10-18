@@ -6,7 +6,9 @@
 use rmcp::model::Tool;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use shared_types::{AgeGroup, Language, VocabularyLevel};
+use shared_types::types::tool_registration::{ToolRegistration, ServiceCapabilities};
 use std::sync::Arc;
 
 // ============================================================================
@@ -181,6 +183,47 @@ pub fn get_all_tools() -> Vec<Tool> {
         create_generate_validation_prompts_tool(),
         create_generate_constraint_prompts_tool(),
         create_get_model_for_language_tool(),
+    ]
+}
+
+/// Get tool registrations for discovery protocol
+///
+/// Returns metadata about all tools provided by this service including
+/// JSON schemas, capabilities, and service version information.
+///
+/// # Returns
+///
+/// Vec<ToolRegistration> containing all available tools
+pub fn get_tool_registrations() -> Vec<ToolRegistration> {
+    vec![
+        ToolRegistration::new(
+            "generate_story_prompts",
+            json!(schema_for!(GenerateStoryPromptsParams)),
+            "prompt-helper",
+            "0.0.1",
+            vec![ServiceCapabilities::Caching, ServiceCapabilities::Retry],
+        ),
+        ToolRegistration::new(
+            "generate_validation_prompts",
+            json!(schema_for!(GenerateValidationPromptsParams)),
+            "prompt-helper",
+            "0.0.1",
+            vec![ServiceCapabilities::Caching, ServiceCapabilities::Retry],
+        ),
+        ToolRegistration::new(
+            "generate_constraint_prompts",
+            json!(schema_for!(GenerateConstraintPromptsParams)),
+            "prompt-helper",
+            "0.0.1",
+            vec![ServiceCapabilities::Caching, ServiceCapabilities::Retry],
+        ),
+        ToolRegistration::new(
+            "get_model_for_language",
+            json!(schema_for!(GetModelForLanguageParams)),
+            "prompt-helper",
+            "0.0.1",
+            vec![ServiceCapabilities::Caching],
+        ),
     ]
 }
 

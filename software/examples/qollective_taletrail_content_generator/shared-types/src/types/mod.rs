@@ -1,6 +1,11 @@
 //! TaleTrail data types
 
+pub mod tool_registration;
+
 use serde::{Deserialize, Serialize};
+
+// Re-export tool registration types
+pub use tool_registration::{DiscoveryInfo, ServiceCapabilities, ToolRegistration};
 
 /// MCP service types in the TaleTrail pipeline
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

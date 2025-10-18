@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
     let orchestrator = std::sync::Arc::new(Orchestrator::new(
         std::sync::Arc::new(nats_client.clone()),
         config.clone(),
-    ));
+    ).await?);
     info!("✅ Created Orchestrator with envelope support");
 
     // Create handler

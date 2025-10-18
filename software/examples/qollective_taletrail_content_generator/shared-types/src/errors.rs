@@ -169,6 +169,16 @@ pub enum TaleTrailError {
     /// - Review state machine logic for invalid transitions
     #[error("Pipeline error: {0}")]
     PipelineError(String),
+
+    /// Service discovery errors (missing services, tool discovery failures)
+    ///
+    /// # Debugging
+    /// - Ensure all required MCP servers are running
+    /// - Check discovery subjects are correct (mcp.discovery.list_tools.*)
+    /// - Verify services are subscribed to their discovery endpoints
+    /// - Review service logs for discovery handler errors
+    #[error("Discovery error: {0}")]
+    DiscoveryError(String),
 }
 
 impl TaleTrailError {
@@ -181,6 +191,7 @@ impl TaleTrailError {
             Self::TimeoutError => Some("Increase timeout values or reduce operation complexity"),
             Self::RetryExhausted => Some("Check logs for underlying error cause"),
             Self::LLMError(_) => Some("Verify LM Studio is running and model is loaded"),
+            Self::DiscoveryError(_) => Some("Ensure all MCP services are running and check discovery subscriptions"),
             _ => None,
         }
     }
@@ -192,7 +203,7 @@ impl TaleTrailError {
             Self::ConfigError(_) => "configuration",
             Self::ValidationError(_) | Self::InvalidRequest(_) => "validation",
             Self::GenerationError(_) | Self::LLMError(_) => "generation",
-            Self::QollectiveError(_) | Self::PipelineError(_) => "framework",
+            Self::QollectiveError(_) | Self::PipelineError(_) | Self::DiscoveryError(_) => "framework",
             Self::TlsCertificateError(_) => "security",
             Self::TimeoutError | Self::RetryExhausted => "reliability",
             Self::SerializationError(_) => "serialization",

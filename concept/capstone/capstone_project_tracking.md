@@ -22,13 +22,15 @@ Project Qollective is planned to be open source and is currently in pre alpha.
    - Create a public github project (shimmy-goes-apple-silicon)[https://github.com/jocax/shimmy-goes-apple-silicon] to build better on apple silicon 
    - Evaluated LM Studio (usable at the moment)
    - Added Support for OpenAI, Google, Anthrophic and the 2 local providers (Shimmy and LM Studio)
-- Implement MCP server "prompt-helper" 🔄
-- Implement MCP server "story-generator" 🔄
+- Implement MCP server "prompt-helper" ✅
+- Implement MCP server "story-generator" ✅
 
 ## Spring 9
 
-- Finish missing MCP Server 📋
-- Finish MCP Client (Orchestrator) 📋
+- Finish missing MCP Server ✅
+- Finish MCP Client (Orchestrator) ✅
+- Initial testing with Google as LLM provider. All MCP's are running but the story generation is not working yet. ⚠️
+- Integration testing LLM 🔥
 
 ## Spring 10
 
@@ -43,3 +45,5 @@ Done ✅
 Progress 🔄
 Planned 📋
 Canceled ❌
+Issue ⚠️
+Critical 🔥
