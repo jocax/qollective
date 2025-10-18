@@ -6,6 +6,8 @@ edition = "2021"
 [features]
 # Mocking feature for test support
 mocking = ["mockall"]
+# Test utilities for envelope testing
+test-utils = []
 
 [dependencies]
 # Generated types
@@ -14,6 +16,7 @@ shared-types-generated = { path = "../shared-types-generated" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
+jsonschema = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
@@ -26,6 +29,7 @@ async-nats = { workspace = true }
 nkeys = "0.4"
 tokio = { workspace = true }
 async-trait = { workspace = true }
+rmcp = { workspace = true }
 
 # Optional dependencies (enabled by features)
 mockall = { workspace = true, optional = true }

@@ -14,6 +14,7 @@
 //! Defaults → config.toml → Environment variables hierarchy.
 
 pub mod constants;
+pub mod contract_tests;
 pub mod custom_metadata;
 pub mod errors;
 pub mod extensions;
@@ -22,6 +23,10 @@ pub mod nats_nkey;
 pub mod payloads;
 pub mod traits;
 pub mod types;
+
+// Test utilities (only available in test builds)
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
 
 // Re-export commonly used items
 pub use constants::*;

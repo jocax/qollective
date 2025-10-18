@@ -531,13 +531,18 @@ impl Orchestrator {
                 arguments: Some({
                     let mut map = serde_json::Map::new();
                     map.insert(
-                        "node".to_string(),
+                        "content_node".to_string(),
                         serde_json::to_value(node)
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
                     map.insert(
-                        "generation_request".to_string(),
-                        serde_json::to_value(&updated_request)
+                        "age_group".to_string(),
+                        serde_json::to_value(&request.age_group)
+                            .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
+                    );
+                    map.insert(
+                        "educational_goals".to_string(),
+                        serde_json::to_value(&request.educational_goals.clone().unwrap_or_default())
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
                     map
@@ -578,7 +583,7 @@ impl Orchestrator {
                 arguments: Some({
                     let mut map = serde_json::Map::new();
                     map.insert(
-                        "node".to_string(),
+                        "content_node".to_string(),
                         serde_json::to_value(node)
                             .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                     );
