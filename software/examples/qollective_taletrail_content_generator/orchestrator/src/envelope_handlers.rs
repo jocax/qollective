@@ -355,6 +355,7 @@ de = "test-model-de"
             negotiation: NegotiationConfig {
                 max_rounds: 3,
             },
+            retry: crate::config::RetryConfig::default(),
         }
     }
 

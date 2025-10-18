@@ -23,6 +23,7 @@ pub mod nats_nkey;
 pub mod payloads;
 pub mod traits;
 pub mod types;
+pub mod validation;
 
 // Test utilities (only available in test builds)
 #[cfg(any(test, feature = "test-utils"))]

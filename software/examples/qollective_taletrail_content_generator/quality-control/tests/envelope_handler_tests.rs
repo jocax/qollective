@@ -162,7 +162,7 @@ async fn test_validate_content_success() {
 
     let params = json!({
         "content_node": content_node,
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": ["reading", "vocabulary"]
     });
 
@@ -196,7 +196,7 @@ async fn test_validate_content_invalid_params() {
 
     // Missing required field: content_node
     let params = json!({
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": []
     });
 
@@ -225,7 +225,7 @@ async fn test_validate_content_tenant_isolation() {
     let content_node = test_content_node("node-1", "Test content");
     let params = json!({
         "content_node": content_node,
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": []
     });
 
@@ -265,7 +265,7 @@ async fn test_batch_validate_success() {
 
     let params = json!({
         "content_nodes": nodes,
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": ["reading"]
     });
 
@@ -316,7 +316,7 @@ async fn test_envelope_metadata_preserved_through_processing() {
     let content_node = test_content_node("node-1", "Test content");
     let params = json!({
         "content_node": content_node,
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": []
     });
 
@@ -387,7 +387,7 @@ async fn test_validate_content_with_safety_violations() {
 
     let params = json!({
         "content_node": content_node,
-        "age_group": "_6To8",
+        "age_group": "6-8",
         "educational_goals": []
     });
 

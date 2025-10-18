@@ -121,12 +121,13 @@ impl QualityControlHandler {
     async fn execute_tool(&self, request: CallToolRequest) -> CallToolResult {
         match request.params.name.as_ref() {
             "validate_content" => {
-                // Deserialize parameters
-                let params: ValidateContentParams = match serde_json::from_value(
-                    serde_json::Value::Object(
-                        request.params.arguments.clone().unwrap_or_default()
-                    )
-                ) {
+                // Deserialize parameters from MCP CallToolRequest arguments
+                // The arguments field is already a Map, convert to Value::Object for deserialization
+                let args_value = serde_json::Value::Object(
+                    request.params.arguments.clone().unwrap_or_default()
+                );
+
+                let params: ValidateContentParams = match serde_json::from_value(args_value) {
                     Ok(p) => p,
                     Err(e) => {
                         tracing::error!("Failed to deserialize validate_content params: {}", e);
@@ -182,12 +183,12 @@ impl QualityControlHandler {
                 }
             }
             "batch_validate" => {
-                // Deserialize parameters
-                let params: BatchValidateParams = match serde_json::from_value(
-                    serde_json::Value::Object(
-                        request.params.arguments.clone().unwrap_or_default()
-                    )
-                ) {
+                // Deserialize parameters from MCP CallToolRequest arguments
+                let args_value = serde_json::Value::Object(
+                    request.params.arguments.clone().unwrap_or_default()
+                );
+
+                let params: BatchValidateParams = match serde_json::from_value(args_value) {
                     Ok(p) => p,
                     Err(e) => {
                         tracing::error!("Failed to deserialize batch_validate params: {}", e);
@@ -471,10 +472,29 @@ mod tests {
 
     /// Create a test QualityControlConfig for testing
     fn test_quality_control_config() -> QualityControlConfig {
+        use shared_types_llm::config::{LlmConfig, ProviderConfig};
+        use shared_types_llm::parameters::{ProviderType, SystemPromptStyle};
+        use std::collections::HashMap;
+
         QualityControlConfig {
             service: ServiceConfig::default(),
             nats: NatsConfig::default(),
             validation: crate::config::ValidationConfig::default(),
+            llm: LlmConfig {
+                provider: ProviderConfig {
+                    provider_type: ProviderType::Shimmy,
+                    url: "http://localhost:11435/v1".to_string(),
+                    api_key: None,
+                    default_model: "test-model".to_string(),
+                    use_default_model_fallback: true,
+                    models: HashMap::new(),
+                    max_tokens: 4096,
+                    temperature: 0.7,
+                    timeout_secs: 60,
+                    system_prompt_style: SystemPromptStyle::Native,
+                },
+                tenants: HashMap::new(),
+            },
             rubrics: crate::config::RubricsConfig {
                 age_6_8: crate::config::AgeGroupConfig {
                     max_sentence_length: 15.0,

@@ -65,3 +65,9 @@ max_depth = 10
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0

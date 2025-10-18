@@ -344,6 +344,7 @@ mod tests {
             negotiation: crate::config::NegotiationConfig {
                 max_rounds: 3,
             },
+            retry: crate::config::RetryConfig::default(),
         }
     }
 

@@ -42,7 +42,9 @@ pub fn validate_content_node(
     );
 
     // Determine if content is valid based on thresholds
-    let is_valid = age_score >= 0.7 && safety_issues.is_empty() && edu_score >= 0.6;
+    // Note: Educational value threshold is lower (0.4) because simple stories for young
+    // children may not explicitly contain educational keywords but still have value
+    let is_valid = age_score >= 0.7 && safety_issues.is_empty() && edu_score >= 0.4;
 
     ValidationResult {
         is_valid,
@@ -105,7 +107,7 @@ fn generate_corrections(
     }
 
     // Generate educational value corrections
-    if edu_score < 0.6 {
+    if edu_score < 0.4 {
         corrections.extend(generate_educational_corrections(content, edu_score));
     }
 

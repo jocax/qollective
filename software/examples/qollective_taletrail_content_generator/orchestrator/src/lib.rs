@@ -10,6 +10,7 @@ pub mod negotiation;
 pub mod orchestrator;
 pub mod pipeline;
 pub mod prompt_orchestration;
+pub mod retry;
 
 // Re-export key types
 pub use config::OrchestratorConfig;

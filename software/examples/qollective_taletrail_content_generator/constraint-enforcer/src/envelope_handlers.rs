@@ -444,6 +444,7 @@ mod tests {
     use qollective::envelope::Meta;
     use rmcp::model::{CallToolRequestParam, CallToolRequestMethod};
     use uuid::Uuid;
+    use shared_types_llm::{LlmConfig, ProviderConfig, ProviderType};
 
     /// Create a test ConstraintEnforcerConfig for testing
     fn test_constraint_enforcer_config() -> ConstraintEnforcerConfig {
@@ -453,6 +454,20 @@ mod tests {
         ConstraintEnforcerConfig {
             service: ServiceConfig::default(),
             nats: NatsConfig::default(),
+            llm: LlmConfig {
+                provider: ProviderConfig {
+                    provider_type: ProviderType::Shimmy,
+                    url: "".to_string(),
+                    api_key: None,
+                    default_model: "".to_string(),
+                    use_default_model_fallback: false,
+                    models: Default::default(),
+                    max_tokens: 0,
+                    temperature: 0.0,
+                    timeout_secs: 0,
+                    system_prompt_style: Default::default(),
+                },
+                tenants: Default::default() },
             constraints: ConstraintsConfig::default(),
             vocabulary: VocabularyConfig {
                 english: LanguageVocabulary {
@@ -535,7 +550,7 @@ mod tests {
 
         let mut meta = Meta::default();
         meta.tenant = Some("test-tenant".to_string());
-        meta.request_id = Some(Uuid::new_v4());
+        meta.request_id = Some(Uuid::now_v7());
 
         let envelope = Envelope::new(meta, mcp_data);
 

@@ -15,6 +15,7 @@ pub struct OrchestratorConfig {
     pub batch: BatchConfig,
     pub dag: DagConfig,
     pub negotiation: NegotiationConfig,
+    pub retry: RetryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +78,14 @@ pub struct DagConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NegotiationConfig {
     pub max_rounds: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryConfig {
+    pub max_attempts: u32,
+    pub initial_delay_ms: u64,
+    pub max_delay_ms: u64,
+    pub backoff_multiplier: f64,
 }
 
 impl Default for ServiceConfig {
@@ -157,6 +166,17 @@ impl Default for NegotiationConfig {
     fn default() -> Self {
         Self {
             max_rounds: 3,
+        }
+    }
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: 3,
+            initial_delay_ms: 100,
+            max_delay_ms: 5000,
+            backoff_multiplier: 2.0,
         }
     }
 }
