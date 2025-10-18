@@ -233,7 +233,7 @@ export NATS_CLI_NATS__URL="nats://production:4222"
 export NATS_CLI_NATS__NKEY_FILE="/path/to/nkey.nk"
 
 # Client settings
-export NATS_CLI_CLIENT__DEFAULT_TIMEOUT_SECS=60
+export NATS_CLI_CLIENT__DEFAULT_TIMEOUT_SECS=180
 export NATS_CLI_CLIENT__DEFAULT_TENANT_ID=42
 export NATS_CLI_CLIENT__LOG_LEVEL="debug"
 ```

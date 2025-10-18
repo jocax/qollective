@@ -1,0 +1,583 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **MCP Tool Registration & Discovery Protocol**
+
+participant "Orchestrator\n(MCP Client)" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Prompt Helper\n(MCP Server)" as PromptHelper #AA96DA
+participant "Story Generator\n(MCP Server)" as StoryGen #8FD9A8
+participant "Quality Control\n(MCP Server)" as QC #FCBAD3
+participant "Constraint Enforcer\n(MCP Server)" as CE #FFA07A
+
+note over Orchestrator, CE
+**Tool Registration & Discovery Architecture**
+
+MCP servers register tools at startup using ToolRegistration metadata.
+Orchestrator discovers tools on-demand with 5-minute TTL caching.
+
+**Key Subjects:**
+- mcp.discovery.list_tools.{service} - List available tools
+- mcp.discovery.health.{service} - Health check
+end note
+
+== Phase 1: MCP Server Startup & Tool Registration ==
+
+activate PromptHelper
+activate StoryGen
+activate QC
+activate CE
+
+note over PromptHelper, CE
+**Servers starting up...**
+Each server initializes:
+1. NATS client with TLS + NKey
+2. EnvelopeHandler for tool execution
+3. DiscoveryHandler for tool listing
+4. HealthHandler for health checks
+end note
+
+PromptHelper -> PromptHelper: **Initialize tool registrations**\nget_tool_registrations()
+
+note right of PromptHelper
+**Prompt Helper Tools:**
+ToolRegistration {
+  tool_name: "generate_story_prompts",
+  input_schema: { type: "object" },
+  service_name: "prompt-helper",
+  service_version: "0.0.1",
+  capabilities: [Caching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "generate_validation_prompts",
+  input_schema: { type: "object" },
+  service_name: "prompt-helper",
+  service_version: "0.0.1",
+  capabilities: [Caching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "generate_constraint_prompts",
+  input_schema: { type: "object" },
+  service_name: "prompt-helper",
+  service_version: "0.0.1",
+  capabilities: [Caching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "get_model_for_language",
+  input_schema: { type: "object" },
+  service_name: "prompt-helper",
+  service_version: "0.0.1",
+  capabilities: [Caching]
+}
+end note
+
+PromptHelper -> NATS: Subscribe to NATS subjects:\n- mcp.prompt.*\n- mcp.discovery.list_tools.prompt-helper\n- mcp.discovery.health.prompt-helper
+activate NATS
+
+NATS -> PromptHelper: Subscription confirmed
+deactivate NATS
+
+PromptHelper -> PromptHelper: **Server ready**\nToolRegistrations: 4 tools
+
+|||
+
+StoryGen -> StoryGen: **Initialize tool registrations**\nStoryGeneratorHandler::get_tool_registrations()
+
+note right of StoryGen
+**Story Generator Tools:**
+ToolRegistration {
+  tool_name: "generate_structure",
+  input_schema: { type: "object" },
+  service_name: "story-generator",
+  service_version: "0.0.1",
+  capabilities: [Batching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "generate_nodes",
+  input_schema: { type: "object" },
+  service_name: "story-generator",
+  service_version: "0.0.1",
+  capabilities: [Batching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "validate_paths",
+  input_schema: { type: "object" },
+  service_name: "story-generator",
+  service_version: "0.0.1",
+  capabilities: [Retry]
+}
+end note
+
+StoryGen -> NATS: Subscribe to NATS subjects:\n- mcp.story.*\n- mcp.discovery.list_tools.story-generator\n- mcp.discovery.health.story-generator
+activate NATS
+
+NATS -> StoryGen: Subscription confirmed
+deactivate NATS
+
+StoryGen -> StoryGen: **Server ready**\nToolRegistrations: 3 tools
+
+|||
+
+QC -> QC: **Initialize tool registrations**\nQualityControlHandler::get_tool_registrations()
+
+note right of QC
+**Quality Control Tools:**
+ToolRegistration {
+  tool_name: "validate_content",
+  input_schema: { type: "object" },
+  service_name: "quality-control",
+  service_version: "0.0.1",
+  capabilities: [Batching, Retry]
+}
+
+ToolRegistration {
+  tool_name: "batch_validate",
+  input_schema: { type: "object" },
+  service_name: "quality-control",
+  service_version: "0.0.1",
+  capabilities: [Batching, Retry]
+}
+end note
+
+QC -> NATS: Subscribe to NATS subjects:\n- mcp.quality.*\n- mcp.discovery.list_tools.quality-control\n- mcp.discovery.health.quality-control
+activate NATS
+
+NATS -> QC: Subscription confirmed
+deactivate NATS
+
+QC -> QC: **Server ready**\nToolRegistrations: 2 tools
+
+|||
+
+CE -> CE: **Initialize tool registrations**\nConstraintEnforcerHandler::get_tool_registrations()
+
+note right of CE
+**Constraint Enforcer Tools:**
+ToolRegistration {
+  tool_name: "enforce_constraints",
+  input_schema: { type: "object" },
+  service_name: "constraint-enforcer",
+  service_version: "0.0.1",
+  capabilities: [Batching, Retry]
+}
+end note
+
+CE -> NATS: Subscribe to NATS subjects:\n- mcp.constraint.*\n- mcp.discovery.list_tools.constraint-enforcer\n- mcp.discovery.health.constraint-enforcer
+activate NATS
+
+NATS -> CE: Subscription confirmed
+deactivate NATS
+
+CE -> CE: **Server ready**\nToolRegistrations: 1 tool
+
+note over PromptHelper, CE
+**All MCP Servers Ready**
+✓ Prompt Helper: 4 tools
+✓ Story Generator: 3 tools
+✓ Quality Control: 2 tools
+✓ Constraint Enforcer: 1 tool
+Total: 10 tools across 4 services
+end note
+
+== Phase 2: Orchestrator Startup & Discovery ==
+
+activate Orchestrator
+
+Orchestrator -> Orchestrator: **Initialize DiscoveryClient**\nwith NATS client
+
+note right of Orchestrator
+**DiscoveryClient Configuration:**
+- Cache TTL: 5 minutes (300 seconds)
+- Parallel discovery: true
+- Services: 4 (all MCP servers)
+end note
+
+Orchestrator -> Orchestrator: discover_all_services()
+
+note right of Orchestrator
+**Services to Discover:**
+1. prompt-helper
+2. story-generator
+3. quality-control
+4. constraint-enforcer
+
+**Discovery Strategy:**
+- Parallel tokio::spawn for each service
+- Aggregate results into HashMap
+- Cache all discoveries
+end note
+
+== Phase 3: Parallel Service Discovery ==
+
+group Parallel Discovery [tokio::spawn for each service]
+
+    par Discover Prompt Helper
+        Orchestrator -> Orchestrator: discover_service_tools(\n  "prompt-helper"\n)
+
+        Orchestrator -> Orchestrator: **Check cache first**\nif cached and TTL valid: return cached
+
+        note right of Orchestrator
+        Cache miss or expired
+        Proceeding with NATS discovery
+        end note
+
+        Orchestrator -> Orchestrator: Create discovery request:\nMcpDiscoveryData {\n  query_type: "list_tools",\n  tools: None,\n  server_info: None\n}
+
+        Orchestrator -> Orchestrator: **Wrap in McpData:**\nMcpData {\n  discovery_data: Some(...)\n}
+
+        Orchestrator -> Orchestrator: **Create envelope metadata:**\nMeta {\n  tenant: "orchestrator",\n  request_id: UUID::new_v4()\n}
+
+        Orchestrator -> Orchestrator: **Wrap in envelope:**\nEnvelope::new(meta, mcp_data)
+
+        Orchestrator -> NATS: request(\n  "mcp.discovery.list_tools.prompt-helper"\n)\n**Envelope<McpData>**
+        activate NATS
+
+        NATS -> PromptHelper: forward discovery request
+        activate PromptHelper
+
+        PromptHelper -> PromptHelper: DiscoveryHandler::handle()\nExtract envelope
+
+        PromptHelper -> PromptHelper: get_tool_registrations()
+
+        PromptHelper -> PromptHelper: Get uptime:\nSystemTime::now() - start_time
+
+        PromptHelper -> PromptHelper: Create DiscoveryInfo {\n  service_id: "prompt-helper",\n  available_tools: [4 tools],\n  health: HealthStatus {\n    is_healthy: true,\n    uptime,\n    error_count: 0\n  }\n}
+
+        PromptHelper -> PromptHelper: **Wrap in McpDiscoveryData:**\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: {\n    server_id: "prompt-helper",\n    tools: [],\n    capabilities: ["Caching", "Retry"],\n    health_status: {...}\n  }\n}
+
+        PromptHelper -> PromptHelper: **Wrap in envelope**\n(preserving metadata)
+
+        PromptHelper -> NATS: publish response
+        deactivate PromptHelper
+
+        NATS -> Orchestrator: deliver response\n**Envelope<McpData>**
+        deactivate NATS
+
+        Orchestrator -> Orchestrator: **Unwrap envelope**\nExtract discovery_data
+
+        Orchestrator -> Orchestrator: parse_tool_registrations(\n  "prompt-helper",\n  discovery_data\n)
+
+        Orchestrator -> Orchestrator: **Cache result:**\nCachedDiscovery {\n  tools: [4 ToolRegistrations],\n  cached_at: Instant::now()\n}
+
+        note right of Orchestrator
+        **Prompt Helper Discovery Complete**
+        ✓ 4 tools discovered
+        ✓ Cached for 5 minutes
+        end note
+
+    else Discover Story Generator
+        Orchestrator -> Orchestrator: discover_service_tools(\n  "story-generator"\n)
+
+        Orchestrator -> NATS: request(\n  "mcp.discovery.list_tools.story-generator"\n)
+        activate NATS
+
+        NATS -> StoryGen: forward discovery request
+        activate StoryGen
+
+        StoryGen -> StoryGen: DiscoveryHandler::handle()
+
+        StoryGen -> StoryGen: StoryGeneratorHandler::get_tool_registrations()
+
+        StoryGen -> StoryGen: Create DiscoveryInfo {\n  service_id: "story-generator",\n  available_tools: [3 tools],\n  health: { is_healthy: true }\n}
+
+        StoryGen -> StoryGen: **Wrap in envelope**
+
+        StoryGen -> NATS: publish response
+        deactivate StoryGen
+
+        NATS -> Orchestrator: deliver response
+        deactivate NATS
+
+        Orchestrator -> Orchestrator: **Cache result:**\n3 tools discovered
+
+        note right of Orchestrator
+        **Story Generator Discovery Complete**
+        ✓ 3 tools discovered
+        ✓ Cached for 5 minutes
+        end note
+
+    else Discover Quality Control
+        Orchestrator -> Orchestrator: discover_service_tools(\n  "quality-control"\n)
+
+        Orchestrator -> NATS: request(\n  "mcp.discovery.list_tools.quality-control"\n)
+        activate NATS
+
+        NATS -> QC: forward discovery request
+        activate QC
+
+        QC -> QC: DiscoveryHandler::handle()
+
+        QC -> QC: QualityControlHandler::get_tool_registrations()
+
+        QC -> QC: Create DiscoveryInfo {\n  service_id: "quality-control",\n  available_tools: [2 tools],\n  health: { is_healthy: true }\n}
+
+        QC -> QC: **Wrap in envelope**
+
+        QC -> NATS: publish response
+        deactivate QC
+
+        NATS -> Orchestrator: deliver response
+        deactivate NATS
+
+        Orchestrator -> Orchestrator: **Cache result:**\n2 tools discovered
+
+        note right of Orchestrator
+        **Quality Control Discovery Complete**
+        ✓ 2 tools discovered
+        ✓ Cached for 5 minutes
+        end note
+
+    else Discover Constraint Enforcer
+        Orchestrator -> Orchestrator: discover_service_tools(\n  "constraint-enforcer"\n)
+
+        Orchestrator -> NATS: request(\n  "mcp.discovery.list_tools.constraint-enforcer"\n)
+        activate NATS
+
+        NATS -> CE: forward discovery request
+        activate CE
+
+        CE -> CE: DiscoveryHandler::handle()
+
+        CE -> CE: ConstraintEnforcerHandler::get_tool_registrations()
+
+        CE -> CE: Create DiscoveryInfo {\n  service_id: "constraint-enforcer",\n  available_tools: [1 tool],\n  health: { is_healthy: true }\n}
+
+        CE -> CE: **Wrap in envelope**
+
+        CE -> NATS: publish response
+        deactivate CE
+
+        NATS -> Orchestrator: deliver response
+        deactivate NATS
+
+        Orchestrator -> Orchestrator: **Cache result:**\n1 tool discovered
+
+        note right of Orchestrator
+        **Constraint Enforcer Discovery Complete**
+        ✓ 1 tool discovered
+        ✓ Cached for 5 minutes
+        end note
+    end
+end
+
+Orchestrator -> Orchestrator: **Aggregate discovery results:**\nHashMap<String, Vec<ToolRegistration>> {\n  "prompt-helper": [4 tools],\n  "story-generator": [3 tools],\n  "quality-control": [2 tools],\n  "constraint-enforcer": [1 tool]\n}
+
+note right of Orchestrator
+**Discovery Complete**
+✓ 4 services discovered
+✓ 10 total tools available
+✓ All services healthy
+✓ Results cached for 5 minutes
+end note
+
+== Phase 4: Health Check Validation ==
+
+Orchestrator -> Orchestrator: **Optional: Verify service health**\ncheck_service_health("story-generator")
+
+Orchestrator -> Orchestrator: Create health request:\nMcpDiscoveryData {\n  query_type: "health"\n}
+
+Orchestrator -> Orchestrator: **Wrap in envelope**
+
+Orchestrator -> NATS: request(\n  "mcp.discovery.health.story-generator"\n)
+activate NATS
+
+NATS -> StoryGen: forward health request
+activate StoryGen
+
+StoryGen -> StoryGen: HealthHandler::handle()
+
+StoryGen -> StoryGen: Get uptime, error count
+
+StoryGen -> StoryGen: Create health response:\nHealthStatus {\n  is_healthy: true,\n  last_check: SystemTime::now(),\n  response_time: 0ms,\n  error_count: 0,\n  uptime: Xs\n}
+
+StoryGen -> StoryGen: **Wrap in McpDiscoveryData:**\nMcpDiscoveryData {\n  query_type: "health_response",\n  server_info: { health_status }\n}
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Extract health_status**\nCheck is_healthy flag
+
+Orchestrator -> Orchestrator: Return bool: true
+
+note right of Orchestrator
+**Health Check Complete**
+✓ Service healthy
+✓ Uptime: Xs
+✓ No errors
+end note
+
+== Phase 5: Runtime - Cache Hit ==
+
+note over Orchestrator
+**5 minutes later...**
+Client request arrives
+Need to discover tools again
+end note
+
+Orchestrator -> Orchestrator: discover_service_tools(\n  "prompt-helper"\n)
+
+Orchestrator -> Orchestrator: **Check cache:**\nif cached.cached_at.elapsed() < 300s
+
+note right of Orchestrator
+**Cache Hit!**
+Cached data age: 180 seconds
+TTL: 300 seconds
+Remaining: 120 seconds
+end note
+
+Orchestrator -> Orchestrator: Return cached tools:\n[4 ToolRegistrations]
+
+note right of Orchestrator
+**No NATS request needed**
+✓ Cached data still valid
+✓ Faster response time
+✓ Reduced NATS traffic
+end note
+
+== Phase 6: Runtime - Cache Expiry ==
+
+note over Orchestrator
+**10 minutes later...**
+Cache has expired (> 5 minutes)
+New discovery required
+end note
+
+Orchestrator -> Orchestrator: discover_service_tools(\n  "prompt-helper"\n)
+
+Orchestrator -> Orchestrator: **Check cache:**\nif cached.cached_at.elapsed() < 300s
+
+note right of Orchestrator
+**Cache Expired!**
+Cached data age: 610 seconds
+TTL: 300 seconds
+Must refresh from source
+end note
+
+Orchestrator -> NATS: request(\n  "mcp.discovery.list_tools.prompt-helper"\n)\n**Fresh discovery request**
+activate NATS
+
+NATS -> PromptHelper: forward discovery request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: DiscoveryHandler::handle()
+
+PromptHelper -> PromptHelper: get_tool_registrations()
+
+PromptHelper -> PromptHelper: **Wrap in envelope**
+
+PromptHelper -> NATS: publish response
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Update cache:**\nCachedDiscovery {\n  tools: [4 ToolRegistrations],\n  cached_at: Instant::now()\n}
+
+note right of Orchestrator
+**Cache Refreshed**
+✓ New discovery data
+✓ Cache reset to 0 seconds
+✓ Valid for next 5 minutes
+end note
+
+== Phase 7: Tool Execution with Discovery ==
+
+note over Orchestrator
+**Using discovered tools...**
+Orchestrator now knows all available tools
+and their capabilities
+end note
+
+Orchestrator -> Orchestrator: **Prepare tool call**\nTool: "generate_story_prompts"\nService: "prompt-helper"
+
+Orchestrator -> Orchestrator: **Verify tool exists:**\ncached_tools.contains("generate_story_prompts")
+
+note right of Orchestrator
+**Tool Validated**
+✓ Tool exists in service
+✓ Capabilities: [Caching, Retry]
+✓ Input schema available
+end note
+
+Orchestrator -> Orchestrator: Create CallToolRequest
+
+Orchestrator -> Orchestrator: **Wrap in envelope**
+
+Orchestrator -> NATS: request("mcp.prompt.generate_story")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> PromptHelper: forward tool request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: PromptHelperHandler::handle()\nExecute tool
+
+PromptHelper -> PromptHelper: **Return result**
+
+PromptHelper -> NATS: publish response
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Process result**
+
+note right of Orchestrator
+**Tool Execution Complete**
+✓ Tool discovered via discovery protocol
+✓ Tool capabilities known
+✓ Tool executed successfully
+end note
+
+deactivate Orchestrator
+
+note over Orchestrator, CE
+**Registration & Discovery Summary**
+
+**Registration (Server Startup):**
+1. Each MCP server defines ToolRegistration metadata
+2. Servers subscribe to NATS discovery subjects
+3. DiscoveryHandler and HealthHandler ready
+
+**Discovery (On-Demand):**
+1. Orchestrator queries services via NATS
+2. Services return ToolRegistrations + health status
+3. Results cached with 5-minute TTL
+4. Parallel discovery for all services
+
+**Benefits:**
+✓ Dynamic tool discovery
+✓ Service health monitoring
+✓ Reduced NATS traffic (caching)
+✓ Automatic failover detection
+✓ No hardcoded tool definitions
+end note
+
+@enduml

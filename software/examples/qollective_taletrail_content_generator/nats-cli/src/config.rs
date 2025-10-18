@@ -109,7 +109,7 @@ impl NatsCliConfig {
     ///
     /// # Example Environment Variables
     /// - NATS_CLI_NATS__URL="nats://production:4222"
-    /// - NATS_CLI_CLIENT__DEFAULT_TIMEOUT_SECS=60
+    /// - NATS_CLI_CLIENT__DEFAULT_TIMEOUT_SECS=180
     /// - NATS_CLI_CLIENT__LOG_LEVEL="debug"
     pub fn load() -> Result<Self> {
         let config: Self = Figment::new()

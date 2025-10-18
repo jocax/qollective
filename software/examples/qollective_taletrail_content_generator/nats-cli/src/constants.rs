@@ -40,7 +40,7 @@ pub const DEFAULT_TENANT_ID: i32 = 1;
 // ============================================================================
 
 /// Default request timeout in seconds
-pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+pub const DEFAULT_TIMEOUT_SECS: u64 = 180;
 
 /// Minimum allowed timeout in seconds
 pub const MIN_TIMEOUT_SECS: u64 = 1;

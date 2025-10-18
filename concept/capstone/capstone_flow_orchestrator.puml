@@ -1,0 +1,330 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **Orchestrator (MCP Client) Flow**
+
+participant "Gateway" as Gateway #4ECDC4
+participant "Orchestrator\n(McpEnvelopeClient)" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "MCP Server\n(Generic)" as MCPServer #AA96DA
+
+note over Orchestrator
+**McpEnvelopeClient Architecture**
+- Wraps requests in Envelope<McpData>
+- Timeout: 60 seconds (configurable)
+- Concurrency limit: 100 requests
+- Backpressure via semaphore
+end note
+
+== Discovery Flow ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+Orchestrator -> Orchestrator: Create DiscoveryClient\nwith NATS client
+
+note right of Orchestrator
+**Discovery Cache**
+- TTL: 5 minutes (300s)
+- Parallel discovery of all services
+- Cache invalidation on TTL expiry
+end note
+
+Orchestrator -> Orchestrator: discover_all_services()
+
+group Parallel Discovery [tokio::spawn for each service]
+    Orchestrator -> Orchestrator: Create discovery request:\nMcpDiscoveryData {\n  query_type: "list_tools"\n}
+
+    Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  discovery_data\n})
+
+    Orchestrator -> NATS: publish("mcp.discovery.list_tools.story-generator")\n**Envelope<McpData>**
+    activate NATS
+    NATS -> MCPServer: forward request
+    activate MCPServer
+
+    MCPServer -> MCPServer: DiscoveryHandler::handle()
+    MCPServer -> MCPServer: Get tool registrations
+
+    MCPServer -> NATS: **Envelope<McpData>** response\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: { tools, health }\n}
+    deactivate MCPServer
+    NATS -> Orchestrator: deliver response
+    deactivate NATS
+
+    Orchestrator -> Orchestrator: **Unwrap envelope**\nExtract ToolRegistrations
+
+    Orchestrator -> Orchestrator: **Cache result**\nCachedDiscovery {\n  tools,\n  cached_at: Instant::now()\n}
+end
+
+Orchestrator -> Orchestrator: Validate required tools present
+
+note right of Orchestrator
+**Discovery Complete**
+✓ All services discovered
+✓ Tools cached for 5 minutes
+✓ Health status verified
+end note
+
+== Default Flow: Tool Call ==
+
+Orchestrator -> Orchestrator: Create CallToolRequest\nwith tool arguments
+
+Orchestrator -> Orchestrator: **Acquire semaphore permit**\n(Backpressure control)
+
+note right of Orchestrator
+**Metadata Creation:**
+Meta {
+  tenant: "tenant-12345",
+  request_id: UUID,
+  tracing: { trace_id, span_id }
+}
+end note
+
+Orchestrator -> Orchestrator: **Wrap in McpData:**\nMcpData {\n  tool_call: Some(request)\n}
+
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, mcp_data)
+
+Orchestrator -> Orchestrator: Serialize envelope to bytes
+
+Orchestrator -> NATS: request("mcp.story.generate_structure")\n**Envelope<McpData>**\nTimeout: 60s
+activate NATS
+
+NATS -> MCPServer: forward to subscriber
+activate MCPServer
+
+MCPServer -> MCPServer: EnvelopeHandler::handle()\nExtract tool_call\nExecute tool
+
+MCPServer -> MCPServer: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: CallToolResult\n})
+
+MCPServer -> NATS: publish response\n**Envelope<McpData>**
+deactivate MCPServer
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Deserialize envelope**\nExtract tool_response
+
+Orchestrator -> Orchestrator: **Validate response:**\n- Check is_error flag\n- Extract Content from response\n- Parse JSON from text content
+
+Orchestrator -> Orchestrator: **Release semaphore permit**
+
+Orchestrator -> Gateway: Return result
+deactivate Orchestrator
+
+note over Orchestrator
+**Default Flow Complete**
+✓ Tool executed successfully
+✓ Metadata propagated
+✓ Semaphore released
+end note
+
+== Error Flow: Timeout ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+Orchestrator -> Orchestrator: **Wrap request in envelope**\n(same as default flow)
+
+Orchestrator -> NATS: request("mcp.story.generate_structure")\nTimeout: 60s
+activate NATS
+
+NATS -> MCPServer: forward request
+activate MCPServer
+
+note right of MCPServer
+**Scenario: MCP Server Hangs**
+- Processing takes > 60 seconds
+- Network latency
+- LLM provider timeout
+end note
+
+MCPServer ->x MCPServer: **Processing hangs**
+
+...Waiting (60 seconds)...
+
+Orchestrator ->x NATS: **tokio::time::timeout**\nafter 60 seconds
+deactivate NATS
+deactivate MCPServer
+
+Orchestrator -> Orchestrator: Return TaleTrailError::TimeoutError
+
+note right of Orchestrator
+**Error Logged:**
+tool_name = "generate_structure"
+timeout_secs = 60
+"MCP tool call timed out"
+end note
+
+Orchestrator -> Gateway: Return Err(TimeoutError)
+deactivate Orchestrator
+
+== Error Flow: NATS Communication Failure ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+Orchestrator -> NATS: request("mcp.story.generate_structure")
+activate NATS
+
+NATS ->x Orchestrator: **Connection timeout**\n**No route to subject**
+deactivate NATS
+
+Orchestrator -> Orchestrator: Return TaleTrailError::NatsError
+
+note right of Orchestrator
+**Error Logged:**
+"NATS request failed"
+error message from async_nats
+end note
+
+Orchestrator -> Gateway: Return Err(NatsError)
+deactivate Orchestrator
+
+== Error Flow: Tool Execution Error ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+Orchestrator -> NATS: request("mcp.story.generate_structure")
+activate NATS
+
+NATS -> MCPServer: forward request
+activate MCPServer
+
+MCPServer -> MCPServer: Execute tool\n**LLM failure**\n**Validation error**
+
+MCPServer -> MCPServer: **Create error response:**\nCallToolResult {\n  content: [error message],\n  is_error: Some(true)\n}
+
+MCPServer -> MCPServer: **Wrap in envelope**\n(preserving metadata)
+
+MCPServer -> NATS: publish response
+deactivate MCPServer
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Extract tool_response**\nCheck is_error == true
+
+Orchestrator -> Orchestrator: Return TaleTrailError::GenerationError
+
+note right of Orchestrator
+**Error Content:**
+"MCP tool error: [error details]"
+Logged with tool_name and content
+end note
+
+Orchestrator -> Gateway: Return Err(GenerationError)
+deactivate Orchestrator
+
+== Error Flow: Retry with Exponential Backoff ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+note right of Orchestrator
+**RetryConfig:**
+max_attempts: 3
+initial_delay_ms: 100
+max_delay_ms: 5000
+backoff_multiplier: 2.0
+end note
+
+Orchestrator -> Orchestrator: retry_with_backoff(\n  operation,\n  config,\n  "generate_structure"\n)
+
+loop Attempt 1
+    Orchestrator -> NATS: request("mcp.story.generate_structure")
+    activate NATS
+    NATS ->x Orchestrator: **Network error**
+    deactivate NATS
+
+    Orchestrator -> Orchestrator: **Log warning:**\n"Operation failed, will retry"\nattempt = 1, delay = 100ms
+
+    Orchestrator -> Orchestrator: **Sleep 100ms**
+end
+
+loop Attempt 2
+    Orchestrator -> NATS: request("mcp.story.generate_structure")
+    activate NATS
+    NATS ->x Orchestrator: **Network error**
+    deactivate NATS
+
+    Orchestrator -> Orchestrator: **Log warning:**\n"Operation failed, will retry"\nattempt = 2, delay = 200ms
+
+    Orchestrator -> Orchestrator: **Sleep 200ms**\n(exponential: 100 * 2.0)
+end
+
+loop Attempt 3 (Final)
+    Orchestrator -> NATS: request("mcp.story.generate_structure")
+    activate NATS
+    NATS ->x Orchestrator: **Network error**
+    deactivate NATS
+
+    Orchestrator -> Orchestrator: **Log error:**\n"Operation failed after max retry attempts"\nmax_attempts = 3
+end
+
+Orchestrator -> Gateway: Return Err(last error)
+deactivate Orchestrator
+
+note over Orchestrator
+**Retry Pattern:**
+✓ Exponential backoff delays
+✓ Max delay cap (5000ms)
+✓ Detailed logging per attempt
+✓ Final error returned after max attempts
+end note
+
+== Health Check Flow ==
+
+Orchestrator -> Orchestrator: check_service_health(\n  "story-generator"\n)
+activate Orchestrator
+
+Orchestrator -> Orchestrator: Create health request:\nMcpDiscoveryData {\n  query_type: "health"\n}
+
+Orchestrator -> Orchestrator: **Wrap in envelope**
+
+Orchestrator -> NATS: request("mcp.discovery.health.story-generator")
+activate NATS
+
+NATS -> MCPServer: forward health request
+activate MCPServer
+
+MCPServer -> MCPServer: HealthHandler::handle()\nGet uptime, error count
+
+MCPServer -> MCPServer: Create health response:\nHealthStatus {\n  is_healthy: true,\n  uptime,\n  error_count: 0\n}
+
+MCPServer -> NATS: **Envelope<McpData>** response
+deactivate MCPServer
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Extract health_status**\nCheck is_healthy flag
+
+Orchestrator -> Orchestrator: Return bool (is_healthy)
+deactivate Orchestrator
+
+note over Orchestrator
+**Health Check Complete**
+✓ Service availability verified
+✓ Uptime retrieved
+✓ Error count monitored
+end note
+
+@enduml

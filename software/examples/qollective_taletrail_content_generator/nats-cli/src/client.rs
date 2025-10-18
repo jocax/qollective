@@ -48,14 +48,19 @@ impl NatsClient {
             .to_str()
             .ok_or_else(|| NatsCliError::ConfigError("Invalid CA cert path".to_string()))?;
 
-        // Use shared-types helper for NKEY + TLS connection
-        let client = connect_with_nkey(&config.nats.url, nkey_path, ca_cert_path)
-            .await
-            .map_err(|e| match e {
-                TaleTrailError::NetworkError(msg) => NatsCliError::ConnectionError(msg),
-                TaleTrailError::ConfigError(msg) => NatsCliError::AuthenticationError(msg),
-                _ => NatsCliError::ConnectionError(e.to_string()),
-            })?;
+        // Use shared-types helper for NKEY + TLS connection with configured timeout
+        let client = connect_with_nkey(
+            &config.nats.url,
+            nkey_path,
+            ca_cert_path,
+            Some(config.timeout()),
+        )
+        .await
+        .map_err(|e| match e {
+            TaleTrailError::NetworkError(msg) => NatsCliError::ConnectionError(msg),
+            TaleTrailError::ConfigError(msg) => NatsCliError::AuthenticationError(msg),
+            _ => NatsCliError::ConnectionError(e.to_string()),
+        })?;
 
         info!("{} Connected to NATS successfully", SUCCESS_PREFIX);
 
