@@ -105,6 +105,159 @@ cargo test -p shared-types --features mocking
 - ✅ **Fast** test execution
 - ✅ **Clear** interface boundaries between components
 
+## MCP Tool Registration & Discovery
+
+TaleTrail implements a comprehensive MCP tool registration and discovery protocol that enables the orchestrator to detect available services, validate their capabilities, and perform pre-flight health checks before pipeline execution.
+
+### Discovery Protocol Overview
+
+Services register their MCP tools at startup and respond to discovery requests via NATS subjects. The orchestrator uses this protocol to build a complete inventory of available tools before attempting generation workflows.
+
+**NATS Discovery Subjects:**
+
+- `mcp.discovery.list_tools.{service_name}` - Request tool inventory from a specific service
+- `mcp.discovery.health.{service_name}` - Request health status from a specific service
+
+**Discovery Flow:**
+
+1. Orchestrator sends envelope-wrapped discovery request to service-specific subject
+2. Service responds with ToolRegistration data for all registered tools
+3. Orchestrator validates required tools are present
+4. Orchestrator caches discovery results (5-minute TTL)
+5. Pipeline execution proceeds with validated tool inventory
+
+**ToolRegistration Data Structure:**
+
+```rust
+pub struct ToolRegistration {
+    tool_name: String,           // Tool identifier (e.g., "generate_structure")
+    tool_schema: JsonValue,      // JSON Schema for tool parameters
+    service_name: String,        // Service providing this tool
+    service_version: String,     // Semantic version (e.g., "0.0.1")
+    capabilities: Vec<ServiceCapabilities>, // Service capabilities
+}
+```
+
+### Service Capabilities
+
+Each tool registration declares which advanced features the service supports. The orchestrator uses this information to optimize execution strategies.
+
+**ServiceCapabilities Enum:**
+
+- `Batching` - Supports batch processing of multiple requests in a single call
+- `Streaming` - Supports streaming responses for progressive results
+- `Caching` - Supports response caching to reduce redundant computations
+- `Retry` - Supports automatic retry on transient failures
+
+**Service-Specific Capabilities:**
+
+| Service | Tools | Capabilities |
+|---------|-------|-------------|
+| story-generator | generate_structure, generate_nodes, validate_paths | Batching, Retry |
+| quality-control | validate_content, batch_validate | Batching, Retry |
+| constraint-enforcer | enforce_constraints | Batching, Retry |
+| prompt-helper | generate_story_prompts | Caching, Retry |
+
+### Orchestrator Discovery Flow
+
+The orchestrator performs service discovery during startup to ensure all required services are available before accepting requests.
+
+**Pre-Flight Check Process:**
+
+1. **Parallel Discovery** - Send discovery requests to all 4 services concurrently
+2. **Response Collection** - Gather tool registrations from each service
+3. **Required Service Validation** - Verify critical services (story-generator, quality-control, constraint-enforcer) are present
+4. **Optional Service Detection** - Detect prompt-helper presence for optimization
+5. **Fail-Fast Behavior** - Exit immediately if required services are missing
+6. **Graceful Degradation** - Continue with reduced functionality if optional services unavailable
+
+**Discovery Caching:**
+
+- Tool inventories cached for 5 minutes (300 seconds)
+- Reduces NATS traffic and discovery latency
+- Cache can be manually cleared for testing
+- Automatic cache invalidation on TTL expiration
+
+**Health Monitoring:**
+
+```rust
+pub struct DiscoveryInfo {
+    available_tools: Vec<ToolRegistration>,
+    service_health: String,     // "healthy" | "degraded"
+    uptime_seconds: u64,        // Service uptime
+}
+```
+
+### Health Checks
+
+Services respond to health check requests with current status information.
+
+**Health Check Protocol:**
+
+1. Orchestrator sends health request to `mcp.discovery.health.{service_name}`
+2. Service responds with DiscoveryInfo containing health status
+3. Orchestrator evaluates service availability
+
+**Health Response Format:**
+
+- `service_health`: "healthy" or "degraded" status indicator
+- `uptime_seconds`: Service uptime for monitoring
+- `available_tools`: Current tool inventory (may differ if service degraded)
+
+**Health Check Use Cases:**
+
+- Pre-flight validation before pipeline execution
+- Continuous monitoring during long-running workflows
+- Circuit breaker pattern for service failure detection
+- Load balancing decisions across service replicas
+
+### Testing
+
+The discovery protocol has comprehensive test coverage across contract and integration tests.
+
+**Contract Tests** (`orchestrator/tests/contract_discovery.rs`):
+
+- 8 contract tests validating schema consistency and serialization
+- No running services required
+- Tests JSON roundtrip for ToolRegistration, DiscoveryInfo, and ServiceCapabilities
+- Validates envelope metadata preservation
+- Ensures consistent schema structure across all registrations
+
+**Integration Tests** (`orchestrator/tests/integration_discovery.rs`):
+
+- 8 total integration tests (6 automated + 2 manual)
+- **Automated tests** (requires running services):
+  - `test_discover_all_services` - Validates all 4 services discovered correctly
+  - `test_tool_registration_data_correctness` - Verifies tool schemas and metadata
+  - `test_service_capabilities_match_expected` - Validates capability declarations
+  - `test_discovery_caching_works` - Confirms cache reduces latency
+  - `test_health_check_integration` - Validates health check protocol
+  - `test_cache_ttl_expiration` - Verifies cache invalidation logic
+
+- **Manual tests** (require stopping services):
+  - `test_graceful_degradation_missing_optional_service` - Tests handling of missing prompt-helper
+  - `test_fail_fast_missing_required_service` - Verifies fail-fast for missing story-generator
+
+**Running Discovery Tests:**
+
+```bash
+# Contract tests (no services needed)
+cargo test --package orchestrator --test contract_discovery
+
+# Integration tests (requires running services)
+# 1. Start NATS: ./start-nats.sh
+# 2. Start all services:
+cargo run -p story-generator &
+cargo run -p quality-control &
+cargo run -p constraint-enforcer &
+cargo run -p prompt-helper &
+
+# 3. Run automated integration tests:
+cargo test --package orchestrator --test integration_discovery -- --ignored
+
+# Manual tests require stopping specific services first
+```
+
 ## Data Structures & Database Alignment
 
 All data structures align with the existing TaleTrails database schema.
