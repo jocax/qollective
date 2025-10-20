@@ -1,0 +1,22 @@
+{
+  "tool_name": "orchestrate_generation",
+  "arguments": {
+    "generation_request": {
+      "theme": "Abenteuer in der Afrikanischen Savanne",
+      "age_group": "12-14",
+      "language": "de",
+      "node_count": 30,
+      "tenant_id": 1,
+      "educational_goals": [
+        "Wüstenbiologie, Tiere der Savanne",
+        "Umwelteinflüsse, Tourismus, Sozialwirtschaftliche Entwicklung in Ostafrika",
+        "Wissenschaftliche Beobachtung und Erforschung"
+      ],
+      "vocabulary_level": "intermediate",
+      "required_elements": [
+        "mindestens fünf Tiere, verschiedene Länder und Regionen",
+        "genaue informationen zu den Ökosystemen der Savanne und angrenzenden Regionen"
+      ]
+    }
+  }
+}

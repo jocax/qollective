@@ -4,9 +4,12 @@
 
 use crate::constants::*;
 use crate::templates::TemplateInfo;
+use anyhow::Result;
 use colored::*;
 use qollective::envelope::Envelope;
 use qollective::types::mcp::McpData;
+use std::fs::File;
+use std::io::Write;
 
 /// Print a response envelope with colored output
 ///
@@ -246,6 +249,40 @@ pub fn print_info(message: &str, use_color: bool) {
     }
 
     println!("{} {}", INFO_PREFIX.blue().bold(), message);
+}
+
+/// Save response envelope to file as pretty-printed JSON
+///
+/// # Arguments
+/// * `envelope` - Response envelope to save
+/// * `path` - File path to write to
+/// * `use_color` - Whether to use colored output for messages
+///
+/// # Returns
+/// * `Result<()>` - Success or IO error
+pub fn save_response_to_file(
+    envelope: &Envelope<McpData>,
+    path: &str,
+    use_color: bool,
+) -> Result<()> {
+    // Pretty-print JSON
+    let json = serde_json::to_string_pretty(envelope)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))?;
+
+    // Write to file
+    let mut file = File::create(path)
+        .map_err(|e| anyhow::anyhow!("Failed to create file {}: {}", path, e))?;
+
+    file.write_all(json.as_bytes())
+        .map_err(|e| anyhow::anyhow!("Failed to write to file {}: {}", path, e))?;
+
+    // Print success message
+    print_success(
+        &format!("Response saved to: {}", path),
+        use_color,
+    );
+
+    Ok(())
 }
 
 /// Indent text by a number of spaces

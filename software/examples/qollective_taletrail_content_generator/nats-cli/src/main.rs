@@ -66,6 +66,10 @@ enum Commands {
         /// Request timeout in seconds (overrides config default)
         #[arg(long)]
         timeout: Option<u64>,
+
+        /// Output file path for pretty-printed JSON response
+        #[arg(short = 'o', long)]
+        output: Option<String>,
     },
 
     /// Template management commands
@@ -112,6 +116,7 @@ async fn main() -> Result<()> {
             template,
             tenant,
             timeout,
+            output,
         } => {
             handle_send(
                 &config,
@@ -119,6 +124,7 @@ async fn main() -> Result<()> {
                 &template,
                 tenant,
                 timeout,
+                output,
                 cli.verbose,
                 use_color,
             )
@@ -141,6 +147,7 @@ async fn handle_send(
     template_path: &str,
     tenant: Option<i32>,
     timeout: Option<u64>,
+    output: Option<String>,
     verbose: bool,
     use_color: bool,
 ) -> Result<()> {
@@ -189,9 +196,15 @@ async fn handle_send(
 
     match client.send_request(subject, request, tenant_id).await {
         Ok(response) => {
-            print_success("Received response", use_color);
-            println!();
-            print_response(&response, verbose, use_color);
+            if let Some(output_path) = output {
+                // Save to file with pretty-print
+                output::save_response_to_file(&response, &output_path, use_color)?;
+            } else {
+                // Console output (existing behavior)
+                print_success("Received response", use_color);
+                println!();
+                print_response(&response, verbose, use_color);
+            }
         }
         Err(e) => {
             print_error(&format!("Request failed: {}", e), use_color);

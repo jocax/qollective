@@ -618,6 +618,8 @@ pub struct Trail {
     pub category: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_coins: Option<Option<i64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dag: Option<DAG>,
 }
 
 impl Trail {

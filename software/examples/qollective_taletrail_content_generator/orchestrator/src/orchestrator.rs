@@ -745,6 +745,7 @@ impl Orchestrator {
             metadata,
             category: None,
             price_coins: None,
+            dag: Some(dag.clone()),
         };
 
         let response = GenerationResponse {
