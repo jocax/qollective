@@ -309,10 +309,16 @@ mod tests {
     #[test]
     fn test_constants_used() {
         // Verify that constants from shared-types are used
-        assert_eq!(MCP_PROMPT_STORY, "mcp.prompt.generate_story");
-        assert_eq!(MCP_PROMPT_VALIDATION, "mcp.prompt.generate_validation");
-        assert_eq!(MCP_PROMPT_CONSTRAINT, "mcp.prompt.generate_constraint");
-        assert_eq!(MCP_PROMPT_MODEL, "mcp.prompt.get_model");
+        // All constants use single subject pattern per architectural decision
+        assert_eq!(MCP_PROMPT_STORY, "mcp.prompt.helper");
+        assert_eq!(MCP_PROMPT_VALIDATION, "mcp.prompt.helper");
+        assert_eq!(MCP_PROMPT_CONSTRAINT, "mcp.prompt.helper");
+        assert_eq!(MCP_PROMPT_MODEL, "mcp.prompt.helper");
+
+        // Verify they're all the same (single subject pattern)
+        assert_eq!(MCP_PROMPT_STORY, MCP_PROMPT_HELPER);
+        assert_eq!(MCP_PROMPT_VALIDATION, MCP_PROMPT_HELPER);
+        assert_eq!(MCP_PROMPT_CONSTRAINT, MCP_PROMPT_HELPER);
     }
 
     #[test]

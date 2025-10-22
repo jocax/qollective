@@ -4,13 +4,13 @@
 //! external LLM services. Mock responses are used to test parsing and integration logic.
 
 use shared_types::{
-    traits::llm_service::NodeContext, AgeGroup, GenerationRequest, Language,
+    traits::llm_service::NodeContext, AgeGroup, ConvergencePattern, DagStructureConfig, GenerationRequest, Language,
     LLMConfig, MCPServiceType, PromptGenerationMethod, PromptMetadata, PromptPackage,
     DAG,
 };
 use story_generator::llm::{generate_node_content, generate_nodes_batch, StoryLlmClient};
 use story_generator::prompts::PromptTemplates;
-use story_generator::structure::{calculate_convergence_points, generate_dag_structure};
+use story_generator::structure::generate_dag_structure;
 
 // ============================================================================
 // Test Utilities
@@ -66,6 +66,8 @@ fn create_test_generation_request() -> GenerationRequest {
         tags: None,
         author_id: None,
         prompt_packages: None,
+        story_structure: None,
+        dag_config: None,
     }
 }
 
@@ -79,8 +81,14 @@ fn create_test_node_context() -> NodeContext {
 }
 
 fn create_test_dag() -> DAG {
-    let convergence_points = calculate_convergence_points(16);
-    generate_dag_structure(16, convergence_points).unwrap()
+    let dag_config = DagStructureConfig {
+        node_count: 16,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    generate_dag_structure(&dag_config).unwrap()
 }
 
 // ============================================================================

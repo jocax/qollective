@@ -5,89 +5,130 @@
 
 use shared_types::constants::{CONVERGENCE_POINT_RATIO, DEFAULT_NODE_COUNT};
 use shared_types::extensions::dag::DagExt;
-use shared_types::{ContentNode, DAG, Edge};
+use shared_types::{ContentNode, ConvergencePattern, DAG, DagStructureConfig, Edge};
 use story_generator::structure::{
-    calculate_convergence_points, generate_dag_structure, validate_path_connectivity,
+    generate_dag_structure, validate_path_connectivity,
     validate_reachability,
 };
 
 // ============================================================================
 // CONVERGENCE POINT CALCULATION TESTS
 // ============================================================================
+// Note: These tests now verify convergence points through DAG generation
+// since calculate_convergence_points is now internal to generate_dag_structure
 
 #[test]
-fn test_calculate_convergence_points_default_count() {
+fn test_dag_has_convergence_points_default_count() {
     // With DEFAULT_NODE_COUNT (16) and CONVERGENCE_POINT_RATIO (0.5)
     // We expect convergence at ~50% intervals: ~8
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // Should have at least one convergence point
-    assert!(!convergence_points.is_empty());
+    assert!(!dag.convergence_points.is_empty());
 
     // All convergence points should be within valid range
-    for &point in &convergence_points {
-        assert!(point > 0, "Convergence point should be after start");
+    for point_id in &dag.convergence_points {
+        let point_num: usize = point_id.parse().expect("Point ID should be numeric");
+        assert!(point_num > 0, "Convergence point should be after start");
         assert!(
-            point < DEFAULT_NODE_COUNT,
+            point_num < DEFAULT_NODE_COUNT,
             "Convergence point should be before end"
         );
     }
 }
 
 #[test]
-fn test_calculate_convergence_points_small_count() {
+fn test_dag_has_convergence_points_small_count() {
     // Test with a small node count (8 nodes)
     let node_count = 8;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // Should have convergence points
-    assert!(!convergence_points.is_empty());
+    assert!(!dag.convergence_points.is_empty());
 
     // With ratio 0.5, expect convergence around position 4
-    for &point in &convergence_points {
-        assert!(point > 0);
-        assert!(point < node_count);
+    for point_id in &dag.convergence_points {
+        let point_num: usize = point_id.parse().expect("Point ID should be numeric");
+        assert!(point_num > 0);
+        assert!(point_num < node_count);
     }
 }
 
 #[test]
-fn test_calculate_convergence_points_large_count() {
+fn test_dag_has_convergence_points_large_count() {
     // Test with a large node count (32 nodes)
     let node_count = 32;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
-    // Should have multiple convergence points
-    assert!(!convergence_points.is_empty());
+    // Should have convergence points
+    assert!(!dag.convergence_points.is_empty());
 
     // With ratio 0.5, expect convergence around positions 16
-    for &point in &convergence_points {
-        assert!(point > 0);
-        assert!(point < node_count);
+    for point_id in &dag.convergence_points {
+        let point_num: usize = point_id.parse().expect("Point ID should be numeric");
+        assert!(point_num > 0);
+        assert!(point_num < node_count);
     }
 }
 
 #[test]
-fn test_calculate_convergence_points_minimum_valid() {
+fn test_dag_has_convergence_points_minimum_valid() {
     // Minimum node count for meaningful convergence (4 nodes: start, choice, converge, end)
     let node_count = 4;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // Should still have convergence point
-    assert!(!convergence_points.is_empty());
+    assert!(!dag.convergence_points.is_empty());
 }
 
 #[test]
-fn test_calculate_convergence_points_ratio_based() {
+fn test_dag_convergence_point_ratio_based() {
     // Verify the ratio calculation is working correctly
     let node_count = 20;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // With CONVERGENCE_POINT_RATIO = 0.5, expect convergence around position 10
     // Allow some tolerance for rounding
     let expected_position = (node_count as f64 * CONVERGENCE_POINT_RATIO) as usize;
-    let has_point_near_expected = convergence_points
+    let has_point_near_expected = dag.convergence_points
         .iter()
-        .any(|&p| (p as i32 - expected_position as i32).abs() <= 2);
+        .filter_map(|id| id.parse::<usize>().ok())
+        .any(|p| (p as i32 - expected_position as i32).abs() <= 2);
 
     assert!(
         has_point_near_expected,
@@ -101,8 +142,14 @@ fn test_calculate_convergence_points_ratio_based() {
 
 #[test]
 fn test_generate_dag_structure_default() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG successfully");
 
     // Verify node count
@@ -131,9 +178,15 @@ fn test_generate_dag_structure_default() {
 #[test]
 fn test_generate_dag_structure_small() {
     let node_count = 8;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
     let dag =
-        generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+        generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     assert_eq!(dag.nodes.len(), node_count);
     assert!(dag.nodes.contains_key(&dag.start_node_id));
@@ -142,9 +195,15 @@ fn test_generate_dag_structure_small() {
 #[test]
 fn test_generate_dag_structure_large() {
     let node_count = 24;
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
     let dag =
-        generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+        generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     assert_eq!(dag.nodes.len(), node_count);
     assert!(dag.nodes.contains_key(&dag.start_node_id));
@@ -152,8 +211,14 @@ fn test_generate_dag_structure_large() {
 
 #[test]
 fn test_generate_dag_has_root_node() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Root node should have ID "0"
@@ -169,8 +234,14 @@ fn test_generate_dag_has_root_node() {
 #[test]
 fn test_generate_dag_has_end_node() {
     let node_count = DEFAULT_NODE_COUNT;
-    let convergence_points = calculate_convergence_points(node_count);
-    let dag = generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // End node should have ID equal to (node_count - 1)
     let end_node_id = format!("{}", node_count - 1);
@@ -188,8 +259,14 @@ fn test_generate_dag_has_end_node() {
 
 #[test]
 fn test_generate_dag_branching_structure() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Count nodes with multiple outgoing edges (branching points)
@@ -215,8 +292,14 @@ fn test_generate_dag_branching_structure() {
 
 #[test]
 fn test_generate_dag_edges_connect_valid_nodes() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Every edge should connect existing nodes
@@ -236,28 +319,36 @@ fn test_generate_dag_edges_connect_valid_nodes() {
 
 #[test]
 fn test_generate_dag_convergence_points_marked() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points.clone())
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
-    // All specified convergence points should be in the DAG
-    for cp_index in &convergence_points {
-        let cp_id = format!("{}", cp_index);
-        assert!(
-            dag.convergence_points.contains(&cp_id),
-            "Convergence point {} should be marked in DAG",
-            cp_id
-        );
-    }
+    // DAG should have convergence points marked
+    assert!(
+        !dag.convergence_points.is_empty(),
+        "DAG should have convergence points marked"
+    );
 }
 
 #[test]
 fn test_generate_dag_min_node_count() {
     // Test with minimum viable node count
     let node_count = 4; // start, choice, converge, end
-    let convergence_points = calculate_convergence_points(node_count);
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
     let dag =
-        generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+        generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     assert_eq!(dag.nodes.len(), node_count);
     assert!(!dag.edges.is_empty());
@@ -265,8 +356,14 @@ fn test_generate_dag_min_node_count() {
 
 #[test]
 fn test_generate_dag_invalid_node_count_zero() {
-    let convergence_points = vec![];
-    let result = generate_dag_structure(0, convergence_points);
+    let dag_config = DagStructureConfig {
+        node_count: 0,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let result = generate_dag_structure(&dag_config);
     assert!(result.is_err(), "Should error with zero nodes");
     assert!(
         result.unwrap_err().to_string().contains("Node count must be at least"),
@@ -276,8 +373,14 @@ fn test_generate_dag_invalid_node_count_zero() {
 
 #[test]
 fn test_generate_dag_invalid_node_count_one() {
-    let convergence_points = vec![];
-    let result = generate_dag_structure(1, convergence_points);
+    let dag_config = DagStructureConfig {
+        node_count: 1,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let result = generate_dag_structure(&dag_config);
     assert!(result.is_err(), "Should error with one node");
     assert!(
         result.unwrap_err().to_string().contains("Node count must be at least"),
@@ -287,8 +390,14 @@ fn test_generate_dag_invalid_node_count_one() {
 
 #[test]
 fn test_generate_dag_invalid_node_count_two() {
-    let convergence_points = vec![];
-    let result = generate_dag_structure(2, convergence_points);
+    let dag_config = DagStructureConfig {
+        node_count: 2,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let result = generate_dag_structure(&dag_config);
     assert!(result.is_err(), "Should error with two nodes");
     assert!(
         result.unwrap_err().to_string().contains("Node count must be at least"),
@@ -302,8 +411,14 @@ fn test_generate_dag_invalid_node_count_two() {
 
 #[test]
 fn test_validate_path_connectivity_valid_dag() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Should validate successfully
@@ -363,8 +478,14 @@ fn test_validate_path_connectivity_empty_dag() {
 
 #[test]
 fn test_validate_reachability_valid_dag() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Should validate successfully
@@ -373,8 +494,14 @@ fn test_validate_reachability_valid_dag() {
 
 #[test]
 fn test_validate_reachability_all_nodes_from_root() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Manually verify all nodes are reachable from root
@@ -390,8 +517,14 @@ fn test_validate_reachability_all_nodes_from_root() {
 #[test]
 fn test_validate_reachability_all_leaves_reach_end() {
     let node_count = DEFAULT_NODE_COUNT;
-    let convergence_points = calculate_convergence_points(node_count);
-    let dag = generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     let end_node_id = format!("{}", node_count - 1);
 
@@ -461,16 +594,20 @@ fn test_validate_reachability_detects_unreachable_node() {
 
 #[test]
 fn test_full_structure_generation_pipeline() {
-    // Test the complete pipeline: calculate -> generate -> validate
+    // Test the complete pipeline: configure -> generate -> validate
     let node_count = DEFAULT_NODE_COUNT;
 
-    // Step 1: Calculate convergence points
-    let convergence_points = calculate_convergence_points(node_count);
-    assert!(!convergence_points.is_empty());
+    // Step 1: Create DAG configuration
+    let dag_config = DagStructureConfig {
+        node_count,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
 
     // Step 2: Generate DAG structure
-    let dag =
-        generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+    let dag = generate_dag_structure(&dag_config).expect("Should generate DAG");
 
     // Step 3: Validate connectivity
     validate_path_connectivity(&dag).expect("Should have valid connectivity");
@@ -488,9 +625,15 @@ fn test_structure_generation_with_different_sizes() {
     let test_sizes = vec![4, 8, 12, 16, 20, 24, 32];
 
     for node_count in test_sizes {
-        let convergence_points = calculate_convergence_points(node_count);
+        let dag_config = DagStructureConfig {
+            node_count,
+            convergence_pattern: ConvergencePattern::SingleConvergence,
+            convergence_point_ratio: Some(0.5),
+            max_depth: 10,
+            branching_factor: 2,
+        };
         let dag =
-            generate_dag_structure(node_count, convergence_points).expect("Should generate DAG");
+            generate_dag_structure(&dag_config).expect("Should generate DAG");
 
         assert_eq!(dag.nodes.len(), node_count);
         validate_path_connectivity(&dag).expect("Should have valid connectivity");
@@ -500,8 +643,14 @@ fn test_structure_generation_with_different_sizes() {
 
 #[test]
 fn test_dag_has_multiple_paths() {
-    let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     let end_node_id = format!("{}", DEFAULT_NODE_COUNT - 1);
@@ -518,18 +667,22 @@ fn test_dag_has_multiple_paths() {
 
 #[test]
 fn test_convergence_points_have_multiple_incoming() {
-    let convergence_points_indices = calculate_convergence_points(DEFAULT_NODE_COUNT);
-    let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points_indices.clone())
+    let dag_config = DagStructureConfig {
+        node_count: DEFAULT_NODE_COUNT,
+        convergence_pattern: ConvergencePattern::SingleConvergence,
+        convergence_point_ratio: Some(0.5),
+        max_depth: 10,
+        branching_factor: 2,
+    };
+    let dag = generate_dag_structure(&dag_config)
         .expect("Should generate DAG");
 
     // Verify that at least one convergence point has multiple incoming edges
     // (Some convergence points might only have 1 incoming edge depending on graph structure)
-    let points_with_multiple_incoming = convergence_points_indices
+    let points_with_multiple_incoming = dag
+        .convergence_points
         .iter()
-        .filter_map(|&cp_index| {
-            let cp_id = format!("{}", cp_index);
-            dag.nodes.get(&cp_id)
-        })
+        .filter_map(|cp_id| dag.nodes.get(cp_id))
         .filter(|node| node.incoming_edges >= 2)
         .count();
 

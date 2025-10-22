@@ -10,6 +10,7 @@ members = [
     "prompt-helper",
     "gateway",
     "nats-cli",
+    "desktop/src-tauri"
 ]
 
 resolver = "2"

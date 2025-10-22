@@ -37,6 +37,7 @@ use crate::{
     prompt_orchestration::PromptOrchestrator,
 };
 use async_nats::Client as NatsClient;
+use chrono::Utc;
 use qollective::envelope::Meta;
 use rmcp::model::{
     CallToolRequest, CallToolRequestMethod, CallToolRequestParam, Extensions,
@@ -93,6 +94,13 @@ pub struct Orchestrator {
 
     /// Discovery client for service health checks
     discovery_client: DiscoveryClient,
+
+    /// Service invocation tracking for execution trace
+    /// Collects all MCP service calls with timing throughout pipeline execution
+    service_invocations: Arc<Mutex<Vec<ServiceInvocation>>>,
+
+    /// Pipeline start time for total duration calculation
+    pipeline_start_time: Arc<Mutex<Option<std::time::Instant>>>,
 }
 
 impl Orchestrator {
@@ -149,6 +157,8 @@ impl Orchestrator {
             tags: None,
             prompt_packages: None,
             author_id: None,
+            story_structure: None,
+            dag_config: None,
         };
         let state = Arc::new(Mutex::new(PipelineState::new(dummy_request)));
 
@@ -161,6 +171,8 @@ impl Orchestrator {
             prompt_orchestrator,
             negotiator,
             discovery_client,
+            service_invocations: Arc::new(Mutex::new(Vec::new())),
+            pipeline_start_time: Arc::new(Mutex::new(None)),
         };
 
         // Run pre-flight check
@@ -252,6 +264,18 @@ impl Orchestrator {
         let start_time = std::time::Instant::now();
         let request_id = uuid::Uuid::new_v4().to_string();
 
+        // Track pipeline start time for execution trace
+        {
+            let mut start = self.pipeline_start_time.lock().await;
+            *start = Some(start_time);
+        }
+
+        // Clear any previous service invocations
+        {
+            let mut invocations = self.service_invocations.lock().await;
+            invocations.clear();
+        }
+
         // Initialize pipeline state
         {
             let mut state = self.state.lock().await;
@@ -306,20 +330,55 @@ impl Orchestrator {
         }
 
         let start = std::time::Instant::now();
+        let started_at = Utc::now();
+        let phase = self.get_current_phase().await;
 
         // Generate all prompts in parallel
-        let prompts = self
+        let prompts_result = self
             .prompt_orchestrator
             .generate_all_prompts(request)
-            .await?;
+            .await;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = start.elapsed().as_millis() as i64;
+
+        // Record invocation
+        match &prompts_result {
+            Ok(prompts) => {
+                self.record_service_invocation(
+                    "prompt-helper".to_string(),
+                    "generate_story_prompts".to_string(),
+                    started_at,
+                    duration_ms,
+                    true,
+                    None,
+                    phase,
+                    None,
+                    None,
+                ).await;
+            }
+            Err(e) => {
+                self.record_service_invocation(
+                    "prompt-helper".to_string(),
+                    "generate_story_prompts".to_string(),
+                    started_at,
+                    duration_ms,
+                    false,
+                    Some(e.to_string()),
+                    phase,
+                    None,
+                    None,
+                ).await;
+            }
+        }
+
+        let prompts = prompts_result?;
+        let duration_ms_u64 = duration_ms as u64;
 
         // Publish event
         self.event_publisher
             .publish_event(PipelineEvent::PromptsGenerated {
                 request_id: request_id.to_string(),
-                duration_ms,
+                duration_ms: duration_ms_u64,
                 fallback_count: 0, // TODO: Track from prompt_orchestrator
                 services: prompts.keys().map(|k| format!("{:?}", k)).collect(),
             })
@@ -354,14 +413,38 @@ impl Orchestrator {
             state.update_progress(15.0);
         }
 
-        // Get story prompt package
-        let story_prompts = prompts
+        // Validate that story prompt package exists
+        let _story_prompts = prompts
             .get(&MCPServiceType::StoryGenerator)
             .ok_or_else(|| TaleTrailError::GenerationError("Missing story prompts".to_string()))?;
+
+        // Create orchestrator defaults from config
+        let orchestrator_defaults = self.config.dag.to_dag_structure_config();
+
+        // Resolve final DAG config using three-tier priority:
+        // 1. story_structure preset (if provided)
+        // 2. dag_config custom (if provided)
+        // 3. orchestrator defaults
+        let dag_config = request.resolve_dag_config(&orchestrator_defaults)
+            .map_err(|e| TaleTrailError::ValidationError(e.to_string()))?;
+
+        // Log resolved configuration for observability
+        tracing::info!(
+            node_count = dag_config.node_count,
+            pattern = ?dag_config.convergence_pattern,
+            ratio = ?dag_config.convergence_point_ratio,
+            max_depth = dag_config.max_depth,
+            branching_factor = dag_config.branching_factor,
+            preset = ?request.story_structure,
+            "Resolved DAG configuration for structure generation"
+        );
 
         // Create updated request with prompt packages following envelope-first architecture
         let mut updated_request = request.clone();
         updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
+
+        // Store resolved config in request for downstream use
+        updated_request.dag_config = Some(dag_config.clone());
 
         // Create metadata for this request
         let meta = self.create_meta(request, request_id);
@@ -384,9 +467,47 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        let response: GenerateStructureResponse = self
+        let started_at = Utc::now();
+        let call_start = std::time::Instant::now();
+
+        let response_result: std::result::Result<GenerateStructureResponse, TaleTrailError> = self
             .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
-            .await?;
+            .await;
+
+        let duration_ms = call_start.elapsed().as_millis() as i64;
+        let phase = self.get_current_phase().await;
+
+        // Record invocation
+        match &response_result {
+            Ok(_) => {
+                self.record_service_invocation(
+                    "story-generator".to_string(),
+                    "generate_structure".to_string(),
+                    started_at,
+                    duration_ms,
+                    true,
+                    None,
+                    phase,
+                    None,
+                    None,
+                ).await;
+            }
+            Err(e) => {
+                self.record_service_invocation(
+                    "story-generator".to_string(),
+                    "generate_structure".to_string(),
+                    started_at,
+                    duration_ms,
+                    false,
+                    Some(e.to_string()),
+                    phase,
+                    None,
+                    None,
+                ).await;
+            }
+        }
+
+        let response = response_result?;
         let dag = response.dag;
 
         // Publish event
@@ -498,9 +619,47 @@ impl Orchestrator {
                 extensions: Extensions::default(),
             };
 
-            let response: GenerateNodesResponse = self
+            let started_at = Utc::now();
+            let call_start = std::time::Instant::now();
+
+            let response_result: std::result::Result<GenerateNodesResponse, TaleTrailError> = self
                 .call_mcp_tool(&constants::MCP_STORY_GENERATE, tool_request, meta)
-                .await?;
+                .await;
+
+            let duration_ms = call_start.elapsed().as_millis() as i64;
+            let phase = self.get_current_phase().await;
+
+            // Record invocation with batch context
+            match &response_result {
+                Ok(_) => {
+                    self.record_service_invocation(
+                        "story-generator".to_string(),
+                        "generate_nodes".to_string(),
+                        started_at,
+                        duration_ms,
+                        true,
+                        None,
+                        phase,
+                        None,
+                        Some(batch_id as i64),
+                    ).await;
+                }
+                Err(e) => {
+                    self.record_service_invocation(
+                        "story-generator".to_string(),
+                        "generate_nodes".to_string(),
+                        started_at,
+                        duration_ms,
+                        false,
+                        Some(e.to_string()),
+                        phase,
+                        None,
+                        Some(batch_id as i64),
+                    ).await;
+                }
+            }
+
+            let response = response_result?;
             let generated_nodes = response.nodes;
 
             // Update DAG with generated content
@@ -596,6 +755,15 @@ impl Orchestrator {
         // Create metadata for this validation
         let meta = self.create_meta(request, request_id);
 
+        // Publish ValidationStarted event
+        self.event_publisher
+            .publish_event(PipelineEvent::ValidationStarted {
+                request_id: request_id.to_string(),
+                batch_id: 0, // Individual node validation, not batched
+                validator: "quality-control".to_string(),
+            })
+            .await?;
+
         let tool_request = CallToolRequest {
             method: CallToolRequestMethod::default(),
             params: CallToolRequestParam {
@@ -623,9 +791,47 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        let response: ValidateContentResponse = self
+        let started_at = Utc::now();
+        let call_start = std::time::Instant::now();
+
+        let response_result: std::result::Result<ValidateContentResponse, TaleTrailError> = self
             .call_mcp_tool(&constants::MCP_QUALITY_VALIDATE, tool_request, meta)
-            .await?;
+            .await;
+
+        let duration_ms = call_start.elapsed().as_millis() as i64;
+        let phase = self.get_current_phase().await;
+
+        // Record invocation with node context
+        match &response_result {
+            Ok(_) => {
+                self.record_service_invocation(
+                    "quality-control".to_string(),
+                    "validate_content".to_string(),
+                    started_at,
+                    duration_ms,
+                    true,
+                    None,
+                    phase,
+                    Some(node.id.clone()),
+                    None,
+                ).await;
+            }
+            Err(e) => {
+                self.record_service_invocation(
+                    "quality-control".to_string(),
+                    "validate_content".to_string(),
+                    started_at,
+                    duration_ms,
+                    false,
+                    Some(e.to_string()),
+                    phase,
+                    Some(node.id.clone()),
+                    None,
+                ).await;
+            }
+        }
+
+        let response = response_result?;
         Ok(response.validation_result)
     }
 
@@ -647,6 +853,15 @@ impl Orchestrator {
 
         // Create metadata for this validation
         let meta = self.create_meta(request, request_id);
+
+        // Publish ValidationStarted event
+        self.event_publisher
+            .publish_event(PipelineEvent::ValidationStarted {
+                request_id: request_id.to_string(),
+                batch_id: 0, // Individual node validation, not batched
+                validator: "constraint-enforcer".to_string(),
+            })
+            .await?;
 
         let tool_request = CallToolRequest {
             method: CallToolRequestMethod::default(),
@@ -670,9 +885,47 @@ impl Orchestrator {
             extensions: Extensions::default(),
         };
 
-        let response: EnforceConstraintsResponse = self
+        let started_at = Utc::now();
+        let call_start = std::time::Instant::now();
+
+        let response_result: std::result::Result<EnforceConstraintsResponse, TaleTrailError> = self
             .call_mcp_tool(&constants::MCP_CONSTRAINT_ENFORCE, tool_request, meta)
-            .await?;
+            .await;
+
+        let duration_ms = call_start.elapsed().as_millis() as i64;
+        let phase = self.get_current_phase().await;
+
+        // Record invocation with node context
+        match &response_result {
+            Ok(_) => {
+                self.record_service_invocation(
+                    "constraint-enforcer".to_string(),
+                    "enforce_constraints".to_string(),
+                    started_at,
+                    duration_ms,
+                    true,
+                    None,
+                    phase,
+                    Some(node.id.clone()),
+                    None,
+                ).await;
+            }
+            Err(e) => {
+                self.record_service_invocation(
+                    "constraint-enforcer".to_string(),
+                    "enforce_constraints".to_string(),
+                    started_at,
+                    duration_ms,
+                    false,
+                    Some(e.to_string()),
+                    phase,
+                    Some(node.id.clone()),
+                    None,
+                ).await;
+            }
+        }
+
+        let response = response_result?;
         Ok(response.constraint_result)
     }
 
@@ -710,6 +963,38 @@ impl Orchestrator {
             })
             .await?;
 
+        // Build execution trace
+        let execution_trace = {
+            // Collect all service invocations
+            let invocations = self.service_invocations.lock().await;
+            let service_invocations = invocations.clone();
+
+            // Get phases completed from pipeline state
+            let phases_completed = vec![
+                GenerationPhase::PromptGeneration,
+                GenerationPhase::Structure,
+                GenerationPhase::Generation,
+                GenerationPhase::Validation,
+                GenerationPhase::Assembly,
+            ];
+
+            PipelineExecutionTrace {
+                request_id: request_id.to_string(),
+                total_duration_ms: total_duration_ms as i64,
+                phases_completed,
+                service_invocations,
+                events_published: None, // Optional - could collect published events if needed
+            }
+        };
+
+        // Log execution trace summary
+        tracing::info!(
+            "Execution trace: {} service invocations across {} phases, total duration: {}ms",
+            execution_trace.service_invocations.len(),
+            execution_trace.phases_completed.len(),
+            execution_trace.total_duration_ms
+        );
+
         // Create response with Trail from DAG
         // Build metadata map
         let mut metadata = HashMap::new();
@@ -745,7 +1030,6 @@ impl Orchestrator {
             metadata,
             category: None,
             price_coins: None,
-            dag: Some(dag.clone()),
         };
 
         let response = GenerationResponse {
@@ -763,6 +1047,7 @@ impl Orchestrator {
             prompt_generation_metadata: None, // TODO: Add from prompt orchestration phase
             trail: Some(trail),
             trail_steps: None, // TODO: Convert DAG nodes to trail steps
+            execution_trace: Some(execution_trace), // NEW: Include execution trace
             errors: None,
         };
 
@@ -845,6 +1130,72 @@ impl Orchestrator {
         meta.tracing = Some(create_tracing_meta(request_id.to_string()));
 
         meta
+    }
+
+    /// Record a service invocation for execution trace
+    ///
+    /// Captures service call details including timing, success status, and context.
+    ///
+    /// # Arguments
+    ///
+    /// * `service_name` - Name of MCP service (e.g., "story-generator")
+    /// * `tool_name` - Name of MCP tool (e.g., "generate_structure")
+    /// * `started_at` - When the service call started
+    /// * `duration_ms` - Duration of the call in milliseconds
+    /// * `success` - Whether the call succeeded
+    /// * `error_message` - Optional error message if call failed
+    /// * `phase` - Pipeline phase during which the call was made
+    /// * `node_id` - Optional node ID being processed
+    /// * `batch_id` - Optional batch ID if part of batch processing
+    async fn record_service_invocation(
+        &self,
+        service_name: String,
+        tool_name: String,
+        started_at: chrono::DateTime<Utc>,
+        duration_ms: i64,
+        success: bool,
+        error_message: Option<String>,
+        phase: GenerationPhase,
+        node_id: Option<String>,
+        batch_id: Option<i64>,
+    ) {
+        let invocation = ServiceInvocation {
+            service_name: service_name.clone(),
+            tool_name: tool_name.clone(),
+            started_at: started_at.to_rfc3339(),
+            duration_ms,
+            success,
+            error_message,
+            phase,
+            node_id,
+            batch_id,
+        };
+
+        let mut invocations = self.service_invocations.lock().await;
+        invocations.push(invocation);
+
+        tracing::debug!(
+            "Recorded service invocation: {} / {} ({}ms, success={})",
+            service_name,
+            tool_name,
+            duration_ms,
+            success
+        );
+    }
+
+    /// Get current pipeline phase for service invocation tracking
+    async fn get_current_phase(&self) -> GenerationPhase {
+        let state = self.state.lock().await;
+        // Convert PipelinePhase to GenerationPhase
+        use crate::pipeline::PipelinePhase;
+        match state.current_phase {
+            PipelinePhase::PromptGeneration => GenerationPhase::PromptGeneration,
+            PipelinePhase::Structure => GenerationPhase::Structure,
+            PipelinePhase::Generation => GenerationPhase::Generation,
+            PipelinePhase::Validation => GenerationPhase::Validation,
+            PipelinePhase::Assembly => GenerationPhase::Assembly,
+            PipelinePhase::Complete => GenerationPhase::Complete,
+        }
     }
 
     /// Generic MCP tool call helper with envelope wrapping

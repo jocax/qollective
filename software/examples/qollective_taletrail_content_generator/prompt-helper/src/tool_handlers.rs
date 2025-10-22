@@ -108,6 +108,7 @@ pub async fn handle_generate_story_prompts(
     let generation_request = shared_types::GenerationRequest {
         theme: params.theme.clone(),
         language: params.language.clone(),
+        story_structure: None,
         age_group: params.age_group.clone(),
         tenant_id: 0, // Default for prompt generation context
         node_count: None,
@@ -117,6 +118,7 @@ pub async fn handle_generate_story_prompts(
         author_id: None,
         prompt_packages: None,
         tags: None,
+        dag_config: None,
     };
 
     let prompt_gen_request = PromptGenerationRequest {
@@ -313,6 +315,7 @@ pub async fn handle_generate_validation_prompts(
     let generation_request = shared_types::GenerationRequest {
         theme: format!("Validation for {}", params.content_type),
         language: params.language.clone(),
+        story_structure: None,
         age_group: params.age_group.clone(),
         tenant_id: 0,
         node_count: None,
@@ -322,6 +325,7 @@ pub async fn handle_generate_validation_prompts(
         author_id: None,
         prompt_packages: None,
         tags: None,
+        dag_config: None,
     };
 
     let prompt_gen_request = PromptGenerationRequest {
@@ -478,6 +482,7 @@ pub async fn handle_generate_constraint_prompts(
     let generation_request = shared_types::GenerationRequest {
         theme: "Constraint Enforcement".to_string(),
         language: params.language.clone(),
+        story_structure: None,
         age_group: AgeGroup::_6To8, // Default, constraints apply to all ages
         tenant_id: 0,
         node_count: None,
@@ -487,6 +492,7 @@ pub async fn handle_generate_constraint_prompts(
         author_id: None,
         prompt_packages: None,
         tags: None,
+        dag_config: None,
     };
 
     let prompt_gen_request = PromptGenerationRequest {

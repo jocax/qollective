@@ -23,7 +23,6 @@ impl DagToTrailExt for DAG {
             category: Some("story".to_string()),
             is_public: false,
             price_coins: None,
-            dag: Some(self.clone()),
         };
 
         let trail_steps = self.generate_trail_steps();

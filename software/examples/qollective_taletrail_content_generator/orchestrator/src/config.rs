@@ -71,8 +71,10 @@ pub struct BatchConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DagConfig {
     pub default_node_count: usize,
+    pub convergence_pattern: String,
     pub convergence_point_ratio: f32,
     pub max_depth: usize,
+    pub branching_factor: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,8 +158,54 @@ impl Default for DagConfig {
     fn default() -> Self {
         Self {
             default_node_count: 16,
-            convergence_point_ratio: 0.25,
+            convergence_pattern: "SingleConvergence".to_string(),
+            convergence_point_ratio: 0.5,
             max_depth: 10,
+            branching_factor: 2,
+        }
+    }
+}
+
+impl DagConfig {
+    /// Convert orchestrator DagConfig to shared-types DagStructureConfig
+    ///
+    /// This method performs pattern parsing and ratio conversion according to DAG structure rules:
+    /// - Parses convergence_pattern string to ConvergencePattern enum
+    /// - Converts ratio to Option<f64> based on pattern requirements
+    /// - PureBranching and ParallelPaths patterns get None for convergence_point_ratio
+    /// - Other patterns get Some(ratio) for convergence_point_ratio
+    pub fn to_dag_structure_config(&self) -> DagStructureConfig {
+        use shared_types::ConvergencePattern;
+
+        // Parse string to enum, with fallback to SingleConvergence
+        let pattern = match self.convergence_pattern.as_str() {
+            "SingleConvergence" => ConvergencePattern::SingleConvergence,
+            "MultipleConvergence" => ConvergencePattern::MultipleConvergence,
+            "EndOnly" => ConvergencePattern::EndOnly,
+            "PureBranching" => ConvergencePattern::PureBranching,
+            "ParallelPaths" => ConvergencePattern::ParallelPaths,
+            unknown => {
+                tracing::warn!(
+                    pattern = unknown,
+                    "Unknown convergence pattern, defaulting to SingleConvergence"
+                );
+                ConvergencePattern::SingleConvergence
+            }
+        };
+
+        // Convert ratio to Option<f64>
+        // PureBranching and ParallelPaths should have None
+        let ratio = match pattern {
+            ConvergencePattern::PureBranching | ConvergencePattern::ParallelPaths => None,
+            _ => Some(self.convergence_point_ratio as f64),
+        };
+
+        DagStructureConfig {
+            node_count: self.default_node_count as i64,
+            convergence_pattern: pattern,
+            convergence_point_ratio: ratio,
+            max_depth: self.max_depth as i64,
+            branching_factor: self.branching_factor as i64,
         }
     }
 }
@@ -307,9 +355,9 @@ mod tests {
 
     fn create_temp_config_dir(content: &str) -> TempDir {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let orch_dir = temp_dir.path().join("orchestrator");
-        fs::create_dir(&orch_dir).expect("Failed to create orchestrator dir");
-        let config_path = orch_dir.join("config.toml");
+        // Create config.toml directly in temp_dir (not in orchestrator subdir)
+        // because OrchestratorConfig::load() looks for config.toml in current directory
+        let config_path = temp_dir.path().join("config.toml");
         let mut file = fs::File::create(&config_path).expect("Failed to create config file");
         file.write_all(content.as_bytes()).expect("Failed to write to config file");
         file.flush().expect("Failed to flush config file");
@@ -366,11 +414,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -431,11 +487,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -494,11 +558,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -557,11 +629,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -620,11 +700,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);
@@ -683,11 +771,19 @@ concurrent_batches_max = 5
 
 [dag]
 default_node_count = 16
-convergence_point_ratio = 0.25
+convergence_pattern = "SingleConvergence"
+convergence_point_ratio = 0.5
 max_depth = 10
+branching_factor = 2
 
 [negotiation]
 max_rounds = 3
+
+[retry]
+max_attempts = 3
+initial_delay_ms = 100
+max_delay_ms = 5000
+backoff_multiplier = 2.0
 "#;
 
         let _temp_dir = create_temp_config_dir(config_content);

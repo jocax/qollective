@@ -19,73 +19,147 @@
 
 use shared_types::constants::CONVERGENCE_POINT_RATIO;
 use shared_types::extensions::dag::DagExt;
-use shared_types::{Content, ContentNode, Edge, TaleTrailError, DAG};
+use shared_types::{Content, ContentNode, ConvergencePattern, DagStructureConfig, Edge, TaleTrailError, DAG};
 use std::collections::{HashMap, HashSet, VecDeque};
 
-/// Calculate convergence point indices based on node count and ratio
+/// Helper configuration for convergence point calculation
+///
+/// This struct simplifies the convergence calculation API by extracting
+/// only the fields needed from DagStructureConfig.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConvergenceConfig {
+    /// The convergence pattern to use
+    pub pattern: ConvergencePattern,
+    /// Position ratio for convergence points (0.0-1.0)
+    /// Required for: SingleConvergence, MultipleConvergence, EndOnly
+    /// Ignored for: PureBranching, ParallelPaths
+    pub ratio: Option<f64>,
+}
+
+impl From<&DagStructureConfig> for ConvergenceConfig {
+    fn from(config: &DagStructureConfig) -> Self {
+        Self {
+            pattern: config.convergence_pattern,
+            ratio: config.convergence_point_ratio,
+        }
+    }
+}
+
+/// Calculate convergence point indices based on pattern and configuration
 ///
 /// Convergence points are positions in the story where different narrative branches
-/// merge back together. They are placed at intervals determined by `CONVERGENCE_POINT_RATIO`.
+/// merge back together. The placement strategy is determined by the convergence pattern.
 ///
 /// # Arguments
 ///
-/// * `node_count` - Total number of nodes in the story
+/// * `node_count` - Total number of nodes in the story (4-100)
+/// * `config` - Convergence configuration including pattern and ratio
 ///
 /// # Returns
 ///
-/// Vector of node indices where convergence should occur
+/// Vector of node indices (0-based) where convergence occurs.
+/// Empty vector for PureBranching and ParallelPaths patterns.
+///
+/// # Panics
+///
+/// Panics if ratio is None for patterns that require it:
+/// - SingleConvergence
+/// - MultipleConvergence
+/// - EndOnly
+///
+/// # Patterns
+///
+/// - **SingleConvergence**: One convergence point at `(node_count * ratio)`, clamped to [1, node_count-2]
+/// - **MultipleConvergence**: Multiple convergence points at intervals of `(node_count * ratio)`, minimum interval 2
+/// - **EndOnly**: One late convergence point at `(node_count * ratio)`, clamped to [node_count-3, node_count-2]
+/// - **PureBranching**: No convergence points (empty vec)
+/// - **ParallelPaths**: No convergence points (empty vec)
 ///
 /// # Examples
 ///
 /// ```
-/// use story_generator::structure::calculate_convergence_points;
-/// use shared_types::constants::DEFAULT_NODE_COUNT;
+/// use story_generator::structure::{calculate_convergence_points, ConvergenceConfig};
+/// use shared_types::ConvergencePattern;
 ///
-/// let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-/// assert!(!convergence_points.is_empty());
+/// let config = ConvergenceConfig {
+///     pattern: ConvergencePattern::SingleConvergence,
+///     ratio: Some(0.5),
+/// };
+/// let points = calculate_convergence_points(16, &config);
+/// assert_eq!(points, vec![8]);
 /// ```
-pub fn calculate_convergence_points(node_count: usize) -> Vec<usize> {
-    if node_count < 4 {
-        // For very small DAGs, just have one convergence point in the middle
-        return vec![node_count / 2];
+pub fn calculate_convergence_points(node_count: usize, config: &ConvergenceConfig) -> Vec<usize> {
+    match config.pattern {
+        ConvergencePattern::SingleConvergence => {
+            let ratio = config.ratio.expect("SingleConvergence requires a ratio");
+            let position = (node_count as f64 * ratio).round() as usize;
+            // Clamp to ensure it's not at start (0) or beyond the range
+            // Allow convergence up to and including the final node (node_count-1)
+            let max_pos = if node_count > 1 { node_count - 1 } else { 1 };
+            let position = position.clamp(1, max_pos);
+            vec![position]
+        }
+        ConvergencePattern::MultipleConvergence => {
+            let ratio = config.ratio.expect("MultipleConvergence requires a ratio");
+
+            let mut points = Vec::new();
+            let mut multiplier = 1.0;
+
+            // Place convergence points at each ratio interval (ratio, 2*ratio, 3*ratio, ...)
+            // until we reach node_count-1
+            loop {
+                let position = (node_count as f64 * ratio * multiplier).round() as usize;
+
+                // Stop if we've reached or passed the final node
+                if position >= node_count - 1 {
+                    break;
+                }
+
+                // Ensure minimum spacing of 2 nodes from the previous point
+                if points.is_empty() || position >= points[points.len() - 1] + 2 {
+                    points.push(position);
+                }
+
+                multiplier += 1.0;
+            }
+
+            // Fallback: if no points were added, add one in the middle
+            if points.is_empty() {
+                points.push(node_count / 2);
+            }
+            points
+        }
+        ConvergencePattern::EndOnly => {
+            let ratio = config.ratio.expect("EndOnly requires a ratio");
+            let position = (node_count as f64 * ratio).round() as usize;
+            // EndOnly should be very near the end but not AT the final node (node_count-1)
+            // Clamp to ensure it's in range [1, node_count-2] for node_count > 2
+            let max_pos = if node_count > 2 { node_count - 2 } else { 1 };
+            let position = position.clamp(1, max_pos);
+            vec![position]
+        }
+        ConvergencePattern::PureBranching | ConvergencePattern::ParallelPaths => {
+            Vec::new()
+        }
     }
-
-    let mut convergence_points = Vec::new();
-
-    // Calculate interval based on convergence ratio
-    // For ratio 0.5 with 16 nodes: interval = 16 * 0.5 = 8
-    let interval = ((node_count as f64) * CONVERGENCE_POINT_RATIO) as usize;
-
-    // Ensure minimum interval of 2 to allow branching
-    let interval = interval.max(2);
-
-    // Place convergence points at intervals, but not at start (0) or end (node_count-1)
-    let mut position = interval;
-    while position < node_count - 1 {
-        convergence_points.push(position);
-        position += interval;
-    }
-
-    // If no convergence points were added (very small graph), add one in the middle
-    if convergence_points.is_empty() {
-        convergence_points.push(node_count / 2);
-    }
-
-    convergence_points
 }
 
 /// Generate DAG structure with branching and convergence
 ///
 /// Creates a complete DAG with:
 /// - Root node (id=0) with no incoming edges
-/// - Intermediate nodes with branching choices (2-3 outgoing edges)
-/// - Convergence points where branches merge
+/// - Intermediate nodes with branching choices based on `branching_factor`
+/// - Convergence points where branches merge (determined by convergence pattern)
 /// - End node (id=node_count-1) with no outgoing edges
 ///
 /// # Arguments
 ///
-/// * `node_count` - Total number of nodes to generate
-/// * `convergence_points` - Indices where branches should converge
+/// * `dag_config` - Complete DAG structure configuration including:
+///   - `node_count`: Total number of nodes (minimum 3)
+///   - `convergence_pattern`: Strategy for placing convergence points
+///   - `convergence_point_ratio`: Position ratio for convergence (when applicable)
+///   - `branching_factor`: Number of choices per decision node (2-4)
+///   - `max_depth`: Maximum depth of DAG tree (currently unused in implementation)
 ///
 /// # Returns
 ///
@@ -100,18 +174,31 @@ pub fn calculate_convergence_points(node_count: usize) -> Vec<usize> {
 /// # Examples
 ///
 /// ```
-/// use story_generator::structure::{calculate_convergence_points, generate_dag_structure};
-/// use shared_types::constants::DEFAULT_NODE_COUNT;
+/// use story_generator::structure::generate_dag_structure;
+/// use shared_types::{DagStructureConfig, ConvergencePattern};
 ///
-/// let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-/// let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+/// let dag_config = DagStructureConfig {
+///     node_count: 16,
+///     convergence_pattern: ConvergencePattern::SingleConvergence,
+///     convergence_point_ratio: Some(0.5),
+///     max_depth: 10,
+///     branching_factor: 2,
+/// };
+/// let dag = generate_dag_structure(&dag_config)
 ///     .expect("Should generate valid DAG");
-/// assert_eq!(dag.nodes.len(), DEFAULT_NODE_COUNT);
+/// assert_eq!(dag.nodes.len(), 16);
 /// ```
 pub fn generate_dag_structure(
-    node_count: usize,
-    convergence_points: Vec<usize>,
+    dag_config: &DagStructureConfig,
 ) -> Result<DAG, TaleTrailError> {
+    // Convert i64 to usize for internal processing
+    let node_count: usize = dag_config.node_count.try_into()
+        .map_err(|_| TaleTrailError::ValidationError(
+            format!("Invalid node count: {} (must be non-negative and fit in usize)", dag_config.node_count)
+        ))?;
+
+    let convergence_config = ConvergenceConfig::from(dag_config);
+    let convergence_points = calculate_convergence_points(node_count, &convergence_config);
     // Validate minimum node count
     if node_count < 3 {
         return Err(TaleTrailError::ValidationError(
@@ -161,16 +248,34 @@ pub fn generate_dag_structure(
 
     // Create edges to form branching structure
     // Strategy: Create branches that converge at convergence points
-    create_branching_structure(&mut dag, node_count, &convergence_set)?;
+    let branching_factor: usize = dag_config.branching_factor.try_into()
+        .map_err(|_| TaleTrailError::ValidationError(
+            format!("Invalid branching factor: {} (must be non-negative and fit in usize)", dag_config.branching_factor)
+        ))?;
+    create_branching_structure(&mut dag, node_count, &convergence_set, branching_factor)?;
 
     Ok(dag)
 }
 
 /// Create branching structure with edges connecting nodes
+///
+/// # Arguments
+///
+/// * `dag` - The DAG being constructed
+/// * `node_count` - Total number of nodes
+/// * `convergence_set` - Set of convergence point indices
+/// * `branching_factor` - Number of outgoing edges per decision node (currently creates 2-3 edges regardless)
+///
+/// # Note
+///
+/// The branching_factor parameter is accepted for API consistency but the current implementation
+/// creates a fixed branching pattern (linear + convergence + midpoint edges). Future versions
+/// should respect the branching_factor value.
 fn create_branching_structure(
     dag: &mut DAG,
     node_count: usize,
     convergence_set: &HashSet<usize>,
+    _branching_factor: usize, // TODO: Use this to control number of branches
 ) -> Result<(), TaleTrailError> {
     let end_node_index = node_count - 1;
 
@@ -440,7 +545,11 @@ mod tests {
 
     #[test]
     fn test_calculate_convergence_basic() {
-        let points = calculate_convergence_points(16);
+        let config = ConvergenceConfig {
+            pattern: ConvergencePattern::MultipleConvergence,
+            ratio: Some(CONVERGENCE_POINT_RATIO),
+        };
+        let points = calculate_convergence_points(16, &config);
         assert!(!points.is_empty());
         // With ratio 0.5 and 16 nodes, expect convergence around position 8
         assert!(points.contains(&8));
@@ -448,8 +557,14 @@ mod tests {
 
     #[test]
     fn test_generate_dag_basic() {
-        let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-        let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+        let dag_config = DagStructureConfig {
+            node_count: DEFAULT_NODE_COUNT,
+            convergence_pattern: ConvergencePattern::SingleConvergence,
+            convergence_point_ratio: Some(0.5),
+            max_depth: 10,
+            branching_factor: 2,
+        };
+        let dag = generate_dag_structure(&dag_config)
             .expect("Should generate DAG");
 
         assert_eq!(dag.nodes.len(), DEFAULT_NODE_COUNT);
@@ -458,8 +573,14 @@ mod tests {
 
     #[test]
     fn test_validate_connectivity_basic() {
-        let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-        let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+        let dag_config = DagStructureConfig {
+            node_count: DEFAULT_NODE_COUNT,
+            convergence_pattern: ConvergencePattern::SingleConvergence,
+            convergence_point_ratio: Some(0.5),
+            max_depth: 10,
+            branching_factor: 2,
+        };
+        let dag = generate_dag_structure(&dag_config)
             .expect("Should generate DAG");
 
         validate_path_connectivity(&dag).expect("Should validate");
@@ -467,8 +588,14 @@ mod tests {
 
     #[test]
     fn test_validate_reachability_basic() {
-        let convergence_points = calculate_convergence_points(DEFAULT_NODE_COUNT);
-        let dag = generate_dag_structure(DEFAULT_NODE_COUNT, convergence_points)
+        let dag_config = DagStructureConfig {
+            node_count: DEFAULT_NODE_COUNT,
+            convergence_pattern: ConvergencePattern::SingleConvergence,
+            convergence_point_ratio: Some(0.5),
+            max_depth: 10,
+            branching_factor: 2,
+        };
+        let dag = generate_dag_structure(&dag_config)
             .expect("Should generate DAG");
 
         validate_reachability(&dag).expect("Should validate");

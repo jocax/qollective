@@ -349,8 +349,10 @@ de = "test-model-de"
             },
             dag: DagConfig {
                 default_node_count: 10,
+                convergence_pattern: "SingleConvergence".to_string(),
                 convergence_point_ratio: 0.6,
                 max_depth: 20,
+                branching_factor: 2,
             },
             negotiation: NegotiationConfig {
                 max_rounds: 3,
@@ -374,6 +376,8 @@ de = "test-model-de"
             tags: Some(vec!["space".to_string(), "science".to_string()]),
             prompt_packages: None,
             author_id: Some(Some(1)),
+            story_structure: None,
+            dag_config: None,
         }
     }
 
@@ -391,7 +395,11 @@ de = "test-model-de"
                 .await
                 .expect("Failed to connect to NATS for test")
         );
-        let orchestrator = Arc::new(Orchestrator::new(nats_client, config));
+        let orchestrator = Arc::new(
+            Orchestrator::new(nats_client, config)
+                .await
+                .expect("Failed to create orchestrator")
+        );
         let handler = OrchestratorHandler::new(orchestrator);
 
         let request = CallToolRequest {
@@ -443,7 +451,11 @@ de = "test-model-de"
                 .await
                 .expect("Failed to connect to NATS for test")
         );
-        let orchestrator = Arc::new(Orchestrator::new(nats_client, config));
+        let orchestrator = Arc::new(
+            Orchestrator::new(nats_client, config)
+                .await
+                .expect("Failed to create orchestrator")
+        );
         let handler = OrchestratorHandler::new(orchestrator);
 
         // Create envelope with NO tool_call

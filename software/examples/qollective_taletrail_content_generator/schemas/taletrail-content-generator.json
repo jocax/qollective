@@ -308,6 +308,15 @@
         "prompt_packages": {
           "type": ["object", "null"],
           "description": "Cached prompts from prompt-helper (Phase 0.5)"
+        },
+        "story_structure": {
+          "type": "string",
+          "enum": ["guided", "adventure", "epic", "choose_your_path"],
+          "description": "Predefined story structure preset (Tier 1: Simple). Mutually exclusive with dag_config. Takes priority if both provided"
+        },
+        "dag_config": {
+          "$ref": "#/$defs/DagStructureConfig",
+          "description": "Custom DAG configuration (Tier 2: Advanced). Mutually exclusive with story_structure"
         }
       }
     },
@@ -342,6 +351,10 @@
         },
         "prompt_generation_metadata": {
           "$ref": "#/$defs/PromptGenerationSummary"
+        },
+        "execution_trace": {
+          "$ref": "#/$defs/PipelineExecutionTrace",
+          "description": "Complete execution trace with all service invocations and timing"
         },
         "errors": {
           "type": "array",
@@ -1096,6 +1109,130 @@
           "type": "string",
           "format": "uuid",
           "description": "Correlation ID for tracking request chains across services"
+        }
+      }
+    },
+
+    "ConvergencePattern": {
+      "type": "string",
+      "enum": ["SingleConvergence", "MultipleConvergence", "EndOnly", "PureBranching", "ParallelPaths"],
+      "description": "Pattern for how story branches converge"
+    },
+
+    "DagStructureConfig": {
+      "type": "object",
+      "required": ["node_count", "convergence_pattern", "max_depth", "branching_factor"],
+      "properties": {
+        "node_count": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 100,
+          "description": "Total number of nodes in story DAG"
+        },
+        "convergence_pattern": {
+          "$ref": "#/$defs/ConvergencePattern"
+        },
+        "convergence_point_ratio": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Position of convergence as ratio (0.5 = midpoint). Required for SingleConvergence, MultipleConvergence, and EndOnly. Must be omitted for PureBranching and ParallelPaths"
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 20,
+          "description": "Maximum depth of DAG tree"
+        },
+        "branching_factor": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 4,
+          "description": "Number of choices per decision node"
+        }
+      }
+    },
+
+    "ServiceInvocation": {
+      "type": "object",
+      "required": ["service_name", "tool_name", "started_at", "duration_ms", "success", "phase"],
+      "properties": {
+        "service_name": {
+          "type": "string",
+          "description": "MCP service name (prompt-helper, story-generator, quality-control, constraint-enforcer)"
+        },
+        "tool_name": {
+          "type": "string",
+          "description": "MCP tool invoked (generate_structure, validate_content, etc.)"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the service call started"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Duration of service call in milliseconds"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the service call succeeded"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Error message if service call failed"
+        },
+        "phase": {
+          "$ref": "#/$defs/GenerationPhase",
+          "description": "Pipeline phase during which this service was invoked"
+        },
+        "node_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Node ID being processed (for content generation and validation)"
+        },
+        "batch_id": {
+          "type": "integer",
+          "description": "Batch ID if part of batch processing"
+        }
+      }
+    },
+
+    "PipelineExecutionTrace": {
+      "type": "object",
+      "required": ["request_id", "total_duration_ms", "phases_completed", "service_invocations"],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Request ID for this execution"
+        },
+        "total_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total pipeline execution time in milliseconds"
+        },
+        "phases_completed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GenerationPhase"
+          },
+          "description": "List of pipeline phases completed in order"
+        },
+        "service_invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServiceInvocation"
+          },
+          "description": "Complete history of all MCP service calls with timing"
+        },
+        "events_published": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "All pipeline events published to NATS (optional, for debugging)"
         }
       }
     }

@@ -35,19 +35,30 @@ use tracing::warn;
 pub fn handle_generate_structure(
     params: GenerateStructureParams,
 ) -> Result<GenerateStructureResponse, TaleTrailError> {
-    // Extract node count from request or use default
-    let node_count = params
-        .generation_request
-        .node_count
-        .map(|n| n as usize)
-        .unwrap_or(DEFAULT_NODE_COUNT);
+    // Use dag_config from request if provided, otherwise create default config
+    let dag_config = if let Some(config) = &params.generation_request.dag_config {
+        config.clone()
+    } else {
+        // Create default config with SingleConvergence pattern
+        use shared_types::{ConvergencePattern, DagStructureConfig};
 
-    // Calculate convergence points based on node count
-    let convergence_points = calculate_convergence_points(node_count);
-    let convergence_point_count = convergence_points.len();
+        let node_count = params
+            .generation_request
+            .node_count
+            .unwrap_or(DEFAULT_NODE_COUNT as i64);
+
+        DagStructureConfig {
+            node_count,
+            convergence_pattern: ConvergencePattern::SingleConvergence,
+            convergence_point_ratio: Some(0.5),
+            max_depth: 10,
+            branching_factor: 2,
+        }
+    };
 
     // Generate DAG structure
-    let dag = generate_dag_structure(node_count, convergence_points)?;
+    let dag = generate_dag_structure(&dag_config)?;
+    let convergence_point_count = dag.convergence_points.len();
 
     // Return response with structure metadata
     Ok(GenerateStructureResponse {
@@ -345,6 +356,8 @@ mod tests {
             tags: None,
             author_id: None,
             prompt_packages: None,
+            story_structure: None,
+            dag_config: None,
         }
     }
 

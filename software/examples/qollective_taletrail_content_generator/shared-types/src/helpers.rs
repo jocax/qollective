@@ -251,6 +251,8 @@ mod tests {
             author_id: None,
             tenant_id: 1,
             prompt_packages: None,
+            story_structure: None,
+            dag_config: None,
         };
 
         let custom_meta = TaleTrailCustomMetadata::new()
@@ -283,6 +285,8 @@ mod tests {
             author_id: None,
             tenant_id: 1,
             prompt_packages: None,
+            story_structure: None,
+            dag_config: None,
         };
 
         let envelope = create_request_envelope(request, 1, None, None).unwrap();

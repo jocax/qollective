@@ -117,6 +117,8 @@ fn test_generation_request(theme: &str) -> GenerationRequest {
         author_id: None,
         required_elements: None,
         vocabulary_level: None,
+        dag_config: None,
+        story_structure: None,
     }
 }
 

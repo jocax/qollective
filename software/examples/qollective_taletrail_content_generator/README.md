@@ -631,6 +631,158 @@ curl --insecure -X POST https://localhost:8443/health -H "Content-Type: applicat
 - Phase 5: HTTP API Gateway
 - Phase 6: Documentation & Finalization
 
+## DAG Configuration
+
+TaleTrail uses a **two-tier DAG configuration model** that balances simplicity with advanced control. Users can choose between predefined presets (Tier 1) for common use cases or provide complete custom DAG configurations (Tier 2) for advanced scenarios.
+
+### Two-Tier Model Overview
+
+**Tier 1: Story Structure Presets** - Simple, predefined configurations
+- Use `story_structure` field in request JSON
+- 4 presets covering common storytelling patterns
+- No manual parameter tuning required
+- Ideal for most educational content
+
+**Tier 2: Custom DAG Configuration** - Full parameter control
+- Use `dag_config` object in request JSON
+- 5 parameters for complete DAG specification
+- Fine-grained control over story structure
+- Ideal for specialized content or experimentation
+
+**Tier 3: Orchestrator Defaults** - Fallback configuration
+- Defined in `orchestrator/config.toml`
+- Used when neither preset nor custom config provided
+- Provides sensible defaults for basic story generation
+
+### Tier 1: Story Structure Presets
+
+Predefined presets optimized for different storytelling styles:
+
+| Preset | Nodes | Pattern | Convergence | Max Depth | Branching | Use Case |
+|--------|-------|---------|-------------|-----------|-----------|----------|
+| `guided` | 12 | SingleConvergence | 50% (node 6) | 8 | 2 | Linear story with one major turning point |
+| `adventure` | 16 | MultipleConvergence | 60% intervals | 10 | 2 | Branching story with multiple convergence points |
+| `epic` | 24 | EndOnly | 90% (node ~21) | 12 | 2 | Complex branching that converges at climax |
+| `choose_your_path` | 16 | PureBranching | None | 10 | 3 | Pure choice tree with multiple endings |
+
+**Example Request with Preset:**
+```json
+{
+  "theme": "Ocean Adventure with Marine Biology",
+  "age_group": "9-11",
+  "language": "en",
+  "educational_goals": ["ocean ecosystem", "marine life"],
+  "vocabulary_level": "intermediate",
+  "story_structure": "guided"
+}
+```
+
+### Tier 2: Custom DAG Configuration
+
+For advanced control, specify all 5 DAG parameters directly:
+
+| Parameter | Type | Range | Description |
+|-----------|------|-------|-------------|
+| `node_count` | integer | 4-100 | Total nodes in story DAG |
+| `convergence_pattern` | enum | See patterns below | How story branches converge |
+| `convergence_point_ratio` | float | 0.0-1.0 | Position of convergence as ratio (0.5 = midpoint) |
+| `max_depth` | integer | 3-20 | Maximum depth of DAG tree structure |
+| `branching_factor` | integer | 2-4 | Number of choices per decision node |
+
+**Convergence Patterns:**
+- `SingleConvergence` - One major convergence point (requires `convergence_point_ratio`)
+- `MultipleConvergence` - Multiple convergence at intervals (requires `convergence_point_ratio`)
+- `EndOnly` - Converges only at story climax (requires `convergence_point_ratio`)
+- `PureBranching` - No convergence, multiple endings (no ratio needed)
+- `ParallelPaths` - Parallel story tracks (no ratio needed)
+
+**Example Request with Custom DAG:**
+```json
+{
+  "theme": "Medieval Quest for the Sacred Artifact",
+  "age_group": "12-14",
+  "language": "en",
+  "educational_goals": ["medieval history", "ethics", "strategy"],
+  "vocabulary_level": "intermediate",
+  "dag_config": {
+    "node_count": 20,
+    "convergence_pattern": "MultipleConvergence",
+    "convergence_point_ratio": 0.33,
+    "max_depth": 15,
+    "branching_factor": 2
+  }
+}
+```
+
+### Configuration Priority
+
+When multiple configuration sources are present, TaleTrail uses this priority order:
+
+1. **Priority 1 (Highest)**: `story_structure` preset in request JSON
+2. **Priority 2 (Middle)**: Custom `dag_config` object in request JSON
+3. **Priority 3 (Lowest)**: Orchestrator defaults from `config.toml`
+
+**Example - Preset Wins:**
+```json
+{
+  "theme": "Space Exploration",
+  "age_group": "9-11",
+  "language": "en",
+  "story_structure": "guided",
+  "dag_config": {
+    "node_count": 20,
+    "convergence_pattern": "Epic"
+  }
+}
+```
+In this case, the `guided` preset configuration will be used, and `dag_config` will be logged but ignored.
+
+### Testing with NATS-CLI
+
+TaleTrail includes template files for testing each configuration approach:
+
+**Test Preset Configurations:**
+```bash
+# Test guided preset (12 nodes, single convergence)
+cargo run -p nats-cli -- send --template templates/orchestrator/request_guided.json
+
+# Test adventure preset (16 nodes, multiple convergence)
+cargo run -p nats-cli -- send --template templates/orchestrator/request_adventure.json
+
+# Test epic preset (24 nodes, end-only convergence)
+cargo run -p nats-cli -- send --template templates/orchestrator/request_epic.json
+
+# Test choose_your_path preset (16 nodes, pure branching)
+cargo run -p nats-cli -- send --template templates/orchestrator/request_choose_your_path.json
+```
+
+**Test Custom DAG Configuration:**
+```bash
+# Test custom DAG with 20 nodes and multiple convergence
+cargo run -p nats-cli -- send --template templates/orchestrator/request_custom_dag.json
+```
+
+### Validation Rules
+
+TaleTrail validates all DAG configurations before generation:
+
+- **node_count**: Must be 4-100 (minimum for meaningful story, maximum for performance)
+- **convergence_pattern**: Must be one of the 5 valid patterns
+- **convergence_point_ratio**:
+  - Required for `SingleConvergence`, `MultipleConvergence`, and `EndOnly`
+  - Must be omitted for `PureBranching` and `ParallelPaths`
+  - Must be between 0.0 and 1.0 when provided
+- **max_depth**: Must be 3-20 (minimum for branching structure, maximum for complexity)
+- **branching_factor**: Must be 2-4 (2-3 typical for readability, 4 for highly complex stories)
+
+**Validation Errors:**
+- Invalid preset name → Error message lists valid options
+- Missing `convergence_point_ratio` → Validation error explains requirement
+- Out-of-range values → Error specifies valid range
+- Both preset and custom config → Warning logged, preset takes priority
+
+For complete configuration details, validation rules, and migration guides, see `CONFIGURATION.md`.
+
 ## Troubleshooting
 
 ### NKey Authentication Failures

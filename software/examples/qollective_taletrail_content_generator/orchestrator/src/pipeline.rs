@@ -121,6 +121,8 @@ mod tests {
             tags: None,
             prompt_packages: None,
             author_id: None,
+            story_structure: None,
+            dag_config: None,
         }
     }
 

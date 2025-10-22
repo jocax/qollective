@@ -8,5 +8,15 @@
 // Include generated module
 mod generated;
 
+// Extension modules for business logic
+pub mod extensions;
+pub mod presets;
+
 // Re-export all generated types
 pub use generated::*;
+
+// Re-export extension methods
+pub use extensions::*;
+
+// Re-export presets
+pub use presets::{PresetError, StoryStructurePreset};
