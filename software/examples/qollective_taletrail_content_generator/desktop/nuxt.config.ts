@@ -8,7 +8,7 @@ export default defineNuxtConfig({
 	],
 	app: {
 		head: {
-			title: "Nuxtor",
+			title: "TaleTrails",
 			charset: "utf-8",
 			viewport: "width=device-width, initial-scale=1",
 			meta: [
@@ -65,7 +65,8 @@ export default defineNuxtConfig({
 		}
 	},
 	devServer: {
-		host: "0.0.0.0"
+		host: "0.0.0.0",
+		port: 3030
 	},
 	router: {
 		options: {

@@ -2,7 +2,11 @@ export const usePages = () => {
 	const router = useRouter();
 	const { pageCategories } = useAppConfig();
 
-	const routes = router.getRoutes().filter((route) => route.name !== "index" && route.name !== "all");
+	const routes = router.getRoutes().filter((route) =>
+		route.name !== "index" &&
+		route.name !== "all" &&
+		route.meta.showInNav === true
+	);
 
 	const categorizedRoutes = routes.reduce((acc, route) => {
 		const category = route.meta.category as string || "other";

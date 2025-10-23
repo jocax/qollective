@@ -1,8 +1,8 @@
 export default defineAppConfig({
 	app: {
-		name: "Nuxtor",
-		author: "Nicola Spadari",
-		repo: "https://github.com/NicolaSpadari/nuxtor",
+		name: "TaleTrails",
+		author: "Michael",
+		repo: "https://github.com/jocax/",
 		tauriSite: "https://tauri.app",
 		nuxtSite: "https://nuxt.com",
 		nuxtUiSite: "https://ui4.nuxt.dev"
@@ -19,6 +19,10 @@ export default defineAppConfig({
 		interface: {
 			label: "Interface",
 			icon: "lucide:app-window-mac"
+		},
+		monitoring: {
+			label: "Monitoring",
+			icon: "lucide:radio"
 		},
 		other: {
 			label: "Other",

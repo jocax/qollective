@@ -1,0 +1,16 @@
+{
+  "tool_name": "orchestrate_generation",
+  "arguments": {
+    "generation_request": {
+      "theme": "Massenmörder im 19. Jahrhundert",
+      "age_group": "+18",
+      "language": "de",
+      "tenant_id": 1,
+      "educational_goals": ["Geschichte", "Kriminalität", "Polizeiarbeit","Medizinische Entwicklung", "Forensik"],
+      "vocabulary_level": "advanced",
+      "required_elements": ["Industrie","Staatliche Ordnung", "historischer Kontext", "Soziale Mißstände", "Gesellschaftliche Verwerfungen"],
+      "tags": ["Politik in Europa", "Geschichte", "Gesellschaft", "Gewalt"],
+      "story_structure": "epic"
+    }
+  }
+}

@@ -9,3 +9,11 @@
 		</Body>
 	</Html>
 </template>
+
+<script setup lang="ts">
+const { loadTheme } = useTheme()
+
+onMounted(() => {
+	loadTheme()
+})
+</script>

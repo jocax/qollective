@@ -1,0 +1,16 @@
+{
+  "tool_name": "orchestrate_generation",
+  "arguments": {
+    "generation_request": {
+      "theme": "Heimische Flora und Fauna im mediteranen Raum",
+      "age_group": "15-17",
+      "language": "de",
+      "tenant_id": 1,
+      "educational_goals": ["Natur", "Tiere und Pflanzen", "Kausalität","Plastik"],
+      "vocabulary_level": "advanced",
+      "required_elements": ["Industrie und Natur Dilemma","Verordnungen und Gesetze", "historischer Kontext", "aktuelle Probleme", "Gesellschaftliche Verwerfungen"],
+      "tags": ["Politik der EU", "Geschichte", "Gesellschaft", "Natur"],
+      "story_structure": "epic"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Preview
 
-Since Nuxtor is a desktop application, there is no way of showing the look and feel of the released project.
+Since TaleTrails is a desktop application, there is no way of showing the look and feel of the released project.
 
 What follows are each page and its functionalities:
 

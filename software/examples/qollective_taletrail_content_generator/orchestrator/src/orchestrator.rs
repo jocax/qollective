@@ -375,13 +375,17 @@ impl Orchestrator {
         let duration_ms_u64 = duration_ms as u64;
 
         // Publish event
+        let tenant_id_str = format!("tenant-{}", request.tenant_id);
         self.event_publisher
-            .publish_event(PipelineEvent::PromptsGenerated {
-                request_id: request_id.to_string(),
-                duration_ms: duration_ms_u64,
-                fallback_count: 0, // TODO: Track from prompt_orchestrator
-                services: prompts.keys().map(|k| format!("{:?}", k)).collect(),
-            })
+            .publish_event(
+                PipelineEvent::PromptsGenerated {
+                    request_id: request_id.to_string(),
+                    duration_ms: duration_ms_u64,
+                    fallback_count: 0, // TODO: Track from prompt_orchestrator
+                    services: prompts.keys().map(|k| format!("{:?}", k)).collect(),
+                },
+                Some(&tenant_id_str)
+            )
             .await?;
 
         // Store in state
@@ -511,12 +515,16 @@ impl Orchestrator {
         let dag = response.dag;
 
         // Publish event
+        let tenant_id_str = format!("tenant-{}", request.tenant_id);
         self.event_publisher
-            .publish_event(PipelineEvent::StructureCreated {
-                request_id: request_id.to_string(),
-                node_count: dag.nodes.len(),
-                convergence_points: response.convergence_point_count,
-            })
+            .publish_event(
+                PipelineEvent::StructureCreated {
+                    request_id: request_id.to_string(),
+                    node_count: dag.nodes.len(),
+                    convergence_points: response.convergence_point_count,
+                },
+                Some(&tenant_id_str)
+            )
             .await?;
 
         // Store in state
@@ -573,13 +581,17 @@ impl Orchestrator {
             batch_id += 1;
 
             // Publish batch started event
+            let tenant_id_str = format!("tenant-{}", request.tenant_id);
             self.event_publisher
-                .publish_event(PipelineEvent::BatchStarted {
-                    request_id: request_id.to_string(),
-                    batch_id,
-                    node_count: batch.len(),
-                    nodes: batch.clone(),
-                })
+                .publish_event(
+                    PipelineEvent::BatchStarted {
+                        request_id: request_id.to_string(),
+                        batch_id,
+                        node_count: batch.len(),
+                        nodes: batch.clone(),
+                    },
+                    Some(&tenant_id_str)
+                )
                 .await?;
 
             let start = std::time::Instant::now();
@@ -670,13 +682,17 @@ impl Orchestrator {
             let duration_ms = start.elapsed().as_millis() as u64;
 
             // Publish batch completed event
+            let tenant_id_str = format!("tenant-{}", request.tenant_id);
             self.event_publisher
-                .publish_event(PipelineEvent::BatchCompleted {
-                    request_id: request_id.to_string(),
-                    batch_id,
-                    success: true,
-                    duration_ms,
-                })
+                .publish_event(
+                    PipelineEvent::BatchCompleted {
+                        request_id: request_id.to_string(),
+                        batch_id,
+                        success: true,
+                        duration_ms,
+                    },
+                    Some(&tenant_id_str)
+                )
                 .await?;
 
             // Update progress
@@ -756,12 +772,16 @@ impl Orchestrator {
         let meta = self.create_meta(request, request_id);
 
         // Publish ValidationStarted event
+        let tenant_id_str = format!("tenant-{}", request.tenant_id);
         self.event_publisher
-            .publish_event(PipelineEvent::ValidationStarted {
-                request_id: request_id.to_string(),
-                batch_id: 0, // Individual node validation, not batched
-                validator: "quality-control".to_string(),
-            })
+            .publish_event(
+                PipelineEvent::ValidationStarted {
+                    request_id: request_id.to_string(),
+                    batch_id: 0, // Individual node validation, not batched
+                    validator: "quality-control".to_string(),
+                },
+                Some(&tenant_id_str)
+            )
             .await?;
 
         let tool_request = CallToolRequest {
@@ -855,12 +875,16 @@ impl Orchestrator {
         let meta = self.create_meta(request, request_id);
 
         // Publish ValidationStarted event
+        let tenant_id_str = format!("tenant-{}", request.tenant_id);
         self.event_publisher
-            .publish_event(PipelineEvent::ValidationStarted {
-                request_id: request_id.to_string(),
-                batch_id: 0, // Individual node validation, not batched
-                validator: "constraint-enforcer".to_string(),
-            })
+            .publish_event(
+                PipelineEvent::ValidationStarted {
+                    request_id: request_id.to_string(),
+                    batch_id: 0, // Individual node validation, not batched
+                    validator: "constraint-enforcer".to_string(),
+                },
+                Some(&tenant_id_str)
+            )
             .await?;
 
         let tool_request = CallToolRequest {
@@ -929,6 +953,64 @@ impl Orchestrator {
         Ok(response.constraint_result)
     }
 
+    /// Convert DAG nodes to trail steps
+    ///
+    /// Transforms the DAG structure into an ordered list of trail steps for frontend consumption.
+    /// Each trail step contains:
+    /// - Sequential ordering (step_order starting at 1)
+    /// - Full content with text, choices, and navigation data
+    /// - Metadata including node_id and convergence_point status
+    ///
+    /// The ordering preserves the DAG's HashMap iteration order. For deterministic ordering in
+    /// production, consider sorting by node_id or implementing a topological sort based on edges.
+    ///
+    /// # Arguments
+    ///
+    /// * `dag` - The complete DAG with nodes, edges, and convergence points
+    ///
+    /// # Returns
+    ///
+    /// Vec<TrailStep> - Ordered list of trail steps ready for frontend visualization
+    fn dag_to_trail_steps(dag: &DAG) -> Vec<TrailStep> {
+        dag.nodes
+            .iter()
+            .enumerate()
+            .map(|(idx, (node_id, node))| {
+                let mut metadata = HashMap::new();
+                metadata.insert("node_id".to_string(), serde_json::json!(node_id));
+                metadata.insert(
+                    "convergence_point".to_string(),
+                    serde_json::json!(dag.convergence_points.contains(node_id)),
+                );
+
+                // Add edge information for debugging/visualization
+                metadata.insert("incoming_edges".to_string(), serde_json::json!(node.incoming_edges));
+                metadata.insert("outgoing_edges".to_string(), serde_json::json!(node.outgoing_edges));
+
+                TrailStep {
+                    step_order: (idx + 1) as i64,
+                    title: None, // Could extract from content.text first sentence if needed
+                    description: None,
+                    is_required: true, // All nodes in generated DAG are considered required
+                    metadata,
+                    content_reference: ContentReference {
+                        temp_node_id: node_id.clone(),
+                        content: {
+                            let mut content = node.content.clone();
+                            // Populate next_node_id for each choice from DAG edges
+                            for choice in &mut content.choices {
+                                if let Some(edge) = dag.edges.iter().find(|e| e.choice_id == choice.id) {
+                                    choice.next_node_id = edge.to_node_id.clone();
+                                }
+                            }
+                            content
+                        },
+                    },
+                }
+            })
+            .collect()
+    }
+
     /// Phase 5: Assemble final response
     ///
     /// Creates final generation response with DAG and metadata, publishes
@@ -953,14 +1035,18 @@ impl Orchestrator {
         let total_duration_ms = start_time.elapsed().as_millis() as u64;
 
         // Publish completion event
+        let tenant_id_str = format!("tenant-{}", request.tenant_id);
         self.event_publisher
-            .publish_event(PipelineEvent::Complete {
-                request_id: request_id.to_string(),
-                total_duration_ms,
-                total_nodes: dag.nodes.len(),
-                total_validations: dag.nodes.len() * 2, // quality + constraints
-                negotiation_rounds: 0,                  // TODO: Track from negotiation
-            })
+            .publish_event(
+                PipelineEvent::Complete {
+                    request_id: request_id.to_string(),
+                    total_duration_ms,
+                    total_nodes: dag.nodes.len(),
+                    total_validations: dag.nodes.len() * 2, // quality + constraints
+                    negotiation_rounds: 0,                  // TODO: Track from negotiation
+                },
+                Some(&tenant_id_str)
+            )
             .await?;
 
         // Build execution trace
@@ -1046,8 +1132,8 @@ impl Orchestrator {
             }),
             prompt_generation_metadata: None, // TODO: Add from prompt orchestration phase
             trail: Some(trail),
-            trail_steps: None, // TODO: Convert DAG nodes to trail steps
-            execution_trace: Some(execution_trace), // NEW: Include execution trace
+            trail_steps: Some(Self::dag_to_trail_steps(&dag)),
+            execution_trace: Some(execution_trace),
             errors: None,
         };
 
@@ -1227,5 +1313,437 @@ impl Orchestrator {
         meta: Meta,
     ) -> Result<T> {
         self.mcp_client.call_tool(subject, request, meta).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared_types::{AgeGroup, Choice, Content, ContentNode, DAG, Edge, Language};
+
+    /// Helper function to create a test ContentNode
+    fn create_test_node(node_id: &str, choices: Vec<Choice>) -> ContentNode {
+        let outgoing_edges = choices.len() as i64;
+        ContentNode {
+            id: node_id.to_string(),
+            content: Content {
+                node_id: node_id.to_string(),
+                text: format!("Test content for {}", node_id),
+                r#type: "story".to_string(),
+                choices,
+                next_nodes: vec![],
+                convergence_point: false,
+                educational_content: None,
+            },
+            incoming_edges: 0,
+            outgoing_edges,
+            generation_metadata: None,
+        }
+    }
+
+    /// Helper function to create a test Choice
+    fn create_test_choice(choice_id: &str, text: &str) -> Choice {
+        Choice {
+            id: choice_id.to_string(),
+            text: text.to_string(),
+            next_node_id: String::new(), // Start empty - should be populated by dag_to_trail_steps
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn test_dag_to_trail_steps_linear_story() {
+        // Create a simple linear story: node0 -> node1 -> node2
+        let mut nodes = HashMap::new();
+
+        // Node 0: Start node with one choice
+        let choice_0 = create_test_choice("choice_0_0", "Continue to node 1");
+        nodes.insert("node0".to_string(), create_test_node("node0", vec![choice_0]));
+
+        // Node 1: Middle node with one choice
+        let choice_1 = create_test_choice("choice_1_0", "Continue to node 2");
+        nodes.insert("node1".to_string(), create_test_node("node1", vec![choice_1]));
+
+        // Node 2: End node with no choices
+        nodes.insert("node2".to_string(), create_test_node("node2", vec![]));
+
+        // Create edges
+        let edges = vec![
+            Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node1".to_string(),
+                choice_id: "choice_0_0".to_string(),
+                weight: None,
+            },
+            Edge {
+                from_node_id: "node1".to_string(),
+                to_node_id: "node2".to_string(),
+                choice_id: "choice_1_0".to_string(),
+                weight: None,
+            },
+        ];
+
+        let dag = DAG {
+            nodes,
+            edges,
+            start_node_id: "node0".to_string(),
+            convergence_points: vec![],
+        };
+
+        // Convert to trail steps
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+
+        // Verify we have 3 trail steps
+        assert_eq!(trail_steps.len(), 3, "Should have 3 trail steps");
+
+        // Find trail steps by their node_id (order not guaranteed due to HashMap)
+        let step_0 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node0")
+            .expect("Should find node0");
+        let step_1 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node1")
+            .expect("Should find node1");
+        let step_2 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node2")
+            .expect("Should find node2");
+
+        // Verify node0 choice has correct next_node_id
+        assert_eq!(
+            step_0.content_reference.content.choices.len(),
+            1,
+            "Node0 should have 1 choice"
+        );
+        assert_eq!(
+            step_0.content_reference.content.choices[0].next_node_id,
+            "node1",
+            "Node0 choice should point to node1"
+        );
+
+        // Verify node1 choice has correct next_node_id
+        assert_eq!(
+            step_1.content_reference.content.choices.len(),
+            1,
+            "Node1 should have 1 choice"
+        );
+        assert_eq!(
+            step_1.content_reference.content.choices[0].next_node_id,
+            "node2",
+            "Node1 choice should point to node2"
+        );
+
+        // Verify node2 (end node) has no choices
+        assert_eq!(
+            step_2.content_reference.content.choices.len(),
+            0,
+            "Node2 (end node) should have no choices"
+        );
+    }
+
+    #[test]
+    fn test_dag_to_trail_steps_branching_story() {
+        // Create a branching story:
+        // node0 -> choice_0_0 -> node1
+        //       -> choice_0_1 -> node2
+        let mut nodes = HashMap::new();
+
+        // Node 0: Start node with two choices
+        let choice_0_0 = create_test_choice("choice_0_0", "Go to node 1");
+        let choice_0_1 = create_test_choice("choice_0_1", "Go to node 2");
+        nodes.insert(
+            "node0".to_string(),
+            create_test_node("node0", vec![choice_0_0, choice_0_1]),
+        );
+
+        // Node 1: First branch end
+        nodes.insert("node1".to_string(), create_test_node("node1", vec![]));
+
+        // Node 2: Second branch end
+        nodes.insert("node2".to_string(), create_test_node("node2", vec![]));
+
+        // Create edges
+        let edges = vec![
+            Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node1".to_string(),
+                choice_id: "choice_0_0".to_string(),
+                weight: None,
+            },
+            Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node2".to_string(),
+                choice_id: "choice_0_1".to_string(),
+                weight: None,
+            },
+        ];
+
+        let dag = DAG {
+            nodes,
+            edges,
+            start_node_id: "node0".to_string(),
+            convergence_points: vec![],
+        };
+
+        // Convert to trail steps
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+
+        // Verify we have 3 trail steps
+        assert_eq!(trail_steps.len(), 3, "Should have 3 trail steps");
+
+        // Find node0
+        let step_0 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node0")
+            .expect("Should find node0");
+
+        // Verify node0 has 2 choices with correct next_node_id values
+        assert_eq!(
+            step_0.content_reference.content.choices.len(),
+            2,
+            "Node0 should have 2 choices"
+        );
+
+        // Find choices by their id
+        let choice_0 = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_0_0")
+            .expect("Should find choice_0_0");
+        let choice_1 = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_0_1")
+            .expect("Should find choice_0_1");
+
+        assert_eq!(
+            choice_0.next_node_id, "node1",
+            "Choice 0 should point to node1"
+        );
+        assert_eq!(
+            choice_1.next_node_id, "node2",
+            "Choice 1 should point to node2"
+        );
+    }
+
+    #[test]
+    fn test_dag_to_trail_steps_convergence_points() {
+        // Create a convergence scenario:
+        // node0 -> choice_0_0 -> node1 -> choice_1_0 -> node3 (convergence)
+        //       -> choice_0_1 -> node2 -> choice_2_0 -> node3 (convergence)
+        let mut nodes = HashMap::new();
+
+        // Node 0: Start with two branches
+        let choice_0_0 = create_test_choice("choice_0_0", "Path 1");
+        let choice_0_1 = create_test_choice("choice_0_1", "Path 2");
+        nodes.insert(
+            "node0".to_string(),
+            create_test_node("node0", vec![choice_0_0, choice_0_1]),
+        );
+
+        // Node 1: First branch
+        let choice_1_0 = create_test_choice("choice_1_0", "Converge");
+        nodes.insert("node1".to_string(), create_test_node("node1", vec![choice_1_0]));
+
+        // Node 2: Second branch
+        let choice_2_0 = create_test_choice("choice_2_0", "Converge");
+        nodes.insert("node2".to_string(), create_test_node("node2", vec![choice_2_0]));
+
+        // Node 3: Convergence point
+        let mut node3 = create_test_node("node3", vec![]);
+        node3.incoming_edges = 2; // Two paths converge here
+        node3.content.convergence_point = true;
+        nodes.insert("node3".to_string(), node3);
+
+        // Create edges
+        let edges = vec![
+            Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node1".to_string(),
+                choice_id: "choice_0_0".to_string(),
+                weight: None,
+            },
+            Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node2".to_string(),
+                choice_id: "choice_0_1".to_string(),
+                weight: None,
+            },
+            Edge {
+                from_node_id: "node1".to_string(),
+                to_node_id: "node3".to_string(),
+                choice_id: "choice_1_0".to_string(),
+                weight: None,
+            },
+            Edge {
+                from_node_id: "node2".to_string(),
+                to_node_id: "node3".to_string(),
+                choice_id: "choice_2_0".to_string(),
+                weight: None,
+            },
+        ];
+
+        let dag = DAG {
+            nodes,
+            edges,
+            start_node_id: "node0".to_string(),
+            convergence_points: vec!["node3".to_string()],
+        };
+
+        // Convert to trail steps
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+
+        // Verify we have 4 trail steps
+        assert_eq!(trail_steps.len(), 4, "Should have 4 trail steps");
+
+        // Find all nodes
+        let step_0 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node0")
+            .expect("Should find node0");
+        let step_1 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node1")
+            .expect("Should find node1");
+        let step_2 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node2")
+            .expect("Should find node2");
+        let step_3 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node3")
+            .expect("Should find node3");
+
+        // Verify node0 choices point to correct nodes
+        let choice_0 = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_0_0")
+            .expect("Should find choice_0_0");
+        let choice_1 = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_0_1")
+            .expect("Should find choice_0_1");
+        assert_eq!(choice_0.next_node_id, "node1");
+        assert_eq!(choice_1.next_node_id, "node2");
+
+        // Verify node1 choice points to convergence node
+        assert_eq!(step_1.content_reference.content.choices[0].next_node_id, "node3");
+
+        // Verify node2 choice points to convergence node
+        assert_eq!(step_2.content_reference.content.choices[0].next_node_id, "node3");
+
+        // Verify convergence point metadata
+        let convergence_point = step_3
+            .metadata
+            .get("convergence_point")
+            .expect("Should have convergence_point metadata");
+        assert_eq!(convergence_point, &serde_json::json!(true));
+
+        // Verify incoming_edges metadata
+        let incoming_edges = step_3
+            .metadata
+            .get("incoming_edges")
+            .expect("Should have incoming_edges metadata");
+        assert_eq!(incoming_edges, &serde_json::json!(2));
+    }
+
+    #[test]
+    fn test_dag_to_trail_steps_edge_cases() {
+        // Test 1: Node with no choices (end node)
+        let mut nodes = HashMap::new();
+        nodes.insert("node0".to_string(), create_test_node("node0", vec![]));
+
+        let dag = DAG {
+            nodes: nodes.clone(),
+            edges: vec![],
+            start_node_id: "node0".to_string(),
+            convergence_points: vec![],
+        };
+
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+        assert_eq!(trail_steps.len(), 1);
+        assert_eq!(trail_steps[0].content_reference.content.choices.len(), 0);
+
+        // Test 2: Missing edge for a choice (should handle gracefully)
+        nodes.clear();
+        let orphan_choice = create_test_choice("orphan_choice", "Broken link");
+        nodes.insert(
+            "node0".to_string(),
+            create_test_node("node0", vec![orphan_choice]),
+        );
+
+        let dag = DAG {
+            nodes,
+            edges: vec![], // No edges - choice has no corresponding edge
+            start_node_id: "node0".to_string(),
+            convergence_points: vec![],
+        };
+
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+        assert_eq!(trail_steps.len(), 1);
+        assert_eq!(trail_steps[0].content_reference.content.choices.len(), 1);
+        // Choice should still exist but next_node_id should be empty
+        assert_eq!(
+            trail_steps[0].content_reference.content.choices[0].next_node_id,
+            ""
+        );
+
+        // Test 3: Multiple choices, some with edges, some without
+        let mut nodes = HashMap::new();
+        let choice_with_edge = create_test_choice("choice_with_edge", "Valid path");
+        let choice_without_edge = create_test_choice("choice_without_edge", "Broken path");
+        nodes.insert(
+            "node0".to_string(),
+            create_test_node("node0", vec![choice_with_edge, choice_without_edge]),
+        );
+        nodes.insert("node1".to_string(), create_test_node("node1", vec![]));
+
+        let dag = DAG {
+            nodes,
+            edges: vec![Edge {
+                from_node_id: "node0".to_string(),
+                to_node_id: "node1".to_string(),
+                choice_id: "choice_with_edge".to_string(),
+                weight: None,
+            }],
+            start_node_id: "node0".to_string(),
+            convergence_points: vec![],
+        };
+
+        let trail_steps = Orchestrator::dag_to_trail_steps(&dag);
+        let step_0 = trail_steps
+            .iter()
+            .find(|s| s.content_reference.temp_node_id == "node0")
+            .expect("Should find node0");
+
+        // Find both choices
+        let choice_valid = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_with_edge")
+            .expect("Should find choice_with_edge");
+        let choice_broken = step_0
+            .content_reference
+            .content
+            .choices
+            .iter()
+            .find(|c| c.id == "choice_without_edge")
+            .expect("Should find choice_without_edge");
+
+        assert_eq!(choice_valid.next_node_id, "node1", "Valid choice should point to node1");
+        assert_eq!(choice_broken.next_node_id, "", "Broken choice should have empty next_node_id");
     }
 }

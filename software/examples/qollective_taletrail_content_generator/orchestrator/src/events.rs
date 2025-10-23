@@ -184,6 +184,37 @@ pub enum PipelineEvent {
 // Event Publisher
 // ============================================================================
 
+/// Desktop-compatible generation event
+///
+/// This matches the structure expected by the desktop viewer application
+/// for live monitoring of generation progress.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopGenerationEvent {
+    /// Type of event (e.g., "generation_started", "generation_progress", "generation_completed")
+    pub event_type: String,
+    /// Tenant ID associated with this generation
+    pub tenant_id: String,
+    /// Unique request ID for tracking
+    pub request_id: String,
+    /// ISO 8601 timestamp of the event
+    pub timestamp: String,
+    /// Service phase (e.g., "prompt-helper", "story-generator", "constraint-enforcer")
+    pub service_phase: String,
+    /// Current status (e.g., "in_progress", "completed", "failed")
+    pub status: String,
+    /// Optional progress percentage (0.0 to 1.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<f32>,
+    /// Optional error message if status is "failed"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    /// Optional file path for completed trails
+    /// Populated only when status = "completed" and trail has been saved
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+}
+
 /// Event publisher for NATS-based pipeline progress monitoring
 ///
 /// Publishes pipeline events to `{subject_prefix}.pipeline` NATS subject.
@@ -244,12 +275,16 @@ impl EventPublisher {
 
     /// Publish pipeline event to NATS
     ///
-    /// Serializes event to JSON and publishes to `{subject_prefix}.pipeline`.
+    /// Serializes event to JSON and publishes to BOTH:
+    /// 1. `{subject_prefix}.pipeline` for internal monitoring
+    /// 2. `taletrail.generation.events.{tenant_id}` for desktop viewer (if tenant_id provided)
+    ///
     /// Adds tracing span with event type for observability.
     ///
     /// # Arguments
     ///
     /// * `event` - Pipeline event to publish
+    /// * `tenant_id` - Optional tenant ID for desktop event publishing
     ///
     /// # Returns
     ///
@@ -263,13 +298,16 @@ impl EventPublisher {
     /// # use orchestrator::events::{EventPublisher, PipelineEvent};
     /// # use async_nats;
     /// # async fn example(publisher: EventPublisher) -> Result<(), Box<dyn std::error::Error>> {
-    /// publisher.publish_event(PipelineEvent::Complete {
-    ///     request_id: "req-123".to_string(),
-    ///     total_duration_ms: 15000,
-    ///     total_nodes: 16,
-    ///     total_validations: 32,
-    ///     negotiation_rounds: 2,
-    /// }).await?;
+    /// publisher.publish_event(
+    ///     PipelineEvent::Complete {
+    ///         request_id: "req-123".to_string(),
+    ///         total_duration_ms: 15000,
+    ///         total_nodes: 16,
+    ///         total_validations: 32,
+    ///         negotiation_rounds: 2,
+    ///     },
+    ///     Some("tenant-1")
+    /// ).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -280,7 +318,7 @@ impl EventPublisher {
             subject = %self.event_subject()
         )
     )]
-    pub async fn publish_event(&self, event: PipelineEvent) -> Result<()> {
+    pub async fn publish_event(&self, event: PipelineEvent, tenant_id: Option<&str>) -> Result<()> {
         // Serialize event to JSON
         let payload = serde_json::to_vec(&event).map_err(|e| {
             error!("Failed to serialize pipeline event: {}", e);
@@ -289,12 +327,19 @@ impl EventPublisher {
 
         let subject = self.event_subject();
 
-        // Publish to NATS
+        // DEBUG: Log publication details
+        eprintln!("[ORCHESTRATOR DEBUG] Publishing event to NATS");
+        eprintln!("[ORCHESTRATOR DEBUG] Subject: {}", subject);
+        eprintln!("[ORCHESTRATOR DEBUG] Event type: {}", self.event_type_name(&event));
+        eprintln!("[ORCHESTRATOR DEBUG] Payload size: {} bytes", payload.len());
+
+        // Publish to NATS (internal monitoring)
         self.nats_client
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| {
                 error!("Failed to publish event to NATS subject {}: {}", subject, e);
+                eprintln!("[ORCHESTRATOR ERROR] Failed to publish: {}", e);
                 TaleTrailError::NatsError(format!("Event publish failed: {}", e))
             })?;
 
@@ -303,8 +348,199 @@ impl EventPublisher {
             self.event_type_name(&event),
             subject
         );
+        eprintln!("[ORCHESTRATOR DEBUG] Successfully published {} event", self.event_type_name(&event));
+
+        // Also publish desktop-compatible event if tenant_id is provided
+        if let Some(tid) = tenant_id {
+            let desktop_event = self.to_desktop_event(&event, tid);
+            if let Err(e) = self.publish_desktop_event(desktop_event).await {
+                // Log error but don't fail the whole operation
+                error!("Failed to publish desktop event: {}", e);
+                eprintln!("[ORCHESTRATOR WARN] Failed to publish desktop event: {}", e);
+            }
+        }
 
         Ok(())
+    }
+
+    /// Publish desktop-compatible generation event
+    ///
+    /// Publishes to `taletrail.generation.events.{tenant_id}` for desktop live monitoring.
+    ///
+    /// # Arguments
+    ///
+    /// * `desktop_event` - Desktop-compatible generation event
+    pub async fn publish_desktop_event(&self, desktop_event: DesktopGenerationEvent) -> Result<()> {
+        // DEBUG: Log event details BEFORE serialization
+        eprintln!("[ORCHESTRATOR DEBUG] Publishing desktop event to NATS");
+        eprintln!("  - Subject: taletrail.generation.events.{}", desktop_event.tenant_id);
+        eprintln!("  - Event type: {}", desktop_event.event_type);
+        eprintln!("  - Request ID: {}", desktop_event.request_id);
+        eprintln!("  - Service phase: {}", desktop_event.service_phase);
+        eprintln!("  - Status: {}", desktop_event.status);
+        eprintln!("  - Progress: {:?}", desktop_event.progress);
+        eprintln!("  - File path: {:?}", desktop_event.file_path);
+
+        // Serialize event to JSON
+        let payload = serde_json::to_vec(&desktop_event).map_err(|e| {
+            error!("Failed to serialize desktop event: {}", e);
+            TaleTrailError::SerializationError(format!("Desktop event serialization failed: {}", e))
+        })?;
+
+        let subject = format!("taletrail.generation.events.{}", desktop_event.tenant_id);
+
+        // DEBUG: Log serialized payload
+        eprintln!("[ORCHESTRATOR DEBUG] Serialized payload size: {} bytes", payload.len());
+        eprintln!("[ORCHESTRATOR DEBUG] JSON: {}", String::from_utf8_lossy(&payload));
+
+        // Publish to NATS
+        self.nats_client
+            .publish(subject.clone(), payload.into())
+            .await
+            .map_err(|e| {
+                error!("Failed to publish desktop event to NATS subject {}: {}", subject, e);
+                eprintln!("[ORCHESTRATOR ERROR] Failed to publish desktop event: {}", e);
+                TaleTrailError::NatsError(format!("Desktop event publish failed: {}", e))
+            })?;
+
+        eprintln!("[ORCHESTRATOR DEBUG] Successfully published desktop event to {}", subject);
+
+        Ok(())
+    }
+
+    /// Convert PipelineEvent to DesktopGenerationEvent
+    ///
+    /// Maps internal pipeline events to desktop-compatible format for live monitoring.
+    /// Requires tenant_id to be passed separately as it's not part of PipelineEvent.
+    fn to_desktop_event(&self, event: &PipelineEvent, tenant_id: &str) -> DesktopGenerationEvent {
+        use chrono::Utc;
+
+        match event {
+            PipelineEvent::PromptsGenerated { request_id, .. } => DesktopGenerationEvent {
+                event_type: "generation_progress".to_string(),
+                tenant_id: tenant_id.to_string(),
+                request_id: request_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                service_phase: "prompt-helper".to_string(),
+                status: "in_progress".to_string(),
+                progress: Some(0.05),
+                error_message: None,
+                file_path: None,
+            },
+            PipelineEvent::StructureCreated { request_id, .. } => DesktopGenerationEvent {
+                event_type: "generation_progress".to_string(),
+                tenant_id: tenant_id.to_string(),
+                request_id: request_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                service_phase: "story-generator".to_string(),
+                status: "in_progress".to_string(),
+                progress: Some(0.15),
+                error_message: None,
+                file_path: None,
+            },
+            PipelineEvent::BatchStarted { request_id, batch_id, .. } => DesktopGenerationEvent {
+                event_type: "generation_progress".to_string(),
+                tenant_id: tenant_id.to_string(),
+                request_id: request_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                service_phase: format!("story-generator-batch-{}", batch_id),
+                status: "in_progress".to_string(),
+                progress: Some(0.25 + (*batch_id as f32 * 0.1)),
+                error_message: None,
+                file_path: None,
+            },
+            PipelineEvent::BatchCompleted { request_id, batch_id, success, .. } => {
+                if *success {
+                    DesktopGenerationEvent {
+                        event_type: "generation_progress".to_string(),
+                        tenant_id: tenant_id.to_string(),
+                        request_id: request_id.clone(),
+                        timestamp: Utc::now().to_rfc3339(),
+                        service_phase: format!("story-generator-batch-{}", batch_id),
+                        status: "in_progress".to_string(),
+                        progress: Some(0.5),
+                        error_message: None,
+                        file_path: None,
+                    }
+                } else {
+                    DesktopGenerationEvent {
+                        event_type: "generation_failed".to_string(),
+                        tenant_id: tenant_id.to_string(),
+                        request_id: request_id.clone(),
+                        timestamp: Utc::now().to_rfc3339(),
+                        service_phase: format!("story-generator-batch-{}", batch_id),
+                        status: "failed".to_string(),
+                        progress: None,
+                        error_message: Some("Batch generation failed".to_string()),
+                        file_path: None,
+                    }
+                }
+            }
+            PipelineEvent::ValidationStarted { request_id, validator, .. } => {
+                // Convert underscore to hyphen for desktop compatibility
+                // quality_control -> quality-control
+                // constraint_enforcer -> constraint-enforcer
+                let desktop_phase = validator.replace("_", "-");
+
+                DesktopGenerationEvent {
+                    event_type: "generation_progress".to_string(),
+                    tenant_id: tenant_id.to_string(),
+                    request_id: request_id.clone(),
+                    timestamp: Utc::now().to_rfc3339(),
+                    service_phase: desktop_phase,
+                    status: "in_progress".to_string(),
+                    progress: Some(0.75),
+                    error_message: None,
+                    file_path: None,
+                }
+            },
+            PipelineEvent::NegotiationRound { request_id, .. } => DesktopGenerationEvent {
+                event_type: "generation_progress".to_string(),
+                tenant_id: tenant_id.to_string(),
+                request_id: request_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                service_phase: "negotiation".to_string(),
+                status: "in_progress".to_string(),
+                progress: Some(0.85),
+                error_message: None,
+                file_path: None,
+            },
+            PipelineEvent::Complete { request_id, .. } => {
+                // Construct expected file path based on tenant_id and request_id
+                // This follows the convention: test-trails/{tenant_id}_{request_id}.json
+                let file_path = format!("test-trails/{}_{}.json", tenant_id, request_id);
+
+                eprintln!("[ORCHESTRATOR DEBUG] Creating completion event:");
+                eprintln!("  - request_id: {}", request_id);
+                eprintln!("  - tenant_id: {}", tenant_id);
+                eprintln!("  - file_path: {}", file_path);
+                eprintln!("  - service_phase: constraint-enforcer");
+                eprintln!("  - status: completed");
+
+                DesktopGenerationEvent {
+                    event_type: "generation_completed".to_string(),
+                    tenant_id: tenant_id.to_string(),
+                    request_id: request_id.clone(),
+                    timestamp: Utc::now().to_rfc3339(),
+                    service_phase: "constraint-enforcer".to_string(),  // Use constraint-enforcer as final phase
+                    status: "completed".to_string(),
+                    progress: Some(1.0),
+                    error_message: None,
+                    file_path: Some(file_path),
+                }
+            },
+            PipelineEvent::Failed { request_id, phase, error, .. } => DesktopGenerationEvent {
+                event_type: "generation_failed".to_string(),
+                tenant_id: tenant_id.to_string(),
+                request_id: request_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                service_phase: phase.clone(),
+                status: "failed".to_string(),
+                progress: None,
+                error_message: Some(error.clone()),
+                file_path: None,
+            },
+        }
     }
 
     /// Get full NATS subject for events
