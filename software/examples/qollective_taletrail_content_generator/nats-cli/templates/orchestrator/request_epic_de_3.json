@@ -6,6 +6,7 @@
       "age_group": "+18",
       "language": "de",
       "tenant_id": 1,
+      "node_count": 33,
       "educational_goals": ["Geschichte", "Kriminalität", "Polizeiarbeit","Medizinische Entwicklung", "Forensik"],
       "vocabulary_level": "advanced",
       "required_elements": ["Industrie","Staatliche Ordnung", "historischer Kontext", "Soziale Mißstände", "Gesellschaftliche Verwerfungen"],

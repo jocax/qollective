@@ -1,0 +1,17 @@
+{
+  "tool_name": "orchestrate_generation",
+  "arguments": {
+    "generation_request": {
+      "theme": "Marine Ecosystems and Environmental Conservation",
+      "age_group": "12-14",
+      "language": "en",
+      "tenant_id": 1,
+      "node_count": 22,
+      "educational_goals": ["Environmental Science", "Marine Biology", "Sustainability", "Climate Change"],
+      "vocabulary_level": "advanced",
+      "required_elements": ["industry vs nature dilemma", "environmental regulations", "historical context", "current challenges", "societal impact"],
+      "tags": ["environmental policy", "conservation", "society", "marine life"],
+      "story_structure": "epic"
+    }
+  }
+}

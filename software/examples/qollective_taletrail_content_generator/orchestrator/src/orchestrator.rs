@@ -43,6 +43,7 @@ use rmcp::model::{
     CallToolRequest, CallToolRequestMethod, CallToolRequestParam, Extensions,
 };
 use shared_types::*;
+use shared_types::TaleTrailCustomMetadata;
 use story_generator::mcp_tools::{GenerateStructureResponse, GenerateNodesResponse};
 use quality_control::envelope_handlers::ValidateContentResponse;
 use constraint_enforcer::envelope_handlers::EnforceConstraintsResponse;
@@ -260,7 +261,13 @@ impl Orchestrator {
         &self,
         request: GenerationRequest,
     ) -> Result<GenerationResponse> {
-        info!("Starting content generation pipeline");
+        // Layer 1: Create correlation_id for this entire pipeline
+        let correlation_id = Uuid::now_v7();
+
+        info!(
+            correlation_id = %correlation_id,
+            "Starting content generation pipeline"
+        );
         let start_time = std::time::Instant::now();
         let request_id = uuid::Uuid::new_v4().to_string();
 
@@ -284,27 +291,27 @@ impl Orchestrator {
 
         // Phase 0.5: Generate Prompts
         let prompts = self
-            .phase_generate_prompts(&request, &request_id)
+            .phase_generate_prompts(&request, &request_id, correlation_id)
             .await?;
 
         // Phase 1: Generate DAG Structure
         let mut dag = self
-            .phase_generate_structure(&request, &prompts, &request_id)
+            .phase_generate_structure(&request, &prompts, &request_id, correlation_id)
             .await?;
 
         // Phase 2: Generate Content (batched)
         dag = self
-            .phase_generate_content(dag, &request, &prompts, &request_id)
+            .phase_generate_content(dag, &request, &prompts, &request_id, correlation_id)
             .await?;
 
         // Phase 3-4: Validate and Negotiate (iterative)
         dag = self
-            .phase_validate_and_negotiate(dag, &request, &prompts, &request_id)
+            .phase_validate_and_negotiate(dag, &request, &prompts, &request_id, correlation_id)
             .await?;
 
         // Phase 5: Assemble and Return
         let response = self
-            .phase_assemble(dag, &request, &request_id, start_time)
+            .phase_assemble(dag, &request, &request_id, start_time, correlation_id)
             .await?;
 
         Ok(response)
@@ -319,6 +326,7 @@ impl Orchestrator {
         &self,
         request: &GenerationRequest,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<HashMap<MCPServiceType, PromptPackage>> {
         info!("Phase 0.5: Generating prompts");
 
@@ -407,6 +415,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<DAG> {
         info!("Phase 1: Generating DAG structure");
 
@@ -451,7 +460,7 @@ impl Orchestrator {
         updated_request.dag_config = Some(dag_config.clone());
 
         // Create metadata for this request
-        let meta = self.create_meta(request, request_id);
+        let meta = self.create_meta(request, request_id, correlation_id);
 
         // Call story-generator MCP tool: generate_structure
         let tool_request = CallToolRequest {
@@ -547,6 +556,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<DAG> {
         info!("Phase 2: Generating content (batched)");
 
@@ -601,7 +611,7 @@ impl Orchestrator {
             updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
 
             // Create metadata for this batch
-            let meta = self.create_meta(request, request_id);
+            let meta = self.create_meta(request, request_id, correlation_id);
 
             // Extract expected choice counts for this batch based on DAG edges
             let expected_choice_counts: Vec<usize> = batch.iter()
@@ -737,6 +747,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<DAG> {
         info!("Phase 3-4: Validation and negotiation");
 
@@ -753,11 +764,11 @@ impl Orchestrator {
         // Validate all nodes
         for node in dag.nodes.values() {
             // Call quality-control
-            let quality_result = self.validate_quality(node, request, prompts, request_id).await?;
+            let quality_result = self.validate_quality(node, request, prompts, request_id, correlation_id).await?;
 
             // Call constraint-enforcer
             let constraint_result = self
-                .validate_constraints(node, request, prompts, request_id)
+                .validate_constraints(node, request, prompts, request_id, correlation_id)
                 .await?;
 
             // Log validation results
@@ -781,6 +792,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<ValidationResult> {
         let validation_prompts = prompts.get(&MCPServiceType::QualityControl);
 
@@ -789,7 +801,7 @@ impl Orchestrator {
         updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
 
         // Create metadata for this validation
-        let meta = self.create_meta(request, request_id);
+        let meta = self.create_meta(request, request_id, correlation_id);
 
         // Publish ValidationStarted event
         let tenant_id_str = format!("tenant-{}", request.tenant_id);
@@ -884,6 +896,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         prompts: &HashMap<MCPServiceType, PromptPackage>,
         request_id: &str,
+        correlation_id: Uuid,
     ) -> Result<ConstraintResult> {
         let constraint_prompts = prompts.get(&MCPServiceType::ConstraintEnforcer);
 
@@ -892,7 +905,7 @@ impl Orchestrator {
         updated_request.prompt_packages = self.convert_prompts_to_request_format(prompts)?;
 
         // Create metadata for this validation
-        let meta = self.create_meta(request, request_id);
+        let meta = self.create_meta(request, request_id, correlation_id);
 
         // Publish ValidationStarted event
         let tenant_id_str = format!("tenant-{}", request.tenant_id);
@@ -1092,6 +1105,7 @@ impl Orchestrator {
         request: &GenerationRequest,
         request_id: &str,
         start_time: std::time::Instant,
+        correlation_id: Uuid,
     ) -> Result<GenerationResponse> {
         info!("Phase 5: Assembling final response");
 
@@ -1260,30 +1274,36 @@ impl Orchestrator {
 
     /// Create metadata for MCP requests
     ///
-    /// Constructs envelope metadata with tenant_id, request_id, and trace_id
+    /// Constructs envelope metadata with tenant_id, request_id, trace_id, and correlation_id
     /// from the orchestrator context.
     ///
     /// # Arguments
     ///
     /// * `request` - Generation request containing tenant_id
-    /// * `request_id` - Request ID for correlation
+    /// * `request_id` - Request ID for correlation (Layer 2: operation identification)
+    /// * `correlation_id` - Correlation ID for pipeline tracking (Layer 1: pipeline tracking)
     ///
     /// # Returns
     ///
-    /// Meta struct populated with tenant and tracing information
-    fn create_meta(&self, request: &GenerationRequest, request_id: &str) -> Meta {
+    /// Meta struct populated with tenant, tracing, and custom TaleTrail metadata
+    fn create_meta(&self, request: &GenerationRequest, request_id: &str, correlation_id: Uuid) -> Meta {
         let mut meta = Meta::default();
 
         // Set tenant ID for multi-tenancy isolation
         meta.tenant = Some(format!("tenant-{}", request.tenant_id));
 
-        // Set request ID for correlation
+        // Set request ID for correlation (Layer 2: operation identification)
         if let Ok(uuid) = Uuid::parse_str(request_id) {
             meta.request_id = Some(uuid);
         }
 
         // Set trace ID for distributed tracing (same as request_id for now)
         meta.tracing = Some(create_tracing_meta(request_id.to_string()));
+
+        // Layer 1: Add TaleTrailCustomMetadata with correlation_id
+        let custom_meta = TaleTrailCustomMetadata::new()
+            .with_correlation_id(correlation_id);
+        meta.extensions = Some(custom_meta.to_extensions_meta());
 
         meta
     }
