@@ -35,6 +35,10 @@ pub struct GenerateNodesParams {
     pub node_ids: Vec<String>,
     /// Generation request containing theme, age group, language, etc.
     pub generation_request: GenerationRequest,
+    /// Expected number of choices for each node (maps to node_ids by index)
+    /// If None, AI decides choice count (legacy behavior for backwards compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_choice_counts: Option<Vec<usize>>,
 }
 
 /// Parameters for validating DAG path connectivity

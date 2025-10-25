@@ -27,7 +27,7 @@
     <UCard>
       <div class="story-text prose prose-lg dark:prose-invert max-w-none p-4">
         <p class="text-lg leading-relaxed whitespace-pre-wrap">
-          {{ node.content.text }}
+          {{ cleanedText }}
         </p>
       </div>
     </UCard>
@@ -83,6 +83,48 @@ const props = withDefaults(defineProps<Props>(), {
   showMetadata: false,
   showInsights: true,
   isConvergencePoint: false
+})
+
+/**
+ * Clean story text by removing AI-generated placeholder patterns
+ * Filters out choice markers, formatting headers, and empty lines
+ */
+const cleanedText = computed(() => {
+  const text = props.node.content.text
+
+  // Split into lines for processing
+  const lines = text.split('\n')
+
+  // Patterns to remove (case-insensitive)
+  const removePatterns = [
+    /^\*\*Choice/i,                    // **Choice Options:**, **Choice 1**, etc.
+    /^\*\*Optional/i,                  // **Optional Educational Content:**
+    /^\*\*Narrative/i,                 // **Narrative Text:**
+    /^Choice\s+\d+/i,                  // Choice 1, Choice 2, Choice 3
+    /^[A-C]\)\s+/,                     // A) , B) , C) choice markers
+    /^\*\*Educational/i,               // **Educational Note:**
+    /^\s*\*\*$/,                       // Lines with just **
+  ]
+
+  // Filter lines
+  const filteredLines = lines.filter(line => {
+    const trimmedLine = line.trim()
+
+    // Remove empty lines
+    if (trimmedLine.length === 0) return false
+
+    // Check against all patterns
+    for (const pattern of removePatterns) {
+      if (pattern.test(trimmedLine)) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  // Join back with line breaks, preserving intentional paragraph breaks
+  return filteredLines.join('\n').trim()
 })
 
 /**

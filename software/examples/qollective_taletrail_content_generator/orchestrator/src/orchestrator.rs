@@ -603,6 +603,21 @@ impl Orchestrator {
             // Create metadata for this batch
             let meta = self.create_meta(request, request_id);
 
+            // Extract expected choice counts for this batch based on DAG edges
+            let expected_choice_counts: Vec<usize> = batch.iter()
+                .map(|node_id| {
+                    dag.edges.iter()
+                        .filter(|e| &e.from_node_id == node_id)
+                        .count()
+                })
+                .collect();
+
+            tracing::info!(
+                batch_size = batch.len(),
+                choice_counts = ?expected_choice_counts,
+                "Sending batch to story-generator with choice count constraints"
+            );
+
             // Call story-generator MCP tool: generate_nodes
             let tool_request = CallToolRequest {
                 method: CallToolRequestMethod::default(),
@@ -623,6 +638,11 @@ impl Orchestrator {
                         map.insert(
                             "generation_request".to_string(),
                             serde_json::to_value(&updated_request)
+                                .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
+                        );
+                        map.insert(
+                            "expected_choice_counts".to_string(),
+                            serde_json::to_value(&expected_choice_counts)
                                 .map_err(|e| TaleTrailError::SerializationError(e.to_string()))?,
                         );
                         map
@@ -1001,6 +1021,56 @@ impl Orchestrator {
                             for choice in &mut content.choices {
                                 if let Some(edge) = dag.edges.iter().find(|e| e.choice_id == choice.id) {
                                     choice.next_node_id = edge.to_node_id.clone();
+                                    tracing::debug!(
+                                        node_id = %node_id,
+                                        choice_id = %choice.id,
+                                        next_node_id = %edge.to_node_id,
+                                        "Successfully matched choice to edge"
+                                    );
+                                } else {
+                                    tracing::warn!(
+                                        node_id = %node_id,
+                                        choice_id = %choice.id,
+                                        choice_text = %choice.text.chars().take(50).collect::<String>(),
+                                        available_edges = ?dag.edges.iter()
+                                            .filter(|e| e.from_node_id == *node_id)
+                                            .map(|e| &e.choice_id)
+                                            .collect::<Vec<_>>(),
+                                        "Failed to match choice to any DAG edge - attempting fallback"
+                                    );
+                                }
+                            }
+
+                            // Fallback: Match by choice order if ID matching failed
+                            let node_edges: Vec<_> = dag.edges.iter()
+                                .filter(|e| e.from_node_id == *node_id)
+                                .collect();
+
+                            for (idx, choice) in content.choices.iter_mut().enumerate() {
+                                // Skip if already matched by ID
+                                if !choice.next_node_id.is_empty() {
+                                    continue;
+                                }
+
+                                // Fallback: match by order if we have enough edges
+                                if idx < node_edges.len() {
+                                    choice.next_node_id = node_edges[idx].to_node_id.clone();
+                                    tracing::info!(
+                                        node_id = %node_id,
+                                        choice_id = %choice.id,
+                                        choice_index = idx,
+                                        matched_edge = %node_edges[idx].choice_id,
+                                        next_node_id = %node_edges[idx].to_node_id,
+                                        "Applied fallback edge matching by choice order"
+                                    );
+                                } else {
+                                    tracing::error!(
+                                        node_id = %node_id,
+                                        choice_id = %choice.id,
+                                        choice_index = idx,
+                                        available_edges = node_edges.len(),
+                                        "Cannot match choice - insufficient edges for fallback"
+                                    );
                                 }
                             }
                             content
@@ -1744,6 +1814,6 @@ mod tests {
             .expect("Should find choice_without_edge");
 
         assert_eq!(choice_valid.next_node_id, "node1", "Valid choice should point to node1");
-        assert_eq!(choice_broken.next_node_id, "", "Broken choice should have empty next_node_id");
+        assert_eq!(choice_broken.next_node_id, "", "Broken choice should remain empty - no fallback edge available at index 1");
     }
 }

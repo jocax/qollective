@@ -108,7 +108,13 @@
           </span>
         </span>
       </div>
-      <UProgress :value="progressPercent" color="primary" size="md" />
+      <!-- Static progress bar (no animation) -->
+      <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div
+          class="h-full bg-primary-500 dark:bg-primary-400"
+          :style="{ width: `${progressPercent}%` }"
+        />
+      </div>
     </div>
 
     <!-- Settings -->

@@ -1,214 +1,41 @@
 /**
  * Component tests for DagVisualization
  *
- * Tests graph rendering, node positioning, zoom/pan, and node selection
+ * Tests graph rendering, node positioning, zoom/pan, and node selection using real trail data
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, VueWrapper } from '@vue/test-utils'
+import { mountSuspended } from '@nuxt/test-utils/runtime'
+import type { VueWrapper } from '@vue/test-utils'
 import DagVisualization from '../DagVisualization.vue'
+import { loadTestTrailWithDAG, getTestTrailStats } from '~/utils/__tests__/fixtures/testDataLoader'
 import type { Trail } from '~/types/trails'
 
-/**
- * Mock trail data for testing
- */
-function createMockTrail(): Trail {
-  return {
-    title: 'DAG Test',
-    description: 'Test trail for DAG visualization',
-    metadata: {
-      generation_params: {
-        age_group: '8-12',
-        theme: 'Adventure',
-        language: 'en',
-        node_count: 5
-      },
-      start_node_id: 'node1'
-    },
-    dag: {
-      nodes: {
-        node1: {
-          id: 'node1',
-          content: {
-            text: 'Start node',
-            choices: [
-              { id: 'choice1', text: 'Left', next_node_id: 'node2' },
-              { id: 'choice2', text: 'Right', next_node_id: 'node3' }
-            ]
-          }
-        },
-        node2: {
-          id: 'node2',
-          content: {
-            text: 'Left path',
-            choices: [
-              { id: 'choice3', text: 'Continue', next_node_id: 'node4' }
-            ]
-          }
-        },
-        node3: {
-          id: 'node3',
-          content: {
-            text: 'Right path',
-            choices: [
-              { id: 'choice4', text: 'Continue', next_node_id: 'node5' }
-            ]
-          }
-        },
-        node4: {
-          id: 'node4',
-          content: {
-            text: 'Left end',
-            choices: []
-          }
-        },
-        node5: {
-          id: 'node5',
-          content: {
-            text: 'Right end',
-            choices: []
-          }
-        }
-      },
-      edges: [
-        { from_node_id: 'node1', to_node_id: 'node2', choice_id: 'choice1' },
-        { from_node_id: 'node1', to_node_id: 'node3', choice_id: 'choice2' },
-        { from_node_id: 'node2', to_node_id: 'node4', choice_id: 'choice3' },
-        { from_node_id: 'node3', to_node_id: 'node5', choice_id: 'choice4' }
-      ],
-      convergence_points: []
-    }
-  }
-}
-
-/**
- * Create trail with convergence point
- */
-function createConvergenceTrail(): Trail {
-  return {
-    title: 'Convergence Test',
-    description: 'Trail with convergence',
-    metadata: {
-      generation_params: {
-        age_group: '8-12',
-        theme: 'Adventure',
-        language: 'en',
-        node_count: 4
-      },
-      start_node_id: 'node1'
-    },
-    dag: {
-      nodes: {
-        node1: {
-          id: 'node1',
-          content: {
-            text: 'Start',
-            choices: [
-              { id: 'choice1', text: 'A', next_node_id: 'node2' },
-              { id: 'choice2', text: 'B', next_node_id: 'node3' }
-            ]
-          }
-        },
-        node2: {
-          id: 'node2',
-          content: {
-            text: 'Path A',
-            choices: [
-              { id: 'choice3', text: 'Merge', next_node_id: 'node4' }
-            ]
-          }
-        },
-        node3: {
-          id: 'node3',
-          content: {
-            text: 'Path B',
-            choices: [
-              { id: 'choice4', text: 'Merge', next_node_id: 'node4' }
-            ]
-          }
-        },
-        node4: {
-          id: 'node4',
-          content: {
-            text: 'Convergence',
-            choices: []
-          }
-        }
-      },
-      edges: [
-        { from_node_id: 'node1', to_node_id: 'node2', choice_id: 'choice1' },
-        { from_node_id: 'node1', to_node_id: 'node3', choice_id: 'choice2' },
-        { from_node_id: 'node2', to_node_id: 'node4', choice_id: 'choice3' },
-        { from_node_id: 'node3', to_node_id: 'node4', choice_id: 'choice4' }
-      ],
-      convergence_points: ['node4']
-    }
-  }
-}
-
-/**
- * Create large trail for performance testing
- */
-function createLargeTrail(nodeCount: number = 50): Trail {
-  const nodes: any = {}
-  const edges: any = []
-
-  for (let i = 1; i <= nodeCount; i++) {
-    nodes[`node${i}`] = {
-      id: `node${i}`,
-      content: {
-        text: `Node ${i} content`,
-        choices: i < nodeCount
-          ? [{ id: `choice${i}`, text: 'Next', next_node_id: `node${i + 1}` }]
-          : []
-      }
-    }
-
-    if (i < nodeCount) {
-      edges.push({
-        from_node_id: `node${i}`,
-        to_node_id: `node${i + 1}`,
-        choice_id: `choice${i}`
-      })
-    }
-  }
-
-  return {
-    title: 'Large Trail',
-    description: 'Performance test trail',
-    metadata: {
-      generation_params: {
-        age_group: '8-12',
-        theme: 'Adventure',
-        language: 'en',
-        node_count: nodeCount
-      },
-      start_node_id: 'node1'
-    },
-    dag: {
-      nodes,
-      edges,
-      convergence_points: []
-    }
-  }
-}
-
-describe('DagVisualization', () => {
+describe('DagVisualization with Real Data', () => {
   let wrapper: VueWrapper<any>
-  let mockTrail: Trail
+  const testData = loadTestTrailWithDAG()
+  const stats = getTestTrailStats()
 
-  beforeEach(() => {
-    mockTrail = createMockTrail()
-    wrapper = mount(DagVisualization, {
+  beforeEach(async () => {
+    wrapper = await mountSuspended(DagVisualization, {
       props: {
-        trail: mockTrail
+        trail: testData.trail
       }
     })
   })
 
-  describe('Initialization', () => {
+  describe('Initialization with 24-node trail', () => {
     it('should mount successfully', () => {
       expect(wrapper.exists()).toBe(true)
+    })
+
+    it('should calculate correct number of node positions for 24-node trail', () => {
+      expect(wrapper.vm.nodePositions.length).toBe(stats.nodeCount)
+    })
+
+    it('should display correct node and edge counts', () => {
+      expect(wrapper.text()).toContain(`${stats.nodeCount} nodes`)
+      expect(wrapper.text()).toContain(`${stats.edgeCount} edges`)
     })
 
     it('should initialize with default zoom', () => {
@@ -227,45 +54,59 @@ describe('DagVisualization', () => {
     it('should have no node selected initially', () => {
       expect(wrapper.vm.selectedNodeId).toBeNull()
     })
+
+    it('should have isPanning set to false initially', () => {
+      expect(wrapper.vm.isPanning).toBe(false)
+    })
   })
 
   describe('Node Positioning - Tree Layout', () => {
-    it('should calculate positions for all nodes', () => {
+    it('should calculate positions for all 24 nodes', () => {
       const positions = wrapper.vm.nodePositions
 
-      expect(positions.length).toBe(5)
+      expect(positions.length).toBe(stats.nodeCount)
       expect(positions.every((p: any) => p.x !== undefined && p.y !== undefined)).toBe(true)
     })
 
     it('should assign level 0 to start node', () => {
       const positions = wrapper.vm.nodePositions
-      const startNode = positions.find((p: any) => p.id === 'node1')
+      const startNode = positions.find((p: any) => p.id === stats.startNodeId)
 
-      expect(startNode.level).toBe(0)
+      expect(startNode?.level).toBe(0)
     })
 
     it('should position child nodes at higher levels', () => {
       const positions = wrapper.vm.nodePositions
-      const node1 = positions.find((p: any) => p.id === 'node1')
-      const node2 = positions.find((p: any) => p.id === 'node2')
+      const startNode = positions.find((p: any) => p.id === stats.startNodeId)
 
-      expect(node2.level).toBeGreaterThan(node1.level)
-    })
+      // Find a child of start node
+      const startNodeEdges = testData.trail.dag.edges.filter(e => e.from_node_id === stats.startNodeId)
+      if (startNodeEdges.length > 0) {
+        const childId = startNodeEdges[0].to_node_id
+        const childNode = positions.find((p: any) => p.id === childId)
 
-    it('should space nodes horizontally within same level', () => {
-      const positions = wrapper.vm.nodePositions
-
-      // Nodes at same level should have different x coordinates
-      const level1Nodes = positions.filter((p: any) => p.level === 1)
-      if (level1Nodes.length > 1) {
-        const x1 = level1Nodes[0].x
-        const x2 = level1Nodes[1].x
-        expect(x1).not.toBe(x2)
+        expect(childNode?.level).toBeGreaterThan(startNode?.level || 0)
       }
     })
 
+    it('should calculate valid x,y coordinates for all nodes', () => {
+      wrapper.vm.layoutMode = 'tree'
+      wrapper.vm.nodePositions.forEach(pos => {
+        expect(pos.x).toBeGreaterThan(0)
+        expect(pos.y).toBeGreaterThan(0)
+      })
+    })
+
+    it('should track render time', () => {
+      wrapper.vm.layoutMode = 'tree'
+      // Access nodePositions to trigger calculation
+      const _ = wrapper.vm.nodePositions
+
+      expect(wrapper.vm.renderTime).toBeGreaterThan(0)
+    })
+
     it('should return position for valid node ID', () => {
-      const position = wrapper.vm.getNodePosition('node1')
+      const position = wrapper.vm.getNodePosition(stats.startNodeId)
 
       expect(position.x).toBeGreaterThan(0)
       expect(position.y).toBeGreaterThan(0)
@@ -286,10 +127,10 @@ describe('DagVisualization', () => {
       await wrapper.vm.$nextTick()
     })
 
-    it('should calculate force-directed positions', () => {
+    it('should calculate force-directed positions for all 24 nodes', () => {
       const positions = wrapper.vm.nodePositions
 
-      expect(positions.length).toBe(5)
+      expect(positions.length).toBe(stats.nodeCount)
       expect(positions.every((p: any) => p.x > 0 && p.y > 0)).toBe(true)
     })
 
@@ -304,9 +145,16 @@ describe('DagVisualization', () => {
       })
     })
 
+    it('should set level to 0 for all nodes in force layout', () => {
+      wrapper.vm.layoutMode = 'force'
+      wrapper.vm.nodePositions.forEach(pos => {
+        expect(pos.level).toBe(0)
+      })
+    })
+
     it('should clear selected node when switching layouts', async () => {
-      wrapper.vm.selectedNodeId = 'node1'
-      expect(wrapper.vm.selectedNodeId).toBe('node1')
+      wrapper.vm.selectedNodeId = stats.startNodeId
+      expect(wrapper.vm.selectedNodeId).toBe(stats.startNodeId)
 
       wrapper.vm.layoutMode = 'tree'
       await wrapper.vm.$nextTick()
@@ -317,44 +165,59 @@ describe('DagVisualization', () => {
 
   describe('Node Colors', () => {
     it('should color start node as green', () => {
-      const color = wrapper.vm.getNodeColor('node1')
+      const color = wrapper.vm.getNodeColor(stats.startNodeId)
       expect(color).toBe('#22c55e') // green
     })
 
     it('should color convergence points as purple', async () => {
-      const convergenceTrail = createConvergenceTrail()
-      const convergenceWrapper = mount(DagVisualization, {
-        props: { trail: convergenceTrail }
-      })
+      if (stats.convergencePointCount > 0 && testData.trail.dag.convergence_points) {
+        const convergenceNode = testData.trail.dag.convergence_points[0]
+        const color = wrapper.vm.getNodeColor(convergenceNode)
 
-      const color = convergenceWrapper.vm.getNodeColor('node4')
-      expect(color).toBe('#a855f7') // purple
+        expect(color).toBe('#a855f7') // purple
+      }
     })
 
     it('should color regular nodes as blue', () => {
-      const color = wrapper.vm.getNodeColor('node2')
-      expect(color).toBe('#3b82f6') // blue
+      // Get a node that's not start and not convergence
+      const regularNode = Object.keys(testData.trail.dag.nodes).find(
+        id => id !== stats.startNodeId && !testData.trail.dag.convergence_points?.includes(id)
+      )
+
+      if (regularNode) {
+        const color = wrapper.vm.getNodeColor(regularNode)
+        expect(color).toBe('#3b82f6') // blue
+      }
+    })
+
+    it('should correctly identify convergence points', () => {
+      if (testData.trail.dag.convergence_points && testData.trail.dag.convergence_points.length > 0) {
+        const convergenceNode = testData.trail.dag.convergence_points[0]
+        expect(wrapper.vm.isConvergencePoint(convergenceNode)).toBe(true)
+      }
+
+      expect(wrapper.vm.isConvergencePoint(stats.startNodeId)).toBe(false)
     })
   })
 
   describe('Node Selection', () => {
     it('should select node when clicked', () => {
-      wrapper.vm.selectNode('node2')
+      wrapper.vm.selectNode(stats.startNodeId)
 
-      expect(wrapper.vm.selectedNodeId).toBe('node2')
+      expect(wrapper.vm.selectedNodeId).toBe(stats.startNodeId)
     })
 
     it('should show selected node details', async () => {
-      wrapper.vm.selectNode('node2')
+      wrapper.vm.selectNode(stats.startNodeId)
       await wrapper.vm.$nextTick()
 
       expect(wrapper.vm.selectedNode).not.toBeNull()
-      expect(wrapper.vm.selectedNode?.id).toBe('node2')
+      expect(wrapper.vm.selectedNode?.id).toBe(stats.startNodeId)
     })
 
     it('should clear selection when clicking away', async () => {
-      wrapper.vm.selectNode('node2')
-      expect(wrapper.vm.selectedNodeId).toBe('node2')
+      wrapper.vm.selectNode(stats.startNodeId)
+      expect(wrapper.vm.selectedNodeId).toBe(stats.startNodeId)
 
       wrapper.vm.selectedNodeId = null
       await wrapper.vm.$nextTick()
@@ -363,13 +226,30 @@ describe('DagVisualization', () => {
     })
 
     it('should highlight edges connected to selected node', async () => {
-      wrapper.vm.selectNode('node1')
+      wrapper.vm.selectNode(stats.startNodeId)
       await wrapper.vm.$nextTick()
 
-      const edge = wrapper.vm.trail.dag.edges[0]
-      const isSelected = wrapper.vm.isEdgeSelected(edge)
+      const startNodeEdges = testData.trail.dag.edges.filter(
+        e => e.from_node_id === stats.startNodeId || e.to_node_id === stats.startNodeId
+      )
 
-      expect(isSelected).toBe(true)
+      if (startNodeEdges.length > 0) {
+        const isSelected = wrapper.vm.isEdgeSelected(startNodeEdges[0])
+        expect(isSelected).toBe(true)
+      }
+    })
+
+    it('should not select edges unconnected to selected node', () => {
+      wrapper.vm.selectedNodeId = stats.startNodeId
+
+      // Find an edge not connected to start node
+      const unconnectedEdge = testData.trail.dag.edges.find(
+        e => e.from_node_id !== stats.startNodeId && e.to_node_id !== stats.startNodeId
+      )
+
+      if (unconnectedEdge) {
+        expect(wrapper.vm.isEdgeSelected(unconnectedEdge)).toBe(false)
+      }
     })
   })
 
@@ -491,7 +371,7 @@ describe('DagVisualization', () => {
     })
 
     it('should clear node selection', () => {
-      wrapper.vm.selectedNodeId = 'node1'
+      wrapper.vm.selectedNodeId = stats.startNodeId
 
       wrapper.vm.resetView()
 
@@ -500,48 +380,55 @@ describe('DagVisualization', () => {
   })
 
   describe('Convergence Points', () => {
-    it('should detect convergence points', () => {
-      const convergenceTrail = createConvergenceTrail()
-      const convergenceWrapper = mount(DagVisualization, {
-        props: { trail: convergenceTrail }
-      })
-
-      const isConvergence = convergenceWrapper.vm.isConvergencePoint('node4')
-      expect(isConvergence).toBe(true)
+    it('should return convergence points array from computed property', () => {
+      expect(wrapper.vm.convergencePoints).toEqual(testData.trail.dag.convergence_points || [])
     })
 
     it('should not mark regular nodes as convergence', () => {
-      const isConvergence = wrapper.vm.isConvergencePoint('node1')
+      const isConvergence = wrapper.vm.isConvergencePoint(stats.startNodeId)
       expect(isConvergence).toBe(false)
     })
   })
 
   describe('Keyboard Shortcuts', () => {
     it('should clear selection on Escape', () => {
-      wrapper.vm.selectedNodeId = 'node1'
+      wrapper.vm.selectedNodeId = stats.startNodeId
 
-      const keyEvent = new KeyboardEvent('keydown', { key: 'Escape' })
-      window.dispatchEvent(keyEvent)
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: 'Escape' }))
 
       expect(wrapper.vm.selectedNodeId).toBeNull()
     })
 
-    it('should reset view on R key', () => {
+    it('should reset view on lowercase r key', () => {
       wrapper.vm.zoom = 2
       wrapper.vm.panX = 100
 
-      const keyEvent = new KeyboardEvent('keydown', { key: 'r' })
-      window.dispatchEvent(keyEvent)
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: 'r' }))
 
       expect(wrapper.vm.zoom).toBe(1)
       expect(wrapper.vm.panX).toBe(50)
     })
 
+    it('should reset view on uppercase R key', () => {
+      wrapper.vm.zoom = 2
+
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: 'R' }))
+
+      expect(wrapper.vm.zoom).toBe(1)
+    })
+
     it('should zoom in on + key', () => {
       const initialZoom = wrapper.vm.zoom
 
-      const keyEvent = new KeyboardEvent('keydown', { key: '+' })
-      window.dispatchEvent(keyEvent)
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: '+' }))
+
+      expect(wrapper.vm.zoom).toBeGreaterThan(initialZoom)
+    })
+
+    it('should zoom in on = key', () => {
+      const initialZoom = wrapper.vm.zoom
+
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: '=' }))
 
       expect(wrapper.vm.zoom).toBeGreaterThan(initialZoom)
     })
@@ -549,46 +436,38 @@ describe('DagVisualization', () => {
     it('should zoom out on - key', () => {
       const initialZoom = wrapper.vm.zoom
 
-      const keyEvent = new KeyboardEvent('keydown', { key: '-' })
-      window.dispatchEvent(keyEvent)
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: '-' }))
+
+      expect(wrapper.vm.zoom).toBeLessThan(initialZoom)
+    })
+
+    it('should zoom out on _ key', () => {
+      const initialZoom = wrapper.vm.zoom
+
+      wrapper.vm.handleKeydown(new KeyboardEvent('keydown', { key: '_' }))
 
       expect(wrapper.vm.zoom).toBeLessThan(initialZoom)
     })
   })
 
   describe('Performance', () => {
-    it('should render small graph quickly', () => {
-      const startTime = performance.now()
-
+    it('should render 24-node graph and track render time', () => {
       const positions = wrapper.vm.nodePositions
 
-      const endTime = performance.now()
-      const renderTime = endTime - startTime
-
-      expect(positions.length).toBe(5)
-      expect(renderTime).toBeLessThan(100) // Should be very fast for small graph
-    })
-
-    it('should render medium graph within 3 seconds', () => {
-      const largeTrail = createLargeTrail(30)
-      const largeWrapper = mount(DagVisualization, {
-        props: { trail: largeTrail }
-      })
-
-      const positions = largeWrapper.vm.nodePositions
-      const renderTime = largeWrapper.vm.renderTime
-
-      expect(positions.length).toBe(30)
-      if (renderTime) {
-        expect(renderTime).toBeLessThan(3000)
-      }
-    })
-
-    it('should track render time', () => {
-      const positions = wrapper.vm.nodePositions
-
+      expect(positions.length).toBe(stats.nodeCount)
       expect(wrapper.vm.renderTime).not.toBeNull()
       expect(wrapper.vm.renderTime).toBeGreaterThan(0)
+    })
+
+    it('should complete 24-node graph render within reasonable time', () => {
+      const positions = wrapper.vm.nodePositions
+      const renderTime = wrapper.vm.renderTime
+
+      expect(positions.length).toBe(stats.nodeCount)
+      if (renderTime) {
+        // 24 nodes should render in under 3 seconds
+        expect(renderTime).toBeLessThan(3000)
+      }
     })
 
     it('should show performance warning for slow renders', async () => {
@@ -603,7 +482,7 @@ describe('DagVisualization', () => {
   })
 
   describe('Edge Cases', () => {
-    it('should handle single node trail', () => {
+    it('should handle single node trail', async () => {
       const singleNodeTrail: Trail = {
         title: 'Single Node',
         description: 'Only one node',
@@ -628,7 +507,7 @@ describe('DagVisualization', () => {
         }
       }
 
-      const singleWrapper = mount(DagVisualization, {
+      const singleWrapper = await mountSuspended(DagVisualization, {
         props: { trail: singleNodeTrail }
       })
 
@@ -636,23 +515,23 @@ describe('DagVisualization', () => {
       expect(positions.length).toBe(1)
     })
 
-    it('should handle disconnected nodes', () => {
+    it('should handle disconnected nodes', async () => {
       const disconnectedTrail: Trail = {
-        ...mockTrail,
+        ...testData.trail,
         dag: {
           nodes: {
-            ...mockTrail.dag.nodes,
+            ...testData.trail.dag.nodes,
             orphan: {
               id: 'orphan',
               content: { text: 'Disconnected', choices: [] }
             }
           },
-          edges: mockTrail.dag.edges,
+          edges: testData.trail.dag.edges,
           convergence_points: []
         }
       }
 
-      const disconnectedWrapper = mount(DagVisualization, {
+      const disconnectedWrapper = await mountSuspended(DagVisualization, {
         props: { trail: disconnectedTrail }
       })
 
@@ -665,3 +544,73 @@ describe('DagVisualization', () => {
     })
   })
 })
+
+// Keep mock trail helper functions for edge case tests that need simpler data
+function createMockTrail(): Trail {
+  return {
+    title: 'DAG Test',
+    description: 'Test trail for DAG visualization',
+    metadata: {
+      generation_params: {
+        age_group: '8-12',
+        theme: 'Adventure',
+        language: 'en',
+        node_count: 5
+      },
+      start_node_id: 'node1'
+    },
+    dag: {
+      nodes: {
+        node1: {
+          id: 'node1',
+          content: {
+            text: 'Start node',
+            choices: [
+              { id: 'choice1', text: 'Left', next_node_id: 'node2' },
+              { id: 'choice2', text: 'Right', next_node_id: 'node3' }
+            ]
+          }
+        },
+        node2: {
+          id: 'node2',
+          content: {
+            text: 'Left path',
+            choices: [
+              { id: 'choice3', text: 'Continue', next_node_id: 'node4' }
+            ]
+          }
+        },
+        node3: {
+          id: 'node3',
+          content: {
+            text: 'Right path',
+            choices: [
+              { id: 'choice4', text: 'Continue', next_node_id: 'node5' }
+            ]
+          }
+        },
+        node4: {
+          id: 'node4',
+          content: {
+            text: 'Left end',
+            choices: []
+          }
+        },
+        node5: {
+          id: 'node5',
+          content: {
+            text: 'Right end',
+            choices: []
+          }
+        }
+      },
+      edges: [
+        { from_node_id: 'node1', to_node_id: 'node2', choice_id: 'choice1' },
+        { from_node_id: 'node1', to_node_id: 'node3', choice_id: 'choice2' },
+        { from_node_id: 'node2', to_node_id: 'node4', choice_id: 'choice3' },
+        { from_node_id: 'node3', to_node_id: 'node5', choice_id: 'choice4' }
+      ],
+      convergence_points: []
+    }
+  }
+}

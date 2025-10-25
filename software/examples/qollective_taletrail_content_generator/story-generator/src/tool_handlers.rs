@@ -95,6 +95,7 @@ pub async fn handle_generate_nodes(
         &params.dag,
         prompt_package,
         &params.generation_request,
+        params.expected_choice_counts.as_ref(),
     )
     .await
     {

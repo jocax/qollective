@@ -131,9 +131,17 @@ impl FileLoader {
             .unwrap_or("en")
             .to_string();
 
-        let node_count = generation_params.get("node_count")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        // Calculate actual node count from trail data, prioritizing actual data over requested params
+        // First check trail_steps array (actual generated steps)
+        let node_count = generation_response.trail_steps
+            .as_ref()
+            .map(|steps| steps.len())
+            .unwrap_or_else(|| {
+                // Fallback to generation_params requested node_count if trail_steps not available
+                generation_params.get("node_count")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as usize
+            });
 
         // Extract tenant_id from envelope metadata
         let tenant_id = if envelope.meta.tenant.is_empty() {

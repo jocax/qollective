@@ -1,12 +1,26 @@
-import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { defineVitestConfig } from '@nuxt/test-utils/config'
 
-export default defineConfig({
-  plugins: [vue()],
+export default defineVitestConfig({
   test: {
-    environment: 'happy-dom',
+    environment: 'nuxt',
     globals: true,
+    setupFiles: ['./vitest.setup.ts'],
+
+    // Add environmentOptions for Vitest 4+ compatibility
+    environmentOptions: {
+      nuxt: {
+        domEnvironment: 'happy-dom'
+      }
+    },
+
+    // Optimize test execution with forks pool
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: false
+      }
+    },
+
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -18,12 +32,6 @@ export default defineConfig({
         '**/*.spec.ts',
         '**/__tests__/**'
       ]
-    }
-  },
-  resolve: {
-    alias: {
-      '~': resolve(__dirname, './app'),
-      '@': resolve(__dirname, './app')
     }
   }
 })

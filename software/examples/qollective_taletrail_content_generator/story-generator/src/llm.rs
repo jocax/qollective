@@ -403,6 +403,7 @@ pub async fn generate_nodes_batch(
     dag: &DAG,
     prompt_package: &PromptPackage,
     generation_request: &GenerationRequest,
+    expected_choice_counts: Option<&Vec<usize>>,
 ) -> Result<Vec<ContentNode>, TaleTrailError> {
     info!(
         "Starting batch generation for {} nodes with concurrency {}",
@@ -497,6 +498,57 @@ pub async fn generate_nodes_batch(
             "All {} node generations failed",
             errors.len()
         )));
+    }
+
+    // Validate and correct choice counts if constraints were provided
+    if let Some(expected_counts) = expected_choice_counts {
+        for (node, &expected_count) in generated_nodes.iter_mut().zip(expected_counts.iter()) {
+            let actual_count = node.content.choices.len();
+
+            if actual_count != expected_count {
+                warn!(
+                    node_id = %node.id,
+                    expected = expected_count,
+                    actual = actual_count,
+                    "AI generated wrong choice count - correcting"
+                );
+
+                if actual_count > expected_count {
+                    // Truncate excess choices
+                    node.content.choices.truncate(expected_count);
+                    info!(
+                        node_id = %node.id,
+                        "Truncated {} excess choices",
+                        actual_count - expected_count
+                    );
+                } else {
+                    // AI generated too few choices - this indicates a prompt issue
+                    error!(
+                        node_id = %node.id,
+                        expected = expected_count,
+                        actual = actual_count,
+                        "AI generated too few choices - this indicates prompt issue"
+                    );
+
+                    // Add placeholder choices to meet the constraint
+                    while node.content.choices.len() < expected_count {
+                        let choice_index = node.content.choices.len();
+                        node.content.choices.push(Choice {
+                            id: format!("fallback_choice_{}_{}", node.id, choice_index),
+                            text: format!("Continue the adventure (option {})", choice_index + 1),
+                            next_node_id: String::new(),
+                            metadata: None,
+                        });
+                    }
+
+                    warn!(
+                        node_id = %node.id,
+                        "Added {} placeholder choices to meet constraint",
+                        expected_count - actual_count
+                    );
+                }
+            }
+        }
     }
 
     Ok(generated_nodes)
