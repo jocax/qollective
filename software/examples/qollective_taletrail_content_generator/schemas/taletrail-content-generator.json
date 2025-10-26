@@ -60,6 +60,37 @@
       "description": "Method used to generate prompts"
     },
 
+    "RestrictedWordsMergeMode": {
+      "type": "string",
+      "enum": ["Replace", "Merge", "ConfigOnly"],
+      "default": "Merge",
+      "description": "How to merge custom restricted words with config defaults"
+    },
+
+    "ValidationPolicy": {
+      "type": "object",
+      "properties": {
+        "enable_validation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable content validation"
+        },
+        "custom_restricted_words": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "description": "Custom restricted words per language (overrides or merges with config defaults)"
+        },
+        "merge_mode": {
+          "$ref": "#/$defs/RestrictedWordsMergeMode",
+          "description": "How to handle custom_restricted_words vs config defaults"
+        }
+      },
+      "description": "Validation policy for content generation"
+    },
+
     "ApiVersion": {
       "type": "string",
       "enum": ["v1"],
@@ -317,6 +348,10 @@
         "dag_config": {
           "$ref": "#/$defs/DagStructureConfig",
           "description": "Custom DAG configuration (Tier 2: Advanced). Mutually exclusive with story_structure"
+        },
+        "validation_policy": {
+          "$ref": "#/$defs/ValidationPolicy",
+          "description": "Validation policy for content generation (optional)"
         }
       }
     },
@@ -730,9 +765,58 @@
       }
     },
 
+    "CorrectionSummary": {
+      "type": "object",
+      "required": ["node_id", "correction_type", "success", "attempts"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "description": "ID of node that was corrected"
+        },
+        "correction_type": {
+          "type": "string",
+          "enum": ["LocalFix", "Regenerate", "Skip"],
+          "description": "Type of correction applied"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the correction succeeded"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of attempts to correct this node"
+        }
+      }
+    },
+
+    "ValidationIssueSummary": {
+      "type": "object",
+      "required": ["node_id", "severity", "issue_type", "description"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "description": "ID of node with unresolved issue"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["Critical", "Warning", "Info"],
+          "description": "Issue severity level"
+        },
+        "issue_type": {
+          "type": "string",
+          "description": "Type of validation issue (e.g., 'age_appropriateness', 'word_count')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable issue description"
+        }
+      }
+    },
+
     "GenerationMetadata": {
       "type": "object",
-      "required": ["generated_at", "total_word_count", "ai_model_version", "generation_duration_seconds", "validation_rounds", "orchestrator_version"],
+      "required": ["generated_at", "total_word_count", "ai_model_version", "generation_duration_seconds", "validation_rounds", "orchestrator_version", "validation_pass_rate", "negotiation_rounds_executed", "resolved_node_count"],
       "properties": {
         "generated_at": {
           "type": "string",
@@ -748,10 +832,40 @@
           "type": "integer"
         },
         "validation_rounds": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Total number of validation rounds executed (includes initial + negotiation rounds)"
         },
         "orchestrator_version": {
           "type": "string"
+        },
+        "validation_pass_rate": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Percentage of nodes that passed validation (nodes_passed / total_nodes)"
+        },
+        "negotiation_rounds_executed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of negotiation rounds executed after initial validation"
+        },
+        "resolved_node_count": {
+          "type": "integer",
+          "description": "Actual node count used after resolving preset/explicit values (Priority: explicit > preset > defaults)"
+        },
+        "corrections_applied": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CorrectionSummary"
+          },
+          "description": "List of all correction attempts during negotiation"
+        },
+        "unresolved_validation_issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValidationIssueSummary"
+          },
+          "description": "Issues remaining after max negotiation rounds exceeded (empty if all resolved)"
         }
       }
     },

@@ -157,6 +157,36 @@ impl LlmConfig {
     }
 }
 
+/// Debug configuration for LLM response logging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DebugConfig {
+    /// Enable raw response dumping to files
+    #[serde(default)]
+    pub dump_raw_response_enabled: bool,
+
+    /// Directory for dumping raw responses
+    #[serde(default = "default_dump_directory")]
+    pub dump_directory: String,
+
+    /// Dump successful responses (not just failures)
+    #[serde(default)]
+    pub dump_all_responses: bool,
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        Self {
+            dump_raw_response_enabled: false,
+            dump_directory: default_dump_directory(),
+            dump_all_responses: false,
+        }
+    }
+}
+
+fn default_dump_directory() -> String {
+    DEFAULT_LLM_DUMP_DIRECTORY.to_string()
+}
+
 /// Default provider configuration from TOML
 ///
 /// This structure defines the default LLM provider settings used when no tenant
@@ -201,6 +231,10 @@ pub struct ProviderConfig {
     /// System prompt handling style
     #[serde(default)]
     pub system_prompt_style: SystemPromptStyle,
+
+    /// Debug configuration
+    #[serde(default)]
+    pub debug: DebugConfig,
 }
 
 impl ProviderConfig {
@@ -344,6 +378,11 @@ temperature = 0.7
 timeout_secs = 60
 system_prompt_style = "native"
 
+[llm.debug]
+dump_raw_response_enabled = false
+dump_directory = "/tmp/llm_responses"
+dump_all_responses = false
+
 [llm.models]
 en = "qwen2.5-32b-instruct-q4_k_m"
 es = "llama-3.3-70b-instruct-q4_k_m"
@@ -443,6 +482,7 @@ default_model = "test-model"
             temperature: 0.7,
             timeout_secs: 60,
             system_prompt_style: SystemPromptStyle::Native,
+            debug: DebugConfig::default(),
         };
 
         assert!(valid_config.validate().is_ok());

@@ -221,26 +221,33 @@ impl Default for DagStructureConfig {
     }
 }
 
-/// Resolve DAG configuration with priority: preset > custom > defaults
+/// Resolve DAG configuration with priority: explicit node_count > preset > custom > defaults
 pub fn resolve_dag_config(
     story_structure: Option<&str>,
+    node_count: Option<usize>,
     dag_config: Option<DagStructureConfig>,
     defaults: &DagStructureConfig,
 ) -> Result<DagStructureConfig, ValidationError> {
-    // PRIORITY 1: story_structure preset
-    if let Some(preset_name) = story_structure {
+    // Start with base config from preset, custom, or defaults
+    let mut resolved_config = if let Some(preset_name) = story_structure {
+        // Priority 2: story_structure preset
         let preset = StoryStructurePreset::from_name(preset_name)?;
-        return Ok(preset.to_dag_config());
-    }
-
-    // PRIORITY 2: Custom dag_config
-    if let Some(config) = dag_config {
+        preset.to_dag_config()
+    } else if let Some(config) = dag_config {
+        // Priority 3: Custom dag_config
         config.validate()?;
-        return Ok(config);
+        config
+    } else {
+        // Priority 4: Defaults
+        defaults.clone()
+    };
+
+    // PRIORITY 1 OVERRIDE: Explicit node_count always wins (even over preset)
+    if let Some(explicit_count) = node_count {
+        resolved_config.node_count = explicit_count;
     }
 
-    // PRIORITY 3: Defaults
-    Ok(defaults.clone())
+    Ok(resolved_config)
 }
 
 // ============================================================================
@@ -819,7 +826,7 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn test_resolve_priority_preset_wins() {
+    fn test_explicit_node_count_overrides_preset() {
         let defaults = DagStructureConfig::default();
         let custom = DagStructureConfig {
             node_count: 50,
@@ -829,15 +836,17 @@ mod tests {
             branching_factor: 3,
         };
 
-        // Both preset and custom provided - preset should win
+        // Both preset and explicit node_count provided - explicit should override preset's count
         let resolved = resolve_dag_config(
             Some("guided"),
+            Some(20), // Explicit node_count
             Some(custom),
             &defaults,
         ).expect("Should resolve");
 
-        // Should match guided preset, not custom
-        assert_eq!(resolved.node_count, 12);
+        // Explicit node_count should win
+        assert_eq!(resolved.node_count, 20);
+        // But preset's other settings should apply
         assert_eq!(resolved.convergence_pattern, ConvergencePattern::SingleConvergence);
         assert_eq!(resolved.convergence_point_ratio, Some(0.5));
     }
@@ -856,6 +865,7 @@ mod tests {
         // No preset, custom provided - custom should win
         let resolved = resolve_dag_config(
             None,
+            None, // No explicit node_count
             Some(custom.clone()),
             &defaults,
         ).expect("Should resolve");
@@ -880,6 +890,7 @@ mod tests {
         // No preset, no custom - defaults should be used
         let resolved = resolve_dag_config(
             None,
+            None, // No explicit node_count
             None,
             &defaults,
         ).expect("Should resolve");
@@ -897,6 +908,7 @@ mod tests {
 
         let result = resolve_dag_config(
             Some("invalid_preset"),
+            None, // No explicit node_count
             None,
             &defaults,
         );
@@ -919,6 +931,7 @@ mod tests {
 
         let result = resolve_dag_config(
             None,
+            None, // No explicit node_count
             Some(invalid_custom),
             &defaults,
         );
@@ -926,6 +939,31 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("node_count"));
+    }
+
+    #[test]
+    fn test_explicit_node_count_with_epic_preset() {
+        // This is the exact scenario from the bug report:
+        // User requests node_count=9 with epic preset
+        // Expected: Use 9 nodes (not epic's default 24)
+        // Expected: Use epic's other settings (convergence_pattern, etc.)
+        let defaults = DagStructureConfig::default();
+
+        let resolved = resolve_dag_config(
+            Some("epic"),
+            Some(9), // Explicit node_count
+            None,
+            &defaults,
+        ).expect("Should resolve");
+
+        // Explicit node_count should win
+        assert_eq!(resolved.node_count, 9);
+
+        // But epic's other settings should apply
+        assert_eq!(resolved.convergence_pattern, ConvergencePattern::EndOnly);
+        assert_eq!(resolved.convergence_point_ratio, Some(0.9));
+        assert_eq!(resolved.max_depth, 12);
+        assert_eq!(resolved.branching_factor, 2);
     }
 
     // ========================================================================

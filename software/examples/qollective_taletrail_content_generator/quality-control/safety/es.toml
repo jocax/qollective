@@ -1,0 +1,3 @@
+# Spanish restricted words (Palabras restringidas en español)
+# Start with empty list - users customize as needed
+restricted_words = []

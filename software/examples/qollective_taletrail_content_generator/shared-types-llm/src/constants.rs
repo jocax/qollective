@@ -167,3 +167,16 @@ pub const ENV_VAR_ANTHROPIC_API_KEY: &str = "LLM_ANTHROPIC_API_KEY";
 
 /// Environment variable name for Google API key
 pub const ENV_VAR_GOOGLE_API_KEY: &str = "LLM_GOOGLE_API_KEY";
+
+// ============================================================================
+// Debug and Logging Constants
+// ============================================================================
+
+/// Default directory for dumping LLM raw responses
+pub const DEFAULT_LLM_DUMP_DIRECTORY: &str = "/tmp/llm_responses";
+
+/// Maximum length of LLM response preview in log messages (characters)
+pub const LLM_RESPONSE_PREVIEW_LENGTH: usize = 500;
+
+/// Filename prefix for LLM response dump files
+pub const LLM_DUMP_FILENAME_PREFIX: &str = "llm_response";

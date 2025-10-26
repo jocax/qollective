@@ -47,6 +47,7 @@ impl StoryLlmClient {
         &self,
         prompt_package: &PromptPackage,
         node_context: &NodeContext,
+        context: Option<shared_types_llm::RequestContext>,
     ) -> Result<String, TaleTrailError> {
         let span = info_span!(
             "story_content_generation",
@@ -91,8 +92,8 @@ impl StoryLlmClient {
 
             info!("Using model: {}", client.model_name());
 
-            // Send prompt and get response
-            let content = client.prompt(&full_prompt).await
+            // Send prompt and get response (pass context)
+            let content = client.prompt(&full_prompt, context).await
                 .map_err(|e| {
                     error!("LLM content generation failed: {}", e);
                     TaleTrailError::LLMError(format!("Content generation failed: {}", e))
@@ -308,14 +309,49 @@ pub async fn generate_node_content(
 ) -> Result<ContentNode, TaleTrailError> {
     debug!("Generating content for node: {}", node_id);
 
-    // Call LLM to generate content
+    // Create request context with node_id for debug dumps
+    let context = shared_types_llm::RequestContext::new()
+        .with_metadata("node_id", node_id);
+
+    // Call LLM to generate content (pass context)
     let llm_response = llm_client
-        .generate_with_prompts(prompt_package, &node_context)
+        .generate_with_prompts(prompt_package, &node_context, Some(context))
         .await?;
 
     // Parse LLM response
     let (narrative, choice_texts, educational_text) =
         StoryLlmClient::parse_content_response(&llm_response)?;
+
+    // Log successful parsing
+    info!(
+        "Parsed LLM response for node {}: narrative={} chars, choices={}, educational={}",
+        node_id,
+        narrative.len(),
+        choice_texts.len(),
+        educational_text.is_some()
+    );
+
+    // Validate narrative is not empty after parsing
+    if narrative.trim().is_empty() {
+        warn!(
+            "LLM returned empty narrative after parsing for node {}",
+            node_id
+        );
+        return Err(TaleTrailError::GenerationError(
+            format!("Parsed narrative is empty for node {}", node_id),
+        ));
+    }
+
+    // Validate we have at least one choice
+    if choice_texts.is_empty() {
+        warn!(
+            "LLM returned no choices after parsing for node {}",
+            node_id
+        );
+        return Err(TaleTrailError::GenerationError(
+            format!("No choices parsed for node {}", node_id),
+        ));
+    }
 
     // Get DAG node to retrieve structural information
     let dag_node = dag.nodes.get(node_id).ok_or_else(|| {

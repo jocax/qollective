@@ -1,0 +1,3 @@
+# German restricted words (Deutsche eingeschränkte Wörter)
+# Start with empty list - users customize as needed
+restricted_words = []

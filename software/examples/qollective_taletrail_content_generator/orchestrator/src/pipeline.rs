@@ -37,6 +37,8 @@ pub struct PipelineState {
     pub dag: Option<DAG>,
     /// Prompt packages for each MCP service
     pub prompt_packages: HashMap<MCPServiceType, PromptPackage>,
+    /// Current negotiation round counter (0 = not in negotiation, 1-N = active round)
+    pub negotiation_round: u32,
 }
 
 impl PipelineState {
@@ -55,6 +57,7 @@ impl PipelineState {
             request,
             dag: None,
             prompt_packages: HashMap::new(),
+            negotiation_round: 0,
         }
     }
 

@@ -68,22 +68,16 @@ max_sentence_length = 35
 vocabulary_level = "advanced"
 allowed_themes = ["mystery", "history", "environment", "technology", "culture", "philosophy", "ethics", "complex-science"]
 
-# Safety keywords for content filtering
+# Safety validation configuration
 [safety]
-violence_keywords = [
-    "sword", "fight", "blood", "weapon", "kill", "hurt",
-    "attack", "battle", "war", "gun", "knife", "stab",
-    "shoot", "wound", "injure", "harm"
-]
-fear_keywords = [
-    "scary", "monster", "nightmare", "dark cave", "ghost",
-    "haunted", "creepy", "frightening", "terror", "horror",
-    "scream", "panic", "dread"
-]
-inappropriate_keywords = [
-    "alcohol", "beer", "wine", "cigarette", "tobacco",
-    "drugs", "weapon", "violence"
-]
+# Enable keyword-based safety validation
+enable_keyword_validation = true
+
+# Directory containing per-language restricted word files
+restricted_words_dir = "../quality-control/safety"
+
+# Automatically load restricted words based on request language
+auto_load_by_language = true
 
 # Educational criteria and keywords
 [educational]

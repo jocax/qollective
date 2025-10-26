@@ -14,6 +14,8 @@ pub struct QualityControlConfig {
     pub llm: SharedLlmConfig,
     pub validation: ValidationConfig,
     pub rubrics: RubricsConfig,
+    /// Safety validation configuration
+    #[serde(default)]
     pub safety: SafetyConfig,
     pub educational: EducationalConfig,
 }
@@ -78,12 +80,43 @@ pub struct AgeGroupConfig {
     pub allowed_themes: Vec<String>,
 }
 
-/// Safety keywords configuration
+/// Safety validation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SafetyConfig {
-    pub violence_keywords: Vec<String>,
-    pub fear_keywords: Vec<String>,
-    pub inappropriate_keywords: Vec<String>,
+    /// Enable keyword-based safety validation
+    #[serde(default = "default_enable_keyword_validation")]
+    pub enable_keyword_validation: bool,
+
+    /// Directory containing per-language restricted word files
+    pub restricted_words_dir: String,
+
+    /// Automatically load restricted words based on request language
+    #[serde(default = "default_auto_load")]
+    pub auto_load_by_language: bool,
+}
+
+impl Default for SafetyConfig {
+    fn default() -> Self {
+        Self {
+            enable_keyword_validation: true,
+            restricted_words_dir: "../quality-control/safety".to_string(),
+            auto_load_by_language: true,
+        }
+    }
+}
+
+fn default_enable_keyword_validation() -> bool {
+    true
+}
+
+fn default_auto_load() -> bool {
+    true
+}
+
+/// Structure of restricted words TOML file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RestrictedWordsFile {
+    restricted_words: Vec<String>,
 }
 
 /// Educational criteria configuration
@@ -291,13 +324,41 @@ impl QualityControlConfig {
         }
     }
 
-    /// Get all safety keywords combined
-    pub fn get_all_safety_keywords(&self) -> Vec<&str> {
-        self.safety.violence_keywords.iter()
-            .chain(self.safety.fear_keywords.iter())
-            .chain(self.safety.inappropriate_keywords.iter())
-            .map(|s| s.as_str())
-            .collect()
+    /// Load restricted words for a specific language from config file
+    ///
+    /// Returns empty Vec if file doesn't exist or keyword validation is disabled.
+    pub fn load_restricted_words(&self, language: &str) -> Result<Vec<String>> {
+        if !self.safety.enable_keyword_validation || !self.safety.auto_load_by_language {
+            return Ok(Vec::new());
+        }
+
+        let file_path = format!("{}/{}.toml", self.safety.restricted_words_dir, language);
+        let path = std::path::Path::new(&file_path);
+
+        // If file doesn't exist, return empty list (not an error)
+        if !path.exists() {
+            tracing::debug!(
+                language = %language,
+                path = %file_path,
+                "No restricted words file found, using empty list"
+            );
+            return Ok(Vec::new());
+        }
+
+        // Load and parse TOML file
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| TaleTrailError::ConfigError(format!("Failed to read restricted words file {}: {}", file_path, e)))?;
+
+        let config: RestrictedWordsFile = toml::from_str(&content)
+            .map_err(|e| TaleTrailError::ConfigError(format!("Failed to parse restricted words file {}: {}", file_path, e)))?;
+
+        tracing::info!(
+            language = %language,
+            word_count = config.restricted_words.len(),
+            "Loaded restricted words from config file"
+        );
+
+        Ok(config.restricted_words)
     }
 }
 
@@ -365,9 +426,23 @@ mod tests {
         env::set_current_dir(ORIGINAL_DIR.as_path()).expect("Failed to restore dir");
     }
 
-    /// Helper to get the standard test config sections (rubrics, safety, educational, validation.thresholds, validation.correction)
+    /// Helper to get the standard test config sections (llm, rubrics, safety, educational, validation.thresholds, validation.correction)
     fn get_test_config_sections() -> &'static str {
         r#"
+[llm]
+type = "google"
+url = "https://generativelanguage.googleapis.com"
+default_model = "gemini-2.0-flash-lite"
+use_default_model_fallback = true
+timeout_secs = 180
+max_tokens = 4096
+temperature = 0.7
+system_prompt_style = "chatml"
+
+[llm.models]
+en = "gemini-2.0-flash-lite"
+de = "gemini-2.0-flash-lite"
+
 [rubrics.age_6_8]
 max_sentence_length = 15
 vocabulary_level = "basic"
@@ -394,9 +469,9 @@ vocabulary_level = "advanced"
 allowed_themes = ["philosophy", "ethics"]
 
 [safety]
-violence_keywords = ["sword", "fight"]
-fear_keywords = ["scary", "monster"]
-inappropriate_keywords = ["alcohol", "drugs"]
+enable_keyword_validation = true
+restricted_words_dir = "../quality-control/safety"
+auto_load_by_language = true
 
 [educational]
 educational_keywords = ["learn", "discover"]
@@ -676,9 +751,9 @@ max_negotiation_rounds = 3
         assert_eq!(config.rubrics.age_18_plus.vocabulary_level, "advanced");
 
         // Test safety configuration
-        assert!(config.safety.violence_keywords.contains(&"sword".to_string()));
-        assert!(config.safety.fear_keywords.contains(&"scary".to_string()));
-        assert!(config.safety.inappropriate_keywords.contains(&"alcohol".to_string()));
+        assert_eq!(config.safety.enable_keyword_validation, true);
+        assert_eq!(config.safety.restricted_words_dir, "../quality-control/safety");
+        assert_eq!(config.safety.auto_load_by_language, true);
 
         // Test educational configuration
         assert!(config.educational.educational_keywords.contains(&"learn".to_string()));
@@ -699,11 +774,6 @@ max_negotiation_rounds = 3
         // Test helper methods
         let age_config = config.get_age_config(&AgeGroup::_6To8);
         assert_eq!(age_config.max_sentence_length, 15.0);
-
-        let all_safety = config.get_all_safety_keywords();
-        assert!(all_safety.contains(&"sword"));
-        assert!(all_safety.contains(&"scary"));
-        assert!(all_safety.contains(&"alcohol"));
 
         restore_original_dir();
     }

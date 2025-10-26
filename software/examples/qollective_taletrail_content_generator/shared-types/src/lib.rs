@@ -13,6 +13,10 @@
 //! Note: Configuration is handled per-service using Figment with
 //! Defaults → config.toml → Environment variables hierarchy.
 
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
+
 pub mod constants;
 pub mod contract_tests;
 pub mod custom_metadata;
@@ -71,3 +75,48 @@ pub use traits::{
     MockStoryGeneratorService,
     MockValidationService,
 };
+
+// ============================================================================
+// Validation Policy Types
+// ============================================================================
+
+/// Validation policy for content generation requests
+///
+/// Provides flexible control over validation behavior including:
+/// - Enable/disable validation entirely
+/// - Custom restricted words per language
+/// - Merge strategies for combining custom words with config
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct ValidationPolicy {
+    /// Enable/disable all validation for this request
+    #[serde(default = "default_enable_validation")]
+    pub enable_validation: bool,
+
+    /// Custom restricted words for this request
+    /// Key: Language code (en, de, es, fr)
+    /// Value: List of words to avoid in generation and check in validation
+    #[serde(default)]
+    pub custom_restricted_words: HashMap<String, Vec<String>>,
+
+    /// How to combine custom words with config file words
+    #[serde(default)]
+    pub merge_mode: RestrictedWordsMergeMode,
+}
+
+/// Strategy for combining custom restricted words with config file words
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
+pub enum RestrictedWordsMergeMode {
+    /// Use custom words only, ignore config file
+    Replace,
+
+    /// Merge custom words with config file words (default)
+    #[default]
+    Merge,
+
+    /// Use config file words only, ignore custom words
+    ConfigOnly,
+}
+
+fn default_enable_validation() -> bool {
+    true
+}

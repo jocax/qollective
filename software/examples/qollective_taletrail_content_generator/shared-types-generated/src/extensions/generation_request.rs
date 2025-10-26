@@ -186,23 +186,31 @@ impl Default for DagStructureConfig {
 impl GenerationRequest {
     /// Resolve DAG configuration from request or orchestrator defaults
     ///
-    /// Implements the three-priority resolution model:
+    /// Implements the priority resolution model with explicit node_count override:
     ///
-    /// # Priority 1: Story Structure Preset
+    /// # Priority 1: Explicit node_count (HIGHEST - Always Wins)
     ///
-    /// If `story_structure` field is present, parse the preset name and
-    /// return the corresponding DAG configuration. This takes priority
-    /// over any custom `dag_config` provided.
+    /// If `node_count` field is explicitly provided in the request, it ALWAYS
+    /// overrides the node count from any preset, custom config, or defaults.
+    /// This allows users to request specific node counts while still benefiting
+    /// from preset structural settings (convergence_pattern, branching_factor, etc.).
     ///
-    /// # Priority 2: Custom DAG Configuration
+    /// # Priority 2: Story Structure Preset
+    ///
+    /// If `story_structure` field is present, parse the preset name and use
+    /// its DAG configuration. When both `node_count` and `story_structure` are
+    /// provided, the preset's structural settings are used but with the explicit
+    /// node count.
+    ///
+    /// # Priority 3: Custom DAG Configuration
     ///
     /// If `dag_config` field is present (and no preset), validate the
-    /// configuration and return it if valid.
+    /// configuration and use it. Explicit `node_count` still overrides.
     ///
-    /// # Priority 3: Orchestrator Defaults
+    /// # Priority 4: Orchestrator Defaults
     ///
-    /// If neither preset nor custom config is provided, return the
-    /// orchestrator's default configuration.
+    /// If neither preset nor custom config is provided, use the orchestrator's
+    /// default configuration. Explicit `node_count` still overrides.
     ///
     /// # Arguments
     ///
@@ -222,17 +230,16 @@ impl GenerationRequest {
     /// # use shared_types_generated::AgeGroup;
     /// # use shared_types_generated::Language;
     ///
-    /// // Preset takes priority - when both preset and custom config are provided,
-    /// // the preset wins and custom config is ignored
+    /// // Explicit node_count overrides preset - this is the key fix for the bug
     /// # let request = GenerationRequest {
-    /// #     story_structure: Some("guided".to_string()),
+    /// #     story_structure: Some("epic".to_string()),
+    /// #     node_count: Some(9),
     /// #     dag_config: None,
     /// #     tenant_id: 1,
     /// #     age_group: AgeGroup::_9To11,
     /// #     language: Language::En,
     /// #     theme: "test".to_string(),
     /// #     tags: None,
-    /// #     node_count: None,
     /// #     prompt_packages: None,
     /// #     educational_goals: None,
     /// #     author_id: None,
@@ -241,32 +248,46 @@ impl GenerationRequest {
     /// # };
     /// # let defaults = DagStructureConfig::default();
     /// let resolved = request.resolve_dag_config(&defaults).unwrap();
-    /// assert_eq!(resolved.node_count, 12); // From "guided" preset
+    /// assert_eq!(resolved.node_count, 9); // Explicit count wins over epic's 24
     /// ```
     pub fn resolve_dag_config(
         &self,
         orchestrator_defaults: &DagStructureConfig,
     ) -> Result<DagStructureConfig, ValidationError> {
-        // PRIORITY 1: story_structure preset
-        if let Some(preset_name) = &self.story_structure {
+        // Start with base config from preset, custom, or defaults
+        let mut resolved_config = if let Some(preset_name) = &self.story_structure {
+            // Priority 2: story_structure preset (for structural settings)
             if self.dag_config.is_some() {
                 tracing::warn!(
-                    "Both story_structure and dag_config provided. Using story_structure preset '{}' (takes priority)",
+                    "Both story_structure and dag_config provided. Using story_structure preset '{}' (takes priority for structure)",
                     preset_name
                 );
             }
             let preset = StoryStructurePreset::from_name(preset_name)?;
-            return Ok(preset.to_dag_config());
-        }
-
-        // PRIORITY 2: Custom dag_config
-        if let Some(config) = &self.dag_config {
+            preset.to_dag_config()
+        } else if let Some(config) = &self.dag_config {
+            // Priority 3: Custom dag_config
             config.validate_config()?;
-            return Ok(config.clone());
+            config.clone()
+        } else {
+            // Priority 4: Orchestrator defaults
+            orchestrator_defaults.clone()
+        };
+
+        // PRIORITY 1 OVERRIDE: Explicit node_count always wins (even over preset)
+        if let Some(explicit_count) = self.node_count {
+            if explicit_count != resolved_config.node_count {
+                tracing::info!(
+                    requested_count = explicit_count,
+                    preset_count = resolved_config.node_count,
+                    preset = ?self.story_structure,
+                    "Explicit node_count overrides story_structure preset"
+                );
+            }
+            resolved_config.node_count = explicit_count;
         }
 
-        // PRIORITY 3: Orchestrator defaults
-        Ok(orchestrator_defaults.clone())
+        Ok(resolved_config)
     }
 }
 

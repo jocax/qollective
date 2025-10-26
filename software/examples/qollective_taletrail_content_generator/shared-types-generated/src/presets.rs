@@ -14,6 +14,7 @@
 //! assert_eq!(config.node_count, 12);
 //! ```
 
+use crate::constants;
 use crate::generated::{ConvergencePattern, DagStructureConfig};
 
 /// Result type for preset operations
@@ -127,28 +128,28 @@ impl StoryStructurePreset {
     pub fn to_dag_config(&self) -> DagStructureConfig {
         match self {
             Self::Guided => DagStructureConfig {
-                node_count: 12,
+                node_count: constants::PRESET_GUIDED_NODE_COUNT,
                 convergence_pattern: ConvergencePattern::SingleConvergence,
                 convergence_point_ratio: Some(0.5),
                 max_depth: 8,
                 branching_factor: 2,
             },
             Self::Adventure => DagStructureConfig {
-                node_count: 16,
+                node_count: constants::PRESET_ADVENTURE_NODE_COUNT,
                 convergence_pattern: ConvergencePattern::MultipleConvergence,
                 convergence_point_ratio: Some(0.6),
                 max_depth: 10,
                 branching_factor: 2,
             },
             Self::Epic => DagStructureConfig {
-                node_count: 24,
+                node_count: constants::PRESET_EPIC_NODE_COUNT,
                 convergence_pattern: ConvergencePattern::EndOnly,
                 convergence_point_ratio: Some(0.9),
                 max_depth: 12,
                 branching_factor: 2,
             },
             Self::ChooseYourPath => DagStructureConfig {
-                node_count: 16,
+                node_count: constants::PRESET_CHOOSE_YOUR_PATH_NODE_COUNT,
                 convergence_pattern: ConvergencePattern::PureBranching,
                 convergence_point_ratio: None,
                 max_depth: 10,

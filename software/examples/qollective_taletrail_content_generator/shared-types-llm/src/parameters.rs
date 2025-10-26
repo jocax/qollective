@@ -293,6 +293,41 @@ impl Default for LlmParameters {
     }
 }
 
+/// Optional metadata for LLM requests that can be included in debug dumps
+///
+/// This allows services to attach contextual information (like node_id, batch_id, request_id)
+/// that will be included in debug dump filenames and file contents, making it easier to
+/// correlate dumps with specific requests.
+///
+/// # Example
+///
+/// ```
+/// use shared_types_llm::RequestContext;
+///
+/// let context = RequestContext::new()
+///     .with_metadata("node_id", "20")
+///     .with_metadata("batch_id", "abc123");
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct RequestContext {
+    /// Key-value pairs of contextual information
+    /// Examples: node_id, batch_id, request_id, tenant_id, etc.
+    pub metadata: HashMap<String, String>,
+}
+
+impl RequestContext {
+    /// Create a new empty RequestContext
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a metadata key-value pair (builder pattern)
+    pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

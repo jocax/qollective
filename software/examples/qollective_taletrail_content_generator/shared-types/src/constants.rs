@@ -99,11 +99,20 @@ pub const MCP_EVENTS: &str = "mcp.events";
 /// Default timeout for generation requests
 pub const GENERATION_TIMEOUT_SECS: u64 = 300; // 5 minutes
 
-/// Default timeout for validation requests
-pub const VALIDATION_TIMEOUT_SECS: u64 = 60; // 1 minute
+/// Default timeout for validation requests (per individual validation call)
+pub const VALIDATION_TIMEOUT_SECS: u64 = 45; // 45 seconds
 
-/// Maximum retry attempts
+/// Maximum retry attempts for node regeneration
 pub const RETRY_MAX_ATTEMPTS: u32 = 3;
+
+/// Initial retry delay in milliseconds for exponential backoff
+pub const RETRY_INITIAL_DELAY_MS: u64 = 100;
+
+/// Maximum retry delay in milliseconds to cap exponential backoff
+pub const RETRY_MAX_DELAY_MS: u64 = 5000;
+
+/// Backoff multiplier for exponential backoff (2.0 = double each time)
+pub const RETRY_BACKOFF_MULTIPLIER: f64 = 2.0;
 
 // ============================================================================
 // BATCH PROCESSING
@@ -137,6 +146,22 @@ pub const DEFAULT_NODE_COUNT: usize = 16;
 
 /// Ratio for convergence point placement (0.0-1.0)
 pub const CONVERGENCE_POINT_RATIO: f64 = 0.5;
+
+// ============================================================================
+// STORY STRUCTURE PRESET NODE COUNTS
+// ============================================================================
+
+/// Node count for "guided" story structure preset
+pub const PRESET_GUIDED_NODE_COUNT: usize = 12;
+
+/// Node count for "adventure" story structure preset
+pub const PRESET_ADVENTURE_NODE_COUNT: usize = 16;
+
+/// Node count for "epic" story structure preset
+pub const PRESET_EPIC_NODE_COUNT: usize = 24;
+
+/// Node count for "choose_your_path" story structure preset
+pub const PRESET_CHOOSE_YOUR_PATH_NODE_COUNT: usize = 16;
 
 // ============================================================================
 // MCP DISCOVERY PROTOCOL

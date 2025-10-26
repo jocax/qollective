@@ -5,7 +5,7 @@
 //! the `mockall` crate when the `mocking` feature is enabled.
 
 use crate::error::LlmError;
-use crate::parameters::LlmParameters;
+use crate::parameters::{LlmParameters, RequestContext};
 use async_trait::async_trait;
 
 /// Provider trait for creating dynamic LLM clients
@@ -82,7 +82,7 @@ pub trait DynamicLlmClientProvider: Send + Sync {
 ///
 /// # async fn example(client: &dyn DynamicLlmClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let prompt = "Tell me a joke about programming.";
-/// let response = client.prompt(prompt).await?;
+/// let response = client.prompt(prompt, None).await?;
 /// println!("LLM response: {}", response);
 /// # Ok(())
 /// # }
@@ -99,6 +99,7 @@ pub trait DynamicLlmClient: Send + Sync {
     /// # Arguments
     ///
     /// * `prompt` - The prompt text to send to the LLM
+    /// * `context` - Optional request context for debug dumps (node_id, batch_id, etc.)
     ///
     /// # Returns
     ///
@@ -109,7 +110,7 @@ pub trait DynamicLlmClient: Send + Sync {
     /// - `LlmError::RequestFailed` - Failed to execute prompt
     /// - `LlmError::ProviderUnreachable` - Cannot reach LLM provider
     /// - `LlmError::RigError` - Error from underlying rig-core library
-    async fn prompt(&self, prompt: &str) -> Result<String, LlmError>;
+    async fn prompt(&self, prompt: &str, context: Option<RequestContext>) -> Result<String, LlmError>;
 
     /// Format prompts according to the system prompt style
     ///
@@ -165,6 +166,9 @@ mod tests {
                     .return_const("http://localhost:11435/v1".to_string());
                 mock_client.expect_max_tokens().return_const(4096u32);
                 mock_client.expect_temperature().return_const(0.7f32);
+                mock_client
+                    .expect_prompt()
+                    .returning(|_prompt, _context| Box::pin(async { Ok("Mock response".to_string()) }));
 
                 Box::pin(async move { Ok(Box::new(mock_client) as Box<dyn DynamicLlmClient>) })
             });

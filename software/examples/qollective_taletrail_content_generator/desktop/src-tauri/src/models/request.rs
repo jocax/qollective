@@ -119,6 +119,7 @@ impl GenerationRequest {
             prompt_packages: None,
             author_id: None,
             story_structure: self.story_structure.clone(),
+            validation_policy: None,
         })
     }
 

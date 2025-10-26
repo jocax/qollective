@@ -119,6 +119,7 @@ pub async fn handle_generate_story_prompts(
         prompt_packages: None,
         tags: None,
         dag_config: None,
+        validation_policy: None
     };
 
     let prompt_gen_request = PromptGenerationRequest {
@@ -326,6 +327,7 @@ pub async fn handle_generate_validation_prompts(
         prompt_packages: None,
         tags: None,
         dag_config: None,
+        validation_policy: None
     };
 
     let prompt_gen_request = PromptGenerationRequest {
@@ -493,6 +495,7 @@ pub async fn handle_generate_constraint_prompts(
         prompt_packages: None,
         tags: None,
         dag_config: None,
+        validation_policy: None
     };
 
     let prompt_gen_request = PromptGenerationRequest {

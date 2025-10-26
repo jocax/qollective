@@ -10,3 +10,4 @@ node_modules
 .cargo
 dist
 src-tauri/target
+/test-trails-llm-responses/*

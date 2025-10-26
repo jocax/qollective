@@ -4,15 +4,17 @@
 //! that wraps rig-core's OpenAI-compatible client with our configuration
 //! and error handling.
 
+use crate::config::DebugConfig;
+use crate::constants::*;
 use crate::error::LlmError;
-use crate::parameters::SystemPromptStyle;
+use crate::parameters::{RequestContext, SystemPromptStyle};
 use crate::rig_wrapper::RigClientWrapper;
 use crate::traits::DynamicLlmClient;
 use async_trait::async_trait;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
 use rig::providers::gemini::completion::gemini_api_types::{AdditionalParameters, GenerationConfig};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, warn};
 
 /// Concrete implementation of DynamicLlmClient using rig-core
 ///
@@ -42,9 +44,10 @@ use tracing::{debug, error, info, trace};
 ///     4096,
 ///     0.7,
 ///     SystemPromptStyle::Native,
+///     Default::default(),
 /// );
 ///
-/// let response = client.prompt("Tell me a joke.").await?;
+/// let response = client.prompt("Tell me a joke.", None).await?;
 /// println!("Response: {}", response);
 /// # Ok(())
 /// # }
@@ -64,6 +67,8 @@ pub struct RigDynamicLlmClient {
     temperature: f32,
     /// System prompt style
     system_prompt_style: SystemPromptStyle,
+    /// Debug configuration
+    debug_config: DebugConfig,
 }
 
 impl RigDynamicLlmClient {
@@ -78,6 +83,7 @@ impl RigDynamicLlmClient {
     /// * `max_tokens` - Maximum tokens limit
     /// * `temperature` - Temperature setting (0.0 - 1.0)
     /// * `system_prompt_style` - How to handle system prompts
+    /// * `debug_config` - Debug configuration for response logging
     pub fn new(
         rig_client: RigClientWrapper,
         model: String,
@@ -86,6 +92,7 @@ impl RigDynamicLlmClient {
         max_tokens: u32,
         temperature: f32,
         system_prompt_style: SystemPromptStyle,
+        debug_config: DebugConfig,
     ) -> Self {
         debug!(
             model = %model,
@@ -94,6 +101,7 @@ impl RigDynamicLlmClient {
             max_tokens = max_tokens,
             temperature = temperature,
             system_prompt_style = %system_prompt_style,
+            debug_enabled = debug_config.dump_raw_response_enabled,
             "Creating RigDynamicLlmClient"
         );
 
@@ -105,18 +113,137 @@ impl RigDynamicLlmClient {
             max_tokens,
             temperature,
             system_prompt_style,
+            debug_config,
         }
+    }
+
+    /// Truncate text for preview logging
+    fn truncate_text(text: &str, max_len: usize) -> String {
+        if text.len() <= max_len {
+            text.to_string()
+        } else {
+            format!("{}... ({} chars total)", &text[..max_len], text.len())
+        }
+    }
+
+    /// Dump LLM response to file for debugging
+    fn dump_response_to_file(&self, prompt: &str, response: &str, context: Option<&RequestContext>) -> Result<(), LlmError> {
+        use std::fs;
+        use std::io::Write;
+        use std::path::Path;
+
+        // Create dump directory if it doesn't exist
+        let dump_dir = Path::new(&self.debug_config.dump_directory);
+        fs::create_dir_all(dump_dir).map_err(|e| {
+            LlmError::config_error(format!("Failed to create dump directory: {}", e))
+        })?;
+
+        // Generate filename with timestamp and model
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
+        let safe_model_name = self.model.replace('/', "_").replace(':', "_");
+
+        // Build context suffix for filename if context is provided
+        let context_suffix = if let Some(ctx) = context {
+            if !ctx.metadata.is_empty() {
+                let suffix = ctx.metadata.iter()
+                    .map(|(k, v)| format!("{}_{}", k, v.replace('/', "_").replace(':', "_")))
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("_{}", suffix)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let response_preview = &response
+            .chars()
+            .take(50)
+            .collect::<String>()
+            .replace(|c: char| !c.is_alphanumeric(), "_");
+
+        let filename = format!(
+            "{}_{}_{}{}_{}",
+            LLM_DUMP_FILENAME_PREFIX,
+            timestamp,
+            safe_model_name,
+            context_suffix,  // Will be empty if no context, or "_node_id_20_batch_id_abc" if context exists
+            response_preview
+        );
+
+        let filepath = dump_dir.join(format!("{}.txt", filename));
+
+        // Write prompt and response
+        let mut file = fs::File::create(&filepath).map_err(|e| {
+            LlmError::config_error(format!("Failed to create dump file: {}", e))
+        })?;
+
+        writeln!(file, "=== LLM REQUEST DUMP ===").map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "Timestamp: {}", chrono::Utc::now().to_rfc3339()).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "Model: {}", self.model).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "Provider: {}", self.provider).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+
+        // Write context metadata to file header
+        if let Some(ctx) = context {
+            if !ctx.metadata.is_empty() {
+                writeln!(file, "\n=== REQUEST CONTEXT ===").map_err(|e| {
+                    LlmError::config_error(format!("Failed to write to dump file: {}", e))
+                })?;
+                for (key, value) in &ctx.metadata {
+                    writeln!(file, "{}: {}", key, value).map_err(|e| {
+                        LlmError::config_error(format!("Failed to write to dump file: {}", e))
+                    })?;
+                }
+            }
+        }
+
+        writeln!(file, "\n=== PROMPT ({} chars) ===\n", prompt.len()).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "{}", prompt).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "\n=== RESPONSE ({} chars) ===\n", response.len()).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+        writeln!(file, "{}", response).map_err(|e| {
+            LlmError::config_error(format!("Failed to write to dump file: {}", e))
+        })?;
+
+        info!(filepath = %filepath.display(), "Dumped LLM response to file");
+
+        Ok(())
     }
 }
 
 #[async_trait]
 impl DynamicLlmClient for RigDynamicLlmClient {
-    async fn prompt(&self, prompt: &str) -> Result<String, LlmError> {
-        trace!(
+    async fn prompt(&self, prompt: &str, context: Option<RequestContext>) -> Result<String, LlmError> {
+        // Log prompt preview at DEBUG level
+        let context_info = if let Some(ref ctx) = context {
+            ctx.metadata.iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else {
+            "none".to_string()
+        };
+
+        debug!(
+            prompt_preview = %Self::truncate_text(prompt, LLM_RESPONSE_PREVIEW_LENGTH),
             prompt_len = prompt.len(),
             model = %self.model,
-            provider = %self.provider,
-            "Executing LLM prompt"
+            context = %context_info,
+            "Sending prompt to LLM"
         );
 
         // Use the agent() builder method directly on the client,
@@ -174,15 +301,25 @@ impl DynamicLlmClient for RigDynamicLlmClient {
 
         }
         .map_err(|e| {
+            error!(error = %e, "LLM request failed");
             LlmError::request_failed(format!("LLM request failed: {}", e))
         })?;
 
+        // Log response preview at DEBUG level (ALWAYS)
         debug!(
+            response_preview = %Self::truncate_text(&response, LLM_RESPONSE_PREVIEW_LENGTH),
             response_len = response.len(),
             model = %self.model,
-            provider = %self.provider,
+            context = %context_info,
             "Received LLM response"
         );
+
+        // Optionally dump full response to file (pass context)
+        if self.debug_config.dump_raw_response_enabled {
+            if let Err(e) = self.dump_response_to_file(prompt, &response, context.as_ref()) {
+                warn!(error = %e, "Failed to dump LLM response to file");
+            }
+        }
 
         Ok(response)
     }
@@ -257,6 +394,7 @@ mod tests {
             4096,
             0.7,
             style,
+            DebugConfig::default(),
         )
     }
 

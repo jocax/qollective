@@ -194,6 +194,38 @@ mod tests {
         assert!(elapsed.as_millis() >= 150, "Should use exponential backoff delays");
     }
 
+    /// Test Task 4.1: Verify exact exponential backoff timing (100ms → 200ms → 400ms)
+    #[tokio::test]
+    async fn test_node_regeneration_retry_timing() {
+        use std::time::Instant;
+
+        // Config matching task requirements: 100ms → 200ms → 400ms
+        let config = RetryConfig {
+            max_attempts: 3,
+            initial_delay_ms: 100,
+            max_delay_ms: 5000,
+            backoff_multiplier: 2.0,
+        };
+
+        let start = Instant::now();
+
+        let _ = retry_with_backoff(
+            || async { Err::<(), &str>("Simulated generation failure") },
+            &config,
+            "node_regeneration",
+        ).await;
+
+        let elapsed = start.elapsed();
+
+        // Total expected: 100ms + 200ms = 300ms (2 delays between 3 attempts)
+        // Allow 50ms tolerance for scheduling overhead
+        assert!(
+            elapsed.as_millis() >= 300 && elapsed.as_millis() < 400,
+            "Expected ~300ms total delay (100ms + 200ms), got {}ms",
+            elapsed.as_millis()
+        );
+    }
+
     #[tokio::test]
     async fn test_successful_first_attempt_no_retry() {
         let counter = Arc::new(AtomicU32::new(0));

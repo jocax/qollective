@@ -171,7 +171,7 @@ impl LlmService for SharedLlmService {
             info!("Using model: {}", client.model_name());
 
             // Send prompt and get response
-            let response = client.prompt(&full_prompt).await
+            let response = client.prompt(&full_prompt, None).await
                 .map_err(|e| {
                     error!("LLM API request failed: {}", e);
                     TaleTrailError::LLMError(format!("LLM request failed: {}", e))
@@ -229,7 +229,7 @@ impl LlmService for SharedLlmService {
             })?;
 
         // Send prompt and get response
-        let content = client.prompt(&full_prompt).await
+        let content = client.prompt(&full_prompt, None).await
             .map_err(|e| {
                 error!("LLM content generation failed: {}", e);
                 TaleTrailError::LLMError(format!("Content generation failed: {}", e))

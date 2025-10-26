@@ -9,6 +9,7 @@
 mod generated;
 
 // Extension modules for business logic
+pub mod constants;
 pub mod extensions;
 pub mod presets;
 

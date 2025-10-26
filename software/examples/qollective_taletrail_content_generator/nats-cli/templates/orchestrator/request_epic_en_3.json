@@ -6,7 +6,7 @@
       "age_group": "+18",
       "language": "en",
       "tenant_id": 1,
-      "node_count": 33,
+      "node_count": 9,
       "educational_goals": ["History", "Criminology", "Law Enforcement", "Medical Development", "Forensic Science"],
       "vocabulary_level": "advanced",
       "required_elements": ["industrialization", "state authority", "historical context", "social inequalities", "societal tensions"],

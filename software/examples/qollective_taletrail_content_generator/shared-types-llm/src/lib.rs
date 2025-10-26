@@ -45,7 +45,7 @@
 //!     "You are a helpful assistant.",
 //!     "Tell me a joke."
 //! );
-//! let response = client.prompt(&formatted).await?;
+//! let response = client.prompt(&formatted, None).await?;
 //!
 //! // Premium tenant with runtime credentials
 //! let tenant_config = TenantLlmConfig {
@@ -160,7 +160,7 @@ pub use client::RigDynamicLlmClient;
 pub use config::{LlmConfig, ProviderConfig, TenantStaticConfig};
 pub use error::LlmError;
 pub use model_selector::{merge_model_mappings, select_model_for_language};
-pub use parameters::{GoogleCredentials, LlmParameters, ProviderType, SystemPromptStyle, TenantLlmConfig};
+pub use parameters::{GoogleCredentials, LlmParameters, ProviderType, RequestContext, SystemPromptStyle, TenantLlmConfig};
 pub use provider::DefaultDynamicLlmClientProvider;
 pub use traits::{DynamicLlmClient, DynamicLlmClientProvider};
 

@@ -5,6 +5,7 @@
 //! with correction suggestions and capability assessments.
 
 use shared_types::*;
+use crate::config::QualityControlConfig;
 
 /// Main validation function that orchestrates all rubrics
 ///
@@ -12,6 +13,9 @@ use shared_types::*;
 /// * `content` - The ContentNode to validate
 /// * `age_group` - Target age group for validation
 /// * `educational_goals` - Optional educational goals to align with
+/// * `language` - Language code for loading appropriate restricted words
+/// * `validation_policy` - Optional validation policy for this request
+/// * `config` - Quality control configuration
 ///
 /// # Returns
 /// A complete ValidationResult with scores, issues, and correction suggestions
@@ -19,11 +23,73 @@ pub fn validate_content_node(
     content: &ContentNode,
     age_group: AgeGroup,
     educational_goals: &[String],
+    language: &str,
+    validation_policy: Option<&ValidationPolicy>,
+    config: &QualityControlConfig,
 ) -> ValidationResult {
+    // Check if validation is entirely disabled
+    if let Some(policy) = validation_policy {
+        if !policy.enable_validation {
+            tracing::info!(
+                node_id = %content.id,
+                "Validation disabled by request policy - returning valid result"
+            );
+            return ValidationResult {
+                is_valid: true,
+                age_appropriate_score: 1.0,
+                safety_issues: Vec::new(),
+                educational_value_score: 1.0,
+                corrections: Vec::new(),
+                correction_capability: CorrectionCapability::CanFixLocally,
+            };
+        }
+    }
+
+    // Build restricted words list from config and policy
+    let restricted_words = build_restricted_words_list(
+        validation_policy,
+        config,
+        language,
+    );
+
+    // Log validation start
+    tracing::info!(
+        node_id = %content.id,
+        language = %language,
+        restricted_word_count = restricted_words.as_ref().map(|w| w.len()).unwrap_or(0),
+        "Starting content validation"
+    );
     // Call individual rubrics (convert f32 to f64 for scoring)
     let age_score = crate::rubrics::validate_age_appropriateness(&content.content.text, age_group) as f64;
-    let safety_issues = crate::rubrics::validate_safety(&content.content.text);
+
+    tracing::info!(
+        "Age appropriateness score for node {}: {:.2} (threshold: 0.7)",
+        content.id, age_score
+    );
+
+    // Call safety validation with restricted words (may be None)
+    let safety_issues = crate::rubrics::validate_safety(
+        &content.content.text,
+        restricted_words.as_deref(),
+    );
+
+    tracing::info!(
+        "Safety validation for node {}: {} issues found",
+        content.id, safety_issues.len()
+    );
+    if !safety_issues.is_empty() {
+        tracing::warn!(
+            "Safety issues for node {}: {:?}",
+            content.id, safety_issues
+        );
+    }
+
     let edu_score = crate::rubrics::validate_educational_value(&content.content.text, educational_goals) as f64;
+
+    tracing::info!(
+        "Educational value score for node {}: {:.2} (threshold: 0.4)",
+        content.id, edu_score
+    );
 
     // Determine correction capability based on scores
     let correction_capability = determine_correction_capability(
@@ -45,6 +111,36 @@ pub fn validate_content_node(
     // Note: Educational value threshold is lower (0.4) because simple stories for young
     // children may not explicitly contain educational keywords but still have value
     let is_valid = age_score >= 0.7 && safety_issues.is_empty() && edu_score >= 0.4;
+
+    tracing::info!(
+        "Validation result for node {}: is_valid={}, age_score={:.2}, safety_issues={}, edu_score={:.2}, correction_capability={:?}",
+        content.id,
+        is_valid,
+        age_score,
+        safety_issues.len(),
+        edu_score,
+        correction_capability
+    );
+
+    // If rejected, log WHY
+    if !is_valid {
+        let mut reasons = Vec::new();
+        if age_score < 0.7 {
+            reasons.push(format!("age_score {:.2} < 0.7", age_score));
+        }
+        if !safety_issues.is_empty() {
+            reasons.push(format!("{} safety issues", safety_issues.len()));
+        }
+        if edu_score < 0.4 {
+            reasons.push(format!("edu_score {:.2} < 0.4", edu_score));
+        }
+
+        tracing::warn!(
+            "Content REJECTED for node {}: {}",
+            content.id,
+            reasons.join(", ")
+        );
+    }
 
     ValidationResult {
         is_valid,
@@ -284,6 +380,76 @@ fn generate_educational_corrections(
     }
 
     corrections
+}
+
+/// Build restricted words list from config and validation policy
+///
+/// Merges config file words and custom words based on merge mode.
+fn build_restricted_words_list(
+    validation_policy: Option<&ValidationPolicy>,
+    config: &QualityControlConfig,
+    language: &str,
+) -> Option<Vec<String>> {
+    let policy = validation_policy?;
+
+    // Load config file words for this language
+    let config_words = config.load_restricted_words(language)
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                error = %e,
+                language = %language,
+                "Failed to load restricted words from config, using empty list"
+            );
+            Vec::new()
+        });
+
+    // Get custom words for this language from policy
+    let custom_words = policy.custom_restricted_words
+        .get(language)
+        .cloned()
+        .unwrap_or_default();
+
+    // Merge based on merge mode
+    let words = match policy.merge_mode {
+        RestrictedWordsMergeMode::Replace => {
+            tracing::debug!(
+                custom_count = custom_words.len(),
+                language = %language,
+                "Using custom restricted words only (Replace mode)"
+            );
+            custom_words
+        }
+        RestrictedWordsMergeMode::Merge => {
+            let mut merged = config_words.clone();
+            merged.extend(custom_words.clone());
+            merged.sort();
+            merged.dedup();
+
+            tracing::debug!(
+                config_count = config_words.len(),
+                custom_count = custom_words.len(),
+                merged_count = merged.len(),
+                language = %language,
+                "Merged config and custom restricted words"
+            );
+
+            merged
+        }
+        RestrictedWordsMergeMode::ConfigOnly => {
+            tracing::debug!(
+                config_count = config_words.len(),
+                language = %language,
+                "Using config restricted words only (ConfigOnly mode)"
+            );
+            config_words
+        }
+    };
+
+    if words.is_empty() {
+        None
+    } else {
+        Some(words)
+    }
 }
 
 #[cfg(test)]

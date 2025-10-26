@@ -58,70 +58,6 @@ const BASIC_WORD_LENGTH_THRESHOLD: usize = 6;
 const INTERMEDIATE_WORD_LENGTH_THRESHOLD: usize = 8;
 
 // ============================================================================
-// CONSTANTS - Safety Keywords
-// ============================================================================
-
-/// Violence-related keywords that trigger safety warnings
-const VIOLENCE_KEYWORDS: &[&str] = &[
-    "sword",
-    "fight",
-    "fighting",
-    "blood",
-    "weapon",
-    "weapons",
-    "kill",
-    "killing",
-    "hurt",
-    "hurting",
-    "attack",
-    "attacking",
-    "battle",
-    "war",
-    "stab",
-    "stabbing",
-    "shoot",
-    "shooting",
-    "gun",
-    "knife",
-    "blade",
-];
-
-/// Fear-inducing keywords that trigger safety warnings
-const FEAR_KEYWORDS: &[&str] = &[
-    "scary",
-    "monster",
-    "monsters",
-    "nightmare",
-    "dark cave",
-    "ghost",
-    "ghosts",
-    "haunted",
-    "creepy",
-    "terrifying",
-    "horrifying",
-    "terror",
-    "scream",
-    "screaming",
-    "screams",
-    "devour",
-    "shadows",
-];
-
-/// Inappropriate content keywords that trigger safety warnings
-const INAPPROPRIATE_KEYWORDS: &[&str] = &[
-    "alcohol",
-    "beer",
-    "wine",
-    "cigarette",
-    "cigarettes",
-    "tobacco",
-    "smoking",
-    "smokes",
-    "drunk",
-    "drinking",
-];
-
-// ============================================================================
 // CONSTANTS - Educational Keywords
 // ============================================================================
 
@@ -221,21 +157,43 @@ pub fn validate_age_appropriateness(content: &str, age_group: AgeGroup) -> f32 {
     let vocab_score = check_vocabulary_complexity(content, age_group);
 
     // Average the two scores
-    (sentence_score + vocab_score) / 2.0
+    let final_score = (sentence_score + vocab_score) / 2.0;
+
+    tracing::debug!(
+        "Age validation breakdown: sentence_score={:.2}, vocab_score={:.2}, avg_sentence_len={:.1}, max_allowed={:.1}",
+        sentence_score,
+        vocab_score,
+        avg_sentence_length,
+        max_sentence_length
+    );
+
+    final_score
 }
 
-/// Validates content for safety issues including violence, fear, and inappropriate themes.
+/// Validates content for safety issues using configurable restricted words
 ///
-/// # Detection Strategy
+/// # Defense in Depth - Layer 2 (Post-Validation)
 ///
-/// Uses case-insensitive keyword matching across three categories:
-/// - **Violence**: weapons, fighting, blood
-/// - **Fear**: scary themes, monsters, nightmares
-/// - **Inappropriate**: substance use, adult themes
+/// This function performs POST-VALIDATION checking. The LLM was already instructed
+/// to avoid restricted words during prompt generation (Layer 1). This function
+/// verifies the LLM complied with those instructions.
+///
+/// # No Hardcoded Keywords
+///
+/// ALL restricted words come from external sources:
+/// 1. Config files: `quality-control/safety/{language}.toml`
+/// 2. Per-request custom words: Provided in `ValidationPolicy`
+///
+/// If no restricted words are provided, returns empty violations (no checks).
+///
+/// # Multi-Language Support
+///
+/// Restricted words are language-specific. Case-insensitive matching is used.
 ///
 /// # Arguments
 ///
 /// * `content` - Text content to validate
+/// * `restricted_words` - Optional list of words to check against
 ///
 /// # Returns
 ///
@@ -246,33 +204,57 @@ pub fn validate_age_appropriateness(content: &str, age_group: AgeGroup) -> f32 {
 /// ```
 /// use quality_control::rubrics::validate_safety;
 ///
-/// let violations = validate_safety("The warrior drew his sharp sword and attacked.");
-/// assert!(!violations.is_empty());
-/// assert!(violations.iter().any(|v| v.contains("violent imagery")));
+/// // No restricted words = no violations
+/// let violations = validate_safety("Any content is fine", None);
+/// assert_eq!(violations.len(), 0);
+///
+/// // With restricted words
+/// let restricted = vec!["violence".to_string(), "murder".to_string()];
+/// let violations = validate_safety("A story about violence", Some(&restricted));
+/// assert!(violations.len() > 0);
 /// ```
-pub fn validate_safety(content: &str) -> Vec<String> {
+pub fn validate_safety(
+    content: &str,
+    restricted_words: Option<&[String]>,
+) -> Vec<String> {
+    // If no restricted words provided, return empty (no safety issues)
+    let Some(words) = restricted_words else {
+        tracing::debug!("No restricted words provided, skipping keyword-based safety validation");
+        return Vec::new();
+    };
+
+    if words.is_empty() {
+        tracing::debug!("Empty restricted words list, skipping keyword-based safety validation");
+        return Vec::new();
+    }
+
     let mut violations = Vec::new();
     let content_lower = content.to_lowercase();
 
-    // Check violence keywords
-    for keyword in VIOLENCE_KEYWORDS {
-        if content_lower.contains(keyword) {
-            violations.push(format!("violent imagery: '{}'", keyword));
+    // Check each restricted word (case-insensitive)
+    for word in words {
+        let word_lower = word.to_lowercase();
+        if content_lower.contains(&word_lower) {
+            violations.push(format!("restricted word: '{}'", word));
+
+            tracing::warn!(
+                word = %word,
+                "Restricted word found in content - LLM failed to comply with content restrictions"
+            );
         }
     }
 
-    // Check fear keywords
-    for keyword in FEAR_KEYWORDS {
-        if content_lower.contains(keyword) {
-            violations.push(format!("scary theme: '{}'", keyword));
-        }
-    }
-
-    // Check inappropriate keywords
-    for keyword in INAPPROPRIATE_KEYWORDS {
-        if content_lower.contains(keyword) {
-            violations.push(format!("inappropriate content: '{}'", keyword));
-        }
+    if violations.is_empty() {
+        tracing::debug!(
+            word_count = words.len(),
+            "No restricted words found in content"
+        );
+    } else {
+        tracing::warn!(
+            violations_count = violations.len(),
+            words_checked = words.len(),
+            "Restricted words detected in generated content"
+        );
     }
 
     violations
@@ -606,41 +588,58 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_safety_clean_content() {
+    fn test_validate_safety_no_restricted_words() {
         let text = "The friendly dolphin swims in the ocean.";
-        let violations = validate_safety(text);
-        assert!(violations.is_empty());
+        let violations = validate_safety(text, None);
+        assert!(violations.is_empty(), "No restricted words should return no violations");
     }
 
     #[test]
-    fn test_validate_safety_violence() {
+    fn test_validate_safety_empty_restricted_words() {
+        let text = "Any content is acceptable.";
+        let restricted = vec![];
+        let violations = validate_safety(text, Some(&restricted));
+        assert!(violations.is_empty(), "Empty restricted words list should return no violations");
+    }
+
+    #[test]
+    fn test_validate_safety_with_violations() {
         let text = "The warrior drew his sword and attacked.";
-        let violations = validate_safety(text);
-        assert!(!violations.is_empty());
-        assert!(violations.iter().any(|v| v.contains("sword") || v.contains("attack")));
+        let restricted = vec!["sword".to_string(), "attack".to_string()];
+        let violations = validate_safety(text, Some(&restricted));
+        assert!(!violations.is_empty(), "Should detect restricted words");
+        assert!(violations.iter().any(|v| v.contains("sword")));
+        assert!(violations.iter().any(|v| v.contains("attack")));
     }
 
     #[test]
-    fn test_validate_safety_scary() {
-        let text = "The scary monster lurked in the dark cave.";
-        let violations = validate_safety(text);
-        assert!(!violations.is_empty());
-        assert!(violations.iter().any(|v| v.contains("scary") || v.contains("monster")));
-    }
-
-    #[test]
-    fn test_validate_safety_inappropriate() {
-        let text = "The character drinks alcohol and smokes a cigarette.";
-        let violations = validate_safety(text);
-        assert!(!violations.is_empty());
-        assert!(violations.iter().any(|v| v.contains("alcohol") || v.contains("cigarette")));
+    fn test_validate_safety_case_insensitive() {
+        let text = "The SCARY monster lurked.";
+        let restricted = vec!["scary".to_string(), "monster".to_string()];
+        let violations = validate_safety(text, Some(&restricted));
+        assert!(!violations.is_empty(), "Should detect words case-insensitively");
+        assert_eq!(violations.len(), 2);
     }
 
     #[test]
     fn test_validate_safety_multiple_violations() {
         let text = "The scary monster attacks with a sword!";
-        let violations = validate_safety(text);
-        assert!(violations.len() >= 3); // scary, monster, attacks, sword
+        let restricted = vec![
+            "scary".to_string(),
+            "monster".to_string(),
+            "attack".to_string(),
+            "sword".to_string(),
+        ];
+        let violations = validate_safety(text, Some(&restricted));
+        assert!(violations.len() >= 3, "Should detect multiple restricted words");
+    }
+
+    #[test]
+    fn test_validate_safety_clean_content() {
+        let text = "The friendly bunny hops in the garden.";
+        let restricted = vec!["violence".to_string(), "scary".to_string()];
+        let violations = validate_safety(text, Some(&restricted));
+        assert!(violations.is_empty(), "Clean content should have no violations");
     }
 
     #[test]

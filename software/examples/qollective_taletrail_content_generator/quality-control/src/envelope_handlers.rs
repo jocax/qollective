@@ -41,6 +41,13 @@ pub struct ValidateContentParams {
     pub age_group: AgeGroup,
     #[serde(default)]
     pub educational_goals: Vec<String>,
+
+    /// Language code for loading appropriate restricted words
+    pub language: String,
+
+    /// Optional validation policy for this request
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_policy: Option<ValidationPolicy>,
 }
 
 /// Response for validate_content tool
@@ -57,6 +64,13 @@ pub struct BatchValidateParams {
     pub age_group: AgeGroup,
     #[serde(default)]
     pub educational_goals: Vec<String>,
+
+    /// Language code for loading appropriate restricted words
+    pub language: String,
+
+    /// Optional validation policy for this request
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_policy: Option<ValidationPolicy>,
 }
 
 /// Response for batch_validate tool
@@ -341,18 +355,22 @@ impl EnvelopeHandler<McpData, McpData> for QualityControlHandler {
 /// Validates a single content node against age appropriateness, safety, and educational rubrics.
 pub fn handle_validate_content(
     params: ValidateContentParams,
-    _config: &QualityControlConfig,
+    config: &QualityControlConfig,
 ) -> Result<ValidateContentResponse> {
-    tracing::debug!(
-        "Validating content node {} for age group {:?}",
+    tracing::info!(
+        "Validating node {} for age group {:?} | Content preview: {}",
         params.content_node.id,
-        params.age_group
+        params.age_group,
+        truncate_content(&params.content_node.content.text, 100)
     );
 
     let validation_result = validate_content_node(
         &params.content_node,
         params.age_group,
         &params.educational_goals,
+        &params.language,                         // Pass language
+        params.validation_policy.as_ref(),        // Pass validation policy
+        config,                                   // Pass config
     );
 
     tracing::info!(
@@ -372,7 +390,7 @@ pub fn handle_validate_content(
 /// Validates multiple content nodes in a batch.
 pub fn handle_batch_validate(
     params: BatchValidateParams,
-    _config: &QualityControlConfig,
+    config: &QualityControlConfig,
 ) -> Result<BatchValidateResponse> {
     let node_count = params.content_nodes.len();
 
@@ -390,6 +408,9 @@ pub fn handle_batch_validate(
             &content_node,
             params.age_group.clone(),
             &params.educational_goals,
+            &params.language,                         // Pass language
+            params.validation_policy.as_ref(),        // Pass validation policy
+            config,                                   // Pass config
         );
 
         if !validation_result.is_valid {
@@ -491,6 +512,47 @@ pub fn get_all_tools() -> Vec<Tool> {
     ]
 }
 
+/// Truncate content for logging (first N characters)
+///
+/// This function safely truncates UTF-8 strings by respecting character boundaries,
+/// not byte boundaries. This prevents panics when truncating strings containing
+/// multi-byte UTF-8 characters (e.g., fancy quotes, emojis, accented characters).
+///
+/// # Arguments
+///
+/// * `text` - The text to truncate
+/// * `max_len` - Maximum number of characters (not bytes) before truncation
+///
+/// # Returns
+///
+/// Truncated string with total character count indicator if content was truncated
+///
+/// # Examples
+///
+/// ```
+/// use quality_control::envelope_handlers::truncate_content;
+///
+/// // ASCII text
+/// assert_eq!(truncate_content("Hello, World!", 5), "Hello... (13 chars total)");
+///
+/// // Text with emoji (4-byte UTF-8 characters)
+/// assert_eq!(truncate_content("Hello 🌍🚀✨", 7), "Hello 🌍... (9 chars total)");
+///
+/// // Short text - no truncation needed
+/// assert_eq!(truncate_content("Hi!", 10), "Hi!");
+/// ```
+pub fn truncate_content(text: &str, max_len: usize) -> String {
+    let char_count = text.chars().count();
+
+    if char_count <= max_len {
+        text.to_string()
+    } else {
+        // Take first max_len characters (not bytes) to avoid UTF-8 boundary issues
+        let truncated: String = text.chars().take(max_len).collect();
+        format!("{}... ({} chars total)", truncated, char_count)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,7 +563,7 @@ mod tests {
 
     /// Create a test QualityControlConfig for testing
     fn test_quality_control_config() -> QualityControlConfig {
-        use shared_types_llm::config::{LlmConfig, ProviderConfig};
+        use shared_types_llm::config::{LlmConfig, ProviderConfig, DebugConfig};
         use shared_types_llm::parameters::{ProviderType, SystemPromptStyle};
         use std::collections::HashMap;
 
@@ -521,6 +583,7 @@ mod tests {
                     temperature: 0.7,
                     timeout_secs: 60,
                     system_prompt_style: SystemPromptStyle::Native,
+                    debug: DebugConfig::default(),  // Add missing debug field
                 },
                 tenants: HashMap::new(),
             },
@@ -552,9 +615,9 @@ mod tests {
                 },
             },
             safety: crate::config::SafetyConfig {
-                violence_keywords: vec!["sword".to_string()],
-                fear_keywords: vec!["scary".to_string()],
-                inappropriate_keywords: vec!["alcohol".to_string()],
+                enable_keyword_validation: true,
+                restricted_words_dir: "../quality-control/safety".to_string(),
+                auto_load_by_language: true,
             },
             educational: crate::config::EducationalConfig {
                 educational_keywords: vec!["learn".to_string()],
@@ -631,5 +694,80 @@ mod tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.to_string().contains("No tool_call in envelope"));
+    }
+
+    // ===== Tests for truncate_content function =====
+
+    #[test]
+    fn test_truncate_content_ascii_no_truncation() {
+        let text = "Hello";
+        let max_len = 10;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_content_ascii_exact_length() {
+        let text = "Hello";
+        let max_len = 5;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_truncate_content_ascii_truncation() {
+        let text = "Hello, World!";
+        let max_len = 5;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "Hello... (13 chars total)");
+    }
+
+    #[test]
+    fn test_truncate_content_fancy_quotes_no_panic() {
+        // This was the original panic case
+        let mut text = String::from("Once upon a time in a magical forest, there lived a wise owl named Oliver. ");
+        text.push('\u{201C}');
+        text.push_str("Who dares disturb my slumber?");
+        text.push('\u{201D}');
+        text.push_str(" he hooted.");
+        let max_len = 100;
+        let result = truncate_content(&text, max_len);
+        assert!(result.contains("..."));
+        assert!(result.contains("chars total"));
+        let truncated_part = result.split("...").next().unwrap();
+        assert_eq!(truncated_part.chars().count(), 100);
+    }
+
+    #[test]
+    fn test_truncate_content_emoji_characters() {
+        let text = "Hello 🌍🚀✨";
+        let max_len = 7;
+        let result = truncate_content(text, max_len);
+        // Actual char count is 9 (Hello=5, space=1, 3 emoji=3)
+        assert_eq!(result, "Hello 🌍... (9 chars total)");
+    }
+
+    #[test]
+    fn test_truncate_content_empty_string() {
+        let text = "";
+        let max_len = 10;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_truncate_content_zero_max_len() {
+        let text = "Hello";
+        let max_len = 0;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "... (5 chars total)");
+    }
+
+    #[test]
+    fn test_truncate_content_single_emoji_truncation() {
+        let text = "🌍🚀";
+        let max_len = 1;
+        let result = truncate_content(text, max_len);
+        assert_eq!(result, "🌍... (2 chars total)");
     }
 }

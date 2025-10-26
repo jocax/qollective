@@ -147,6 +147,22 @@ pub enum PipelineEvent {
         corrections_applied: usize,
     },
 
+    /// Negotiation round completed (Phase 4)
+    ///
+    /// Published after each negotiation round completes, indicating progress
+    /// toward resolving validation issues. Includes remaining issues count
+    /// and corrections applied in this round.
+    NegotiationRoundCompleted {
+        /// Unique request identifier for tracing
+        request_id: String,
+        /// Negotiation round number (1-indexed)
+        round: u32,
+        /// Number of issues remaining after this round
+        issues_remaining: usize,
+        /// Number of corrections applied in this round
+        corrections_applied: usize,
+    },
+
     /// Pipeline completed successfully (Phase 5)
     ///
     /// Published when entire pipeline finishes with validated content.
@@ -505,6 +521,25 @@ impl EventPublisher {
                 error_message: None,
                 file_path: None,
             },
+            PipelineEvent::NegotiationRoundCompleted { request_id, round, .. } => {
+                // Progress increments from 85% to 95% across max 3 rounds
+                // Round 1: 85% + (10% / 3 * 1) = 88.33%
+                // Round 2: 85% + (10% / 3 * 2) = 91.67%
+                // Round 3: 85% + (10% / 3 * 3) = 95%
+                let progress = 0.85 + (0.10 * (*round as f32 / 3.0));
+
+                DesktopGenerationEvent {
+                    event_type: "generation_progress".to_string(),
+                    tenant_id: tenant_id.to_string(),
+                    request_id: request_id.clone(),
+                    timestamp: Utc::now().to_rfc3339(),
+                    service_phase: format!("negotiation-round-{}", round),
+                    status: "in_progress".to_string(),
+                    progress: Some(progress),
+                    error_message: None,
+                    file_path: None,
+                }
+            },
             PipelineEvent::Complete { request_id, .. } => {
                 // Construct expected file path based on tenant_id and request_id
                 // This follows the convention: test-trails/{tenant_id}_{request_id}.json
@@ -559,6 +594,7 @@ impl EventPublisher {
             PipelineEvent::BatchCompleted { .. } => "BatchCompleted",
             PipelineEvent::ValidationStarted { .. } => "ValidationStarted",
             PipelineEvent::NegotiationRound { .. } => "NegotiationRound",
+            PipelineEvent::NegotiationRoundCompleted { .. } => "NegotiationRoundCompleted",
             PipelineEvent::Complete { .. } => "Complete",
             PipelineEvent::Failed { .. } => "Failed",
         }

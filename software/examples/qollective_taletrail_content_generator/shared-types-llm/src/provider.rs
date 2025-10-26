@@ -98,6 +98,7 @@ impl DefaultDynamicLlmClientProvider {
                 system_prompt_style: tenant_config
                     .system_prompt_style
                     .unwrap_or(self.config.provider.system_prompt_style),
+                debug_config: self.config.provider.debug.clone(),
                 source: ConfigSource::RuntimeTenant,
             };
         }
@@ -148,6 +149,7 @@ impl DefaultDynamicLlmClientProvider {
                     system_prompt_style: tenant_config
                         .system_prompt_style
                         .unwrap_or(self.config.provider.system_prompt_style),
+                    debug_config: self.config.provider.debug.clone(),
                     source: ConfigSource::StaticTenant,
                 };
             } else {
@@ -170,6 +172,7 @@ impl DefaultDynamicLlmClientProvider {
             max_tokens: self.config.provider.max_tokens,
             temperature: self.config.provider.temperature,
             system_prompt_style: self.config.provider.system_prompt_style,
+            debug_config: self.config.provider.debug.clone(),
             source: ConfigSource::Default,
         }
     }
@@ -330,6 +333,7 @@ impl DynamicLlmClientProvider for DefaultDynamicLlmClientProvider {
             resolved.max_tokens,
             resolved.temperature,
             resolved.system_prompt_style,
+            resolved.debug_config.clone(),
         );
 
         Ok(Box::new(client))
@@ -348,6 +352,7 @@ struct ResolvedConfig<'a> {
     max_tokens: u32,
     temperature: f32,
     system_prompt_style: SystemPromptStyle,
+    debug_config: crate::config::DebugConfig,
     source: ConfigSource,
 }
 
@@ -496,6 +501,8 @@ en = "tenant-en-model"
 
     #[tokio::test]
     async fn test_build_rig_client_requires_api_key() {
+        use crate::config::DebugConfig;
+
         let config = create_test_config();
         let provider = DefaultDynamicLlmClientProvider::new(config);
 
@@ -509,6 +516,7 @@ en = "tenant-en-model"
             max_tokens: 4096,
             temperature: 0.7,
             system_prompt_style: SystemPromptStyle::Native,
+            debug_config: DebugConfig::default(),
             source: ConfigSource::Default,
         };
 
@@ -617,6 +625,8 @@ en = "tenant-en-model"
 
     #[tokio::test]
     async fn test_google_missing_credentials() {
+        use crate::config::DebugConfig;
+
         let config = create_test_config();
         let provider = DefaultDynamicLlmClientProvider::new(config);
 
@@ -630,6 +640,7 @@ en = "tenant-en-model"
             max_tokens: 4096,
             temperature: 0.7,
             system_prompt_style: SystemPromptStyle::Native,
+            debug_config: DebugConfig::default(),
             source: ConfigSource::Default,
         };
 
