@@ -11,3 +11,5 @@ node_modules
 dist
 src-tauri/target
 /test-trails-llm-responses/*
+/test-trails-llm-responses-prompts/*
+/test-trails/*
