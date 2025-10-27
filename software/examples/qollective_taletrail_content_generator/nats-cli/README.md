@@ -496,17 +496,17 @@ Part of the Qollective TaleTrail Content Generator project.
 ```bash
 ../target/release/nats-cli send --subject mcp.orchestrator.request \
 --template templates/orchestrator/request_epic_en_1.json \
---timeout 300 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_1.json
+--timeout 600 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_1.json
 ```
 
 ```bash
 ../target/release/nats-cli send --subject mcp.orchestrator.request \
 --template templates/orchestrator/request_epic_en_2.json \
---timeout 300 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_2.json
+--timeout 600 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_2.json
 ```
 
 ```bash
 ../target/release/nats-cli send --subject mcp.orchestrator.request \
 --template templates/orchestrator/request_epic_en_3.json \
---timeout 300 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_3.json
+--timeout 600 --output /Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/desktop/test-trails/response_test_epic_en_3.json
 ```

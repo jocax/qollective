@@ -118,3 +118,48 @@ keywords = ["friend", "friendship", "together", "help", "share", "care", "trust"
 moral_keywords = ["learn", "lesson", "moral", "teach", "value", "friendship", "honesty", "kindness", "courage", "respect", "responsibility", "empathy", "trust", "fairness", "compassion"]
 science_keywords = ["fact", "science", "discover", "research", "study", "experiment", "observe", "investigate", "analyze", "evidence", "hypothesis", "theory", "knowledge", "understanding", "explanation"]
 educational_keywords = ["education", "knowledge", "understand", "explain", "learn", "teaching", "concept", "idea", "skill", "practice", "information", "explore", "question", "answer", "reason"]
+
+# Hybrid validation configuration for required elements checking
+[constraints.validation]
+# Keyword-based matching threshold (0.0 to 1.0). If this percentage of keywords from the
+# required element are found in content, the element is considered matched without LLM check.
+keyword_match_threshold = 0.8
+
+# Enable LLM semantic fallback when keyword matching fails to meet threshold
+enable_llm_fallback = true
+
+# Minimum keyword length to consider (filters out common words like "a", "or", "und")
+min_keyword_length = 3
+
+# Maximum content length (in characters) to send to LLM for semantic checking
+# Content longer than this will be truncated to save API costs
+max_llm_content_length = 2000
+
+# Stopwords to filter out when extracting keywords (common words with low semantic value)
+# English stopwords
+stopwords_en = [
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "up", "about", "into", "through", "during",
+    "before", "after", "above", "below", "between", "under", "again", "further",
+    "then", "once", "here", "there", "when", "where", "why", "how", "all", "both",
+    "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not",
+    "only", "own", "same", "so", "than", "too", "very", "can", "will", "just"
+]
+
+# German stopwords
+stopwords_de = [
+    "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "eines",
+    "und", "oder", "aber", "in", "an", "auf", "zu", "für", "von", "mit", "bei",
+    "aus", "nach", "über", "unter", "zwischen", "durch", "gegen", "ohne", "um",
+    "vor", "hinter", "neben", "seit", "bis", "während", "wegen", "trotz", "statt",
+    "als", "wenn", "ob", "weil", "dass", "damit", "also", "dann", "doch", "noch",
+    "schon", "auch", "nur", "sehr", "mehr", "am", "im", "zum", "zur"
+]
+
+# LLM semantic checking prompt template (used when keyword matching is below threshold)
+llm_semantic_prompt = """Does the following content convey or address the concept of '{element}'?
+
+Content:
+{content}
+
+Answer with ONLY 'yes' or 'no' (no explanation needed)."""

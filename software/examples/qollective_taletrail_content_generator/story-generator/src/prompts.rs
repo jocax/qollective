@@ -191,12 +191,20 @@ Guidelines:
 - Include educational elements when requested
 - Generate exactly 3 simple choices at the end
 
-Format your response as JSON:
-{
-  "narrative": "Story text here (~200 words)",
-  "choices": ["Choice 1", "Choice 2", "Choice 3"],
-  "educational_content": "Optional educational info"
-}"#.to_string()
+Format your response in Markdown with these exact sections:
+
+## Narrative
+[Story text here, ~200 words]
+
+## Choices
+1. [First choice, simple and clear]
+2. [Second choice, simple and clear]
+3. [Third choice, simple and clear]
+
+## Educational Content
+[Optional: Educational information]
+
+IMPORTANT: Use exactly these section headers with ## prefix."#.to_string()
     }
 
     fn system_prompt_english_9_11(&self) -> String {
@@ -210,12 +218,20 @@ Guidelines:
 - Include educational elements when requested
 - Generate exactly 3 meaningful choices that affect the story
 
-Format your response as JSON:
-{
-  "narrative": "Story text here (~300-400 words)",
-  "choices": ["Choice 1 (~20 words)", "Choice 2 (~20 words)", "Choice 3 (~20 words)"],
-  "educational_content": "Optional educational info"
-}"#.to_string()
+Format your response in Markdown with these exact sections:
+
+## Narrative
+[Story text here, ~300-400 words]
+
+## Choices
+1. [First choice, ~20 words]
+2. [Second choice, ~20 words]
+3. [Third choice, ~20 words]
+
+## Educational Content
+[Optional: Educational information]
+
+IMPORTANT: Use exactly these section headers with ## prefix."#.to_string()
     }
 
     fn system_prompt_english_12_14(&self) -> String {
@@ -229,12 +245,20 @@ Guidelines:
 - Include educational elements when requested
 - Generate exactly 3 choices with meaningful consequences
 
-Format your response as JSON:
-{
-  "narrative": "Story text here (~400-500 words)",
-  "choices": ["Choice 1 with consequences", "Choice 2 with consequences", "Choice 3 with consequences"],
-  "educational_content": "Optional educational info"
-}"#.to_string()
+Format your response in Markdown with these exact sections:
+
+## Narrative
+[Story text here, ~400-500 words]
+
+## Choices
+1. [Complex choice with consequences]
+2. [Complex choice with consequences]
+3. [Complex choice with consequences]
+
+## Educational Content
+[Optional: Educational information]
+
+IMPORTANT: Use exactly these section headers with ## prefix."#.to_string()
     }
 
     fn system_prompt_english_15_17(&self) -> String {
@@ -248,12 +272,20 @@ Guidelines:
 - Include educational elements when requested
 - Generate exactly 3 choices with significant ethical dimensions
 
-Format your response as JSON:
-{
-  "narrative": "Story text here (~500 words)",
-  "choices": ["Complex choice 1", "Complex choice 2", "Complex choice 3"],
-  "educational_content": "Optional educational info"
-}"#.to_string()
+Format your response in Markdown with these exact sections:
+
+## Narrative
+[Story text here, ~500 words]
+
+## Choices
+1. [Complex choice with ethical dimension]
+2. [Complex choice with ethical dimension]
+3. [Complex choice with ethical dimension]
+
+## Educational Content
+[Optional: Educational information]
+
+IMPORTANT: Use exactly these section headers with ## prefix."#.to_string()
     }
 
     fn system_prompt_english_18_plus(&self) -> String {
@@ -267,12 +299,20 @@ Guidelines:
 - Include educational elements when requested
 - Generate exactly 3 choices with far-reaching implications
 
-Format your response as JSON:
-{
-  "narrative": "Story text here (~500-600 words)",
-  "choices": ["Sophisticated choice 1", "Sophisticated choice 2", "Sophisticated choice 3"],
-  "educational_content": "Optional educational info"
-}"#.to_string()
+Format your response in Markdown with these exact sections:
+
+## Narrative
+[Story text here, ~500-600 words]
+
+## Choices
+1. [Sophisticated choice with far-reaching implications]
+2. [Sophisticated choice with far-reaching implications]
+3. [Sophisticated choice with far-reaching implications]
+
+## Educational Content
+[Optional: Educational information]
+
+IMPORTANT: Use exactly these section headers with ## prefix."#.to_string()
     }
 
     // ========================================================================
@@ -379,12 +419,20 @@ Richtlinien:
 - Füge bei Bedarf Bildungselemente hinzu
 - Generiere genau 3 einfache Wahlmöglichkeiten am Ende
 
-Formatiere deine Antwort als JSON:
-{
-  "narrative": "Geschichtentext hier (~200 Wörter)",
-  "choices": ["Wahl 1", "Wahl 2", "Wahl 3"],
-  "educational_content": "Optionale Bildungsinformationen"
-}"#.to_string()
+Formatiere deine Antwort im Markdown-Format mit diesen genauen Abschnitten:
+
+## Narrative
+[Geschichtentext hier, ~200 Wörter]
+
+## Choices
+1. [Erste Wahl, einfach und klar]
+2. [Zweite Wahl, einfach und klar]
+3. [Dritte Wahl, einfach und klar]
+
+## Educational Content
+[Optional: Bildungsinformationen]
+
+WICHTIG: Verwende genau diese Abschnittsüberschriften mit ## Präfix."#.to_string()
     }
 
     fn system_prompt_german_9_11(&self) -> String {
@@ -398,12 +446,20 @@ Richtlinien:
 - Füge bei Bedarf Bildungselemente hinzu
 - Generiere genau 3 bedeutungsvolle Wahlmöglichkeiten, die die Geschichte beeinflussen
 
-Formatiere deine Antwort als JSON:
-{
-  "narrative": "Geschichtentext hier (~300-400 Wörter)",
-  "choices": ["Wahl 1 (~20 Wörter)", "Wahl 2 (~20 Wörter)", "Wahl 3 (~20 Wörter)"],
-  "educational_content": "Optionale Bildungsinformationen"
-}"#.to_string()
+Formatiere deine Antwort im Markdown-Format mit diesen genauen Abschnitten:
+
+## Narrative
+[Geschichtentext hier, ~300-400 Wörter]
+
+## Choices
+1. [Erste Wahl, ~20 Wörter]
+2. [Zweite Wahl, ~20 Wörter]
+3. [Dritte Wahl, ~20 Wörter]
+
+## Educational Content
+[Optional: Bildungsinformationen]
+
+WICHTIG: Verwende genau diese Abschnittsüberschriften mit ## Präfix."#.to_string()
     }
 
     fn system_prompt_german_12_14(&self) -> String {
@@ -417,12 +473,20 @@ Richtlinien:
 - Füge bei Bedarf Bildungselemente hinzu
 - Generiere genau 3 Wahlmöglichkeiten mit bedeutungsvollen Konsequenzen
 
-Formatiere deine Antwort als JSON:
-{
-  "narrative": "Geschichtentext hier (~400-500 Wörter)",
-  "choices": ["Wahl 1 mit Konsequenzen", "Wahl 2 mit Konsequenzen", "Wahl 3 mit Konsequenzen"],
-  "educational_content": "Optionale Bildungsinformationen"
-}"#.to_string()
+Formatiere deine Antwort im Markdown-Format mit diesen genauen Abschnitten:
+
+## Narrative
+[Geschichtentext hier, ~400-500 Wörter]
+
+## Choices
+1. [Komplexe Wahl mit Konsequenzen]
+2. [Komplexe Wahl mit Konsequenzen]
+3. [Komplexe Wahl mit Konsequenzen]
+
+## Educational Content
+[Optional: Bildungsinformationen]
+
+WICHTIG: Verwende genau diese Abschnittsüberschriften mit ## Präfix."#.to_string()
     }
 
     fn system_prompt_german_15_17(&self) -> String {
@@ -436,12 +500,20 @@ Richtlinien:
 - Füge bei Bedarf Bildungselemente hinzu
 - Generiere genau 3 Wahlmöglichkeiten mit erheblichen ethischen Dimensionen
 
-Formatiere deine Antwort als JSON:
-{
-  "narrative": "Geschichtentext hier (~500 Wörter)",
-  "choices": ["Komplexe Wahl 1", "Komplexe Wahl 2", "Komplexe Wahl 3"],
-  "educational_content": "Optionale Bildungsinformationen"
-}"#.to_string()
+Formatiere deine Antwort im Markdown-Format mit diesen genauen Abschnitten:
+
+## Narrative
+[Geschichtentext hier, ~500 Wörter]
+
+## Choices
+1. [Komplexe Wahl mit ethischer Dimension]
+2. [Komplexe Wahl mit ethischer Dimension]
+3. [Komplexe Wahl mit ethischer Dimension]
+
+## Educational Content
+[Optional: Bildungsinformationen]
+
+WICHTIG: Verwende genau diese Abschnittsüberschriften mit ## Präfix."#.to_string()
     }
 
     fn system_prompt_german_18_plus(&self) -> String {
@@ -455,12 +527,20 @@ Richtlinien:
 - Füge bei Bedarf Bildungselemente hinzu
 - Generiere genau 3 Wahlmöglichkeiten mit weitreichenden Implikationen
 
-Formatiere deine Antwort als JSON:
-{
-  "narrative": "Geschichtentext hier (~500-600 Wörter)",
-  "choices": ["Anspruchsvolle Wahl 1", "Anspruchsvolle Wahl 2", "Anspruchsvolle Wahl 3"],
-  "educational_content": "Optionale Bildungsinformationen"
-}"#.to_string()
+Formatiere deine Antwort im Markdown-Format mit diesen genauen Abschnitten:
+
+## Narrative
+[Geschichtentext hier, ~500-600 Wörter]
+
+## Choices
+1. [Anspruchsvolle Wahl mit weitreichenden Implikationen]
+2. [Anspruchsvolle Wahl mit weitreichenden Implikationen]
+3. [Anspruchsvolle Wahl mit weitreichenden Implikationen]
+
+## Educational Content
+[Optional: Bildungsinformationen]
+
+WICHTIG: Verwende genau diese Abschnittsüberschriften mit ## Präfix."#.to_string()
     }
 
     // ========================================================================

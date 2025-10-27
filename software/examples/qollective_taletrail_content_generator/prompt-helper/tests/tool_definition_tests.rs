@@ -121,6 +121,8 @@ fn test_generate_story_prompts_params_serialization() {
             "Learn about planets".to_string(),
             "Understand gravity".to_string(),
         ],
+        required_elements: None,
+        node_choice_counts: None,
     };
 
     let json = serde_json::to_value(&params).unwrap();
@@ -315,6 +317,8 @@ fn test_empty_educational_goals_serialization() {
         age_group: AgeGroup::_6To8,
         language: Language::En,
         educational_goals: vec![],
+        required_elements: None,
+        node_choice_counts: None,
     };
 
     let json = serde_json::to_value(&params).unwrap();

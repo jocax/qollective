@@ -165,27 +165,60 @@ note right of CE
    - No theme deviation
    - Consistent tone
 
-3. Required Elements
-   - Mandatory story elements
-   - Character requirements
-   - Plot requirements
+3. Required Elements (HYBRID VALIDATION)
+   - **Validation Strategy:**
+     • Keyword matching (80% threshold default)
+     • LLM semantic fallback if needed
+   - **Process:**
+     1. Extract keywords from element phrase
+     2. Filter stopwords (der, die, und, etc.)
+     3. Check keyword presence in content
+     4. If >= 80% → PASS (keyword match)
+     5. If < 80% → LLM semantic check
+   - **Examples:**
+     • "Industrie und Natur Dilemma"
+       → keywords: [industrie, natur, dilemma]
+     • Matches natural variations in storytelling
 
 4. Content Guidelines
    - Educational objectives
    - Moral lessons
    - Cultural sensitivity
+
+**Configuration:**
+- keyword_match_threshold: 0.8 (80%)
+- enable_llm_fallback: true
+- stopwords: language-specific
 end note
 
 CE -> CE: Build constraint checklist:\n- Vocabulary: age_group word list\n- Theme: "adventure"\n- Required: ["protagonist", "challenge", "resolution"]\n- Guidelines: educational content
 
-CE -> LLM: Check constraints\nusing rig-core
+CE -> CE: **Hybrid Validation - Phase 1:**\nExtract keywords from required elements\n- Filter stopwords per language\n- Keep words >= 3 chars\n["protagonist", "challenge", "resolution"]
+
+CE -> CE: **Hybrid Validation - Phase 2:**\nCheck keyword presence in content\nCalculate match percentages
+
+alt keyword match >= 80%
+    CE -> CE: **PASS (Keyword Match)**\n✓ No LLM call needed\nRecord match method: KeywordMatch
+else keyword match < 80%
+    CE -> LLM: **Semantic Fallback Check**\nusing rig-core\nPrompt: "Does content convey '{element}'?"
+    activate LLM
+
+    LLM -> LLM: Analyze semantic meaning
+
+    LLM -> CE: Return semantic match: bool\n(yes/no answer)
+    deactivate LLM
+
+    CE -> CE: Record match method: SemanticLLM
+end
+
+CE -> LLM: Check vocabulary & theme constraints\nusing rig-core
 activate LLM
 
 LLM -> LLM: Build constraint validation prompt
 
-LLM -> LLM: Analyze content against constraints
+LLM -> LLM: Analyze vocabulary and theme
 
-LLM -> CE: Return ConstraintResult {\n  satisfied: bool,\n  vocabulary_check: VocabularyResult,\n  theme_check: ThemeResult,\n  required_elements_check: ElementsResult,\n  violations: Vec<Violation>,\n  suggestions: Vec<String>\n}
+LLM -> CE: Return partial results
 deactivate LLM
 
 CE -> CE: Process constraint results
@@ -203,17 +236,37 @@ Theme Check:
 ✓ Tone consistent
 ✓ No theme deviation
 
-Required Elements:
-✓ Protagonist present
-✓ Challenge identified
-✓ Resolution included
+Required Elements (Hybrid Validation):
+✓ "protagonist" - PASS
+  • Method: KeywordMatch(100%)
+  • Found: [protagonist]
+  • Missing: []
+
+✓ "challenge" - PASS
+  • Method: KeywordMatch(100%)
+  • Found: [challenge]
+  • Missing: []
+
+✓ "resolution" - PASS
+  • Method: SemanticLLM (keywords: 67%)
+  • Found: [resolve]
+  • Missing: [resolution]
+  • LLM: YES (concept present)
 
 Guidelines:
 ✓ Educational value present
 ✓ Moral lesson clear
+
+**Example - German Story:**
+Required: "Industrie und Natur Dilemma"
+Content: "Die Fabrik vergiftet die Natur..."
+✓ Keywords: [industrie, natur, dilemma]
+✓ Found: [industrie→fabrik, natur]
+✓ Missing: [dilemma]
+✓ Match: 67% → LLM fallback → YES
 end note
 
-CE -> CE: Create final ConstraintResult {\n  satisfied: true,\n  constraint_scores: {\n    "vocabulary": 1.0,\n    "theme": 0.95,\n    "required_elements": 1.0,\n    "guidelines": 0.90\n  },\n  violations: [],\n  suggestions: [\n    "Consider adding more educational detail"\n  ],\n  overall_compliance: 0.96\n}
+CE -> CE: Create final ConstraintResult {\n  satisfied: true,\n  constraint_scores: {\n    "vocabulary": 1.0,\n    "theme": 0.95,\n    "required_elements": 1.0,\n    "guidelines": 0.90\n  },\n  element_match_details: [\n    {\n      element: "protagonist",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["protagonist"],\n      keywords_missing: []\n    },\n    {\n      element: "resolution",\n      match_method: SemanticLLM,\n      match_score: 0.67,\n      keywords_found: ["resolve"],\n      keywords_missing: ["resolution"]\n    }\n  ],\n  violations: [],\n  suggestions: [\n    "Consider adding more educational detail"\n  ],\n  overall_compliance: 0.96\n}
 
 CE -> CE: **Serialize to JSON string**\nserde_json::to_string(&result)
 
@@ -255,12 +308,21 @@ deactivate LLM
 
 note right of CE
 **Violations Detected:**
+
 ✗ Vocabulary violation: "complicated" word used
+
 ✗ Theme violation: Content deviates from theme
-✗ Missing required element: "resolution"
+
+✗ Required Element: "resolution"
+  • Validation Method: Hybrid
+  • Keyword Match: 0% (0/1 keywords)
+  • Keywords Found: []
+  • Keywords Missing: [resolution]
+  • LLM Fallback: NO (concept not present)
+  • Result: FAIL - element truly missing
 end note
 
-CE -> CE: Create ConstraintResult {\n  satisfied: false,\n  constraint_scores: {\n    "vocabulary": 0.60,\n    "theme": 0.45,\n    "required_elements": 0.67,\n    "guidelines": 0.85\n  },\n  violations: [\n    Violation {\n      category: "vocabulary",\n      severity: "medium",\n      description: "Word 'complicated' too advanced",\n      location: "paragraph 2",\n      suggestion: "Use 'hard' or 'difficult' instead"\n    },\n    Violation {\n      category: "theme",\n      severity: "high",\n      description: "Content deviates from adventure theme",\n      location: "scene 3",\n      suggestion: "Refocus on adventure elements"\n    },\n    Violation {\n      category: "required_elements",\n      severity: "high",\n      description: "Missing resolution",\n      location: "ending",\n      suggestion: "Add clear story resolution"\n    }\n  ],\n  overall_compliance: 0.64\n}
+CE -> CE: Create ConstraintResult {\n  satisfied: false,\n  constraint_scores: {\n    "vocabulary": 0.60,\n    "theme": 0.45,\n    "required_elements": 0.67,\n    "guidelines": 0.85\n  },\n  element_match_details: [\n    {\n      element: "protagonist",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["protagonist"],\n      keywords_missing: []\n    },\n    {\n      element: "challenge",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["challenge"],\n      keywords_missing: []\n    },\n    {\n      element: "resolution",\n      match_method: Failed,\n      match_score: 0.0,\n      keywords_found: [],\n      keywords_missing: ["resolution"]\n    }\n  ],\n  violations: [\n    Violation {\n      category: "vocabulary",\n      severity: "medium",\n      description: "Word 'complicated' too advanced",\n      location: "paragraph 2",\n      suggestion: "Use 'hard' or 'difficult' instead"\n    },\n    Violation {\n      category: "theme",\n      severity: "high",\n      description: "Content deviates from adventure theme",\n      location: "scene 3",\n      suggestion: "Refocus on adventure elements"\n    },\n    Violation {\n      category: "required_elements",\n      severity: "high",\n      description: "Missing resolution (0% keyword match, LLM: no)",\n      location: "ending",\n      suggestion: "Add clear story resolution with keywords: [resolution]",\n      match_details: {\n        attempted_methods: ["KeywordMatch", "SemanticLLM"],\n        keyword_score: 0.0,\n        semantic_result: false\n      }\n    }\n  ],\n  overall_compliance: 0.64\n}
 
 CE -> CE: **Create CallToolResult**\nwith is_error = false\n(enforcement completed, constraints violated)
 

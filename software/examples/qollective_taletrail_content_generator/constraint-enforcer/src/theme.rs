@@ -196,7 +196,7 @@ pub fn validate_theme_consistency(nodes: &[ContentNode], theme: &str) -> f32 {
 ///
 /// # Returns
 /// Vector of theme-related keywords
-fn extract_theme_keywords(theme: &str) -> Vec<String> {
+pub fn extract_theme_keywords(theme: &str) -> Vec<String> {
     let theme_lower = theme.to_lowercase();
     let mut keywords = Vec::new();
 

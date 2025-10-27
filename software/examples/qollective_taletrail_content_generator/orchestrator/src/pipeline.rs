@@ -126,6 +126,7 @@ mod tests {
             author_id: None,
             story_structure: None,
             dag_config: None,
+            validation_policy: None,
         }
     }
 

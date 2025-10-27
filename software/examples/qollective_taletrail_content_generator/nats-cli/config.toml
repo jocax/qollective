@@ -14,7 +14,7 @@ ca_cert = "../certs/ca.pem"
 
 [client]
 # Default request timeout in seconds
-default_timeout_secs = 180
+default_timeout_secs = 600
 
 # Default tenant ID for requests (can be overridden via CLI)
 default_tenant_id = 1

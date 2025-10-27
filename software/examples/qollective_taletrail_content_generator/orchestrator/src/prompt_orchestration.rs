@@ -130,6 +130,7 @@ impl PromptOrchestrator {
     /// # Arguments
     ///
     /// * `request` - Generation request containing theme, age group, language, etc.
+    /// * `dag` - DAG structure to extract node choice counts for accurate prompt generation
     ///
     /// # Returns
     ///
@@ -139,15 +140,16 @@ impl PromptOrchestrator {
     ///
     /// Returns error if story prompt generation fails (critical path).
     /// Validation and constraint prompt failures are logged but don't cause failure.
-    #[instrument(skip(self, request))]
+    #[instrument(skip(self, request, dag))]
     pub async fn generate_all_prompts(
         &self,
         request: &GenerationRequest,
+        dag: &DAG,
     ) -> Result<HashMap<MCPServiceType, PromptPackage>> {
-        info!("Generating prompts for all services in parallel");
+        info!("Generating prompts for all services in parallel (DAG-aware)");
 
         // Create futures for parallel execution
-        let story_future = self.generate_story_prompts(request);
+        let story_future = self.generate_story_prompts(request, dag);
         let validation_future = self.generate_validation_prompts(request);
         let constraint_future = self.generate_constraint_prompts(request);
 
@@ -203,16 +205,33 @@ impl PromptOrchestrator {
     /// Generate story prompts via MCP tool call
     ///
     /// Calls the `generate_story_prompts` tool on the prompt-helper service.
-    #[instrument(skip(self, request))]
-    async fn generate_story_prompts(&self, request: &GenerationRequest) -> Result<PromptPackage> {
-        info!("Generating story prompts");
+    /// Now includes DAG-aware choice counts for accurate prompt generation.
+    #[instrument(skip(self, request, dag))]
+    async fn generate_story_prompts(&self, request: &GenerationRequest, dag: &DAG) -> Result<PromptPackage> {
+        info!("Generating story prompts (DAG-aware)");
 
-        // Build CallToolRequest for generate_story_prompts tool
+        // Calculate choice counts for each node from DAG edges
+        let node_choice_counts: std::collections::HashMap<String, usize> = dag.edges.iter()
+            .fold(std::collections::HashMap::new(), |mut acc, edge| {
+                *acc.entry(edge.from_node_id.clone()).or_insert(0) += 1;
+                acc
+            });
+
+        info!(
+            total_nodes = dag.nodes.len(),
+            total_edges = dag.edges.len(),
+            nodes_with_choices = node_choice_counts.len(),
+            "Calculated node choice counts from DAG"
+        );
+
+        // Build CallToolRequest for generate_story_prompts tool with DAG context
         let arguments = serde_json::json!({
             "theme": request.theme,
             "age_group": request.age_group,
             "language": request.language,
             "educational_goals": request.educational_goals,
+            "required_elements": request.required_elements,
+            "node_choice_counts": node_choice_counts,
         });
 
         let arguments_map = arguments.as_object().cloned();

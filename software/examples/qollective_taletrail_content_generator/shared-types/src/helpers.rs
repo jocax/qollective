@@ -253,6 +253,7 @@ mod tests {
             prompt_packages: None,
             story_structure: None,
             dag_config: None,
+            validation_policy: None,
         };
 
         let custom_meta = TaleTrailCustomMetadata::new()
@@ -287,6 +288,7 @@ mod tests {
             prompt_packages: None,
             story_structure: None,
             dag_config: None,
+            validation_policy: None,
         };
 
         let envelope = create_request_envelope(request, 1, None, None).unwrap();

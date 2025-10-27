@@ -186,8 +186,8 @@ impl QualityControlHandler {
                     }
                 };
 
-                // Call handler
-                match handle_validate_content(params, &self.config) {
+                // Call handler (now async)
+                match handle_validate_content(params, &self.config).await {
                     Ok(response) => {
                         // Serialize response to JSON
                         match serde_json::to_string(&response) {
@@ -247,8 +247,8 @@ impl QualityControlHandler {
                     }
                 };
 
-                // Call handler
-                match handle_batch_validate(params, &self.config) {
+                // Call handler (now async)
+                match handle_batch_validate(params, &self.config).await {
                     Ok(response) => {
                         // Serialize response to JSON
                         match serde_json::to_string(&response) {
@@ -353,7 +353,7 @@ impl EnvelopeHandler<McpData, McpData> for QualityControlHandler {
 /// Handler for validate_content tool
 ///
 /// Validates a single content node against age appropriateness, safety, and educational rubrics.
-pub fn handle_validate_content(
+pub async fn handle_validate_content(
     params: ValidateContentParams,
     config: &QualityControlConfig,
 ) -> Result<ValidateContentResponse> {
@@ -371,7 +371,7 @@ pub fn handle_validate_content(
         &params.language,                         // Pass language
         params.validation_policy.as_ref(),        // Pass validation policy
         config,                                   // Pass config
-    );
+    ).await;
 
     tracing::info!(
         "Validation complete for node {}: is_valid={}",
@@ -388,7 +388,7 @@ pub fn handle_validate_content(
 /// Handler for batch_validate tool
 ///
 /// Validates multiple content nodes in a batch.
-pub fn handle_batch_validate(
+pub async fn handle_batch_validate(
     params: BatchValidateParams,
     config: &QualityControlConfig,
 ) -> Result<BatchValidateResponse> {
@@ -411,7 +411,7 @@ pub fn handle_batch_validate(
             &params.language,                         // Pass language
             params.validation_policy.as_ref(),        // Pass validation policy
             config,                                   // Pass config
-        );
+        ).await;
 
         if !validation_result.is_valid {
             failed_node_ids.push(content_node.id.clone());

@@ -37,7 +37,7 @@ url = "http://127.0.0.1:1234/v1"
 default_model = "meta-llama-3-8b-instruct"
 use_default_model_fallback = true
 timeout_secs = 180
-max_tokens = 600
+max_tokens = 2048
 temperature = 0.7
 system_prompt_style = "chatml"
 

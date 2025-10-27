@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn test_generate_dag_basic() {
         let dag_config = DagStructureConfig {
-            node_count: DEFAULT_NODE_COUNT,
+            node_count: DEFAULT_NODE_COUNT as i64,
             convergence_pattern: ConvergencePattern::SingleConvergence,
             convergence_point_ratio: Some(0.5),
             max_depth: 10,
@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn test_validate_connectivity_basic() {
         let dag_config = DagStructureConfig {
-            node_count: DEFAULT_NODE_COUNT,
+            node_count: DEFAULT_NODE_COUNT as i64,
             convergence_pattern: ConvergencePattern::SingleConvergence,
             convergence_point_ratio: Some(0.5),
             max_depth: 10,
@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn test_validate_reachability_basic() {
         let dag_config = DagStructureConfig {
-            node_count: DEFAULT_NODE_COUNT,
+            node_count: DEFAULT_NODE_COUNT as i64,
             convergence_pattern: ConvergencePattern::SingleConvergence,
             convergence_point_ratio: Some(0.5),
             max_depth: 10,

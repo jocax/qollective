@@ -2,15 +2,15 @@
   "tool_name": "orchestrate_generation",
   "arguments": {
     "generation_request": {
-      "theme": "Heimische Flora und Fauna im mediteranen Raum",
+      "theme": "Zeitreise-Paradoxon und historische Entdeckungen",
       "age_group": "15-17",
       "language": "de",
       "tenant_id": 1,
-      "node_count": 22,
-      "educational_goals": ["Natur", "Tiere und Pflanzen", "Kausalität","Plastik"],
+      "node_count": 40,
+      "educational_goals": ["Geschichte", "Philosophie", "Kausalität"],
       "vocabulary_level": "advanced",
-      "required_elements": ["Industrie und Natur Dilemma","Verordnungen und Gesetze", "historischer Kontext", "aktuelle Probleme", "Gesellschaftliche Verwerfungen"],
-      "tags": ["Politik der EU", "Geschichte", "Gesellschaft", "Natur"],
+      "required_elements": ["Moral", "Dilemma", "Verantwortung","historischer Kontext"],
+      "tags": ["Zeitreise", "Geschichte", "Philosophie"],
       "story_structure": "epic"
     }
   }

@@ -378,6 +378,7 @@ de = "test-model-de"
             author_id: Some(Some(1)),
             story_structure: None,
             dag_config: None,
+            validation_policy: None,
         }
     }
 

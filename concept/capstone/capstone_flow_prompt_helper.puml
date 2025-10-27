@@ -128,7 +128,7 @@ end note
 
 == Default Flow: Generate Story Prompts ==
 
-Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_story_prompts",\n  arguments: { theme, age_group, language }\n}
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_story_prompts",\n  arguments: {\n    theme, age_group, language,\n    required_elements,\n    node_choice_counts\n  }\n}
 activate NATS
 
 NATS -> PromptHelper: forward tool request
@@ -158,18 +158,18 @@ PromptHelper -> PromptHelper: **Route by tool name:**\nmatch tool_call.params.na
 
 PromptHelper -> PromptHelper: handle_generate_story_prompts(\n  request,\n  llm_service,\n  config\n)
 
-PromptHelper -> PromptHelper: Parse arguments:\n- theme\n- age_group\n- language
+PromptHelper -> PromptHelper: Parse arguments:\n- theme\n- age_group\n- language\n- required_elements\n- node_choice_counts
 
-PromptHelper -> PromptHelper: Create generation request:\nGenerationRequest {\n  theme,\n  age_group,\n  language,\n  tenant_id\n}
+PromptHelper -> PromptHelper: Create generation request:\nGenerationRequest {\n  theme,\n  age_group,\n  language,\n  required_elements,\n  tenant_id\n}
 
-PromptHelper -> LLM: Generate story prompts\nusing rig-core
+PromptHelper -> LLM: Generate DAG-aware prompts\nusing rig-core
 activate LLM
 
-LLM -> LLM: Build LLM prompt\nwith templates
+LLM -> LLM: Build meta-prompts with:\n- Markdown format instructions\n- Required elements integration\n- Variable choice counts per node
 
 LLM -> LLM: Call LLM provider\n(OpenAI, Ollama, etc.)
 
-LLM -> PromptHelper: Return PromptPackage {\n  system_prompt,\n  user_prompt,\n  model,\n  language\n}
+LLM -> PromptHelper: Return PromptPackage {\n  system_prompt (with Markdown format),\n  user_prompt,\n  model,\n  language,\n  includes required_elements,\n  includes choice count instructions\n}
 deactivate LLM
 
 PromptHelper -> PromptHelper: **Serialize to JSON string**\nserde_json::to_string(&result)

@@ -6,11 +6,11 @@
       "age_group": "+18",
       "language": "de",
       "tenant_id": 1,
-      "node_count": 33,
-      "educational_goals": ["Geschichte", "Kriminalität", "Polizeiarbeit","Medizinische Entwicklung", "Forensik"],
+      "node_count": 99,
+      "educational_goals": ["Geschichte", "Kriminalität", "historischer Kontext", "Polizeiarbeit","Medizinische Entwicklung", "Forensik"],
       "vocabulary_level": "advanced",
-      "required_elements": ["Industrie","Staatliche Ordnung", "historischer Kontext", "Soziale Mißstände", "Gesellschaftliche Verwerfungen"],
-      "tags": ["Politik in Europa", "Geschichte", "Gesellschaft", "Gewalt"],
+      "required_elements": ["Industrie","Staatliche Ordnung", "Soziale Mißstände", "Gesellschaftliche Verwerfungen"],
+      "tags": ["Politik", "Europa", "Geschichte", "Gesellschaft", "Gewalt"],
       "story_structure": "epic"
     }
   }

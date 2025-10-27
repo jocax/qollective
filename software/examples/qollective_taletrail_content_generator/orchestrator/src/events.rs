@@ -254,6 +254,7 @@ pub struct DesktopGenerationEvent {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Clone)]
 pub struct EventPublisher {
     /// NATS client for publishing
     nats_client: NatsClient,

@@ -58,7 +58,7 @@ activate Gateway
 Gateway -> Gateway: Validate request\nExtract tenant context
 Gateway -> Gateway: Create request_id: UUID
 
-== Phase 0.5: Prompt Generation (Parallel) ==
+== Phase 1: Structure Generation ==
 
 Gateway -> Orchestrator: generate_story(request)
 activate Orchestrator
@@ -74,8 +74,40 @@ Meta {
 }
 end note
 
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_structure(\n    generation_request\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.story.generate_structure")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> StoryGen: forward\n**Envelope<McpData>**
+activate StoryGen
+
+StoryGen -> StoryGen: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id, trace_id\n- Process tool_call
+
+StoryGen -> StoryGen: generate_structure(request)\n→ DAG
+
+StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: DAG\n})
+
+StoryGen -> NATS: publish response\n**Envelope<McpData>**
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver\n**Envelope<McpData>**
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ DAG
+
+note right of Orchestrator
+**Phase 1 Complete**
+DAG Structure: { nodes, edges, convergence_points }
+Progress: 10%
+end note
+
+== Phase 1.5: Prompt Generation (DAG-Aware) ==
+
+Orchestrator -> Orchestrator: Extract DAG info:\n- Node count\n- Edge counts per node\n- Required elements from request
+
 group Parallel Prompt Generation [tokio::join!]
-    Orchestrator -> Orchestrator: **Wrap in Envelope<McpData>:**\nEnvelope::new(meta.clone(), McpData {\n  tool_call: generate_story_prompts\n})
+    Orchestrator -> Orchestrator: **Wrap in Envelope<McpData>:**\nEnvelope::new(meta.clone(), McpData {\n  tool_call: generate_story_prompts(\n    theme, age_group, language,\n    required_elements,\n    node_choice_counts from DAG\n  )\n})
 
     Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**
     activate NATS
@@ -91,9 +123,9 @@ group Parallel Prompt Generation [tokio::join!]
     NATS -> PromptHelper: forward to subscriber\n**Envelope<McpData>**
     activate PromptHelper
 
-    PromptHelper -> PromptHelper: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id from meta\n- Process tool_call
+    PromptHelper -> PromptHelper: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id from meta\n- Process tool_call with DAG info
 
-    PromptHelper -> PromptHelper: generate_story_prompts(\n  theme, age_group, language\n)\n→ PromptPackage
+    PromptHelper -> PromptHelper: generate_story_prompts(\n  theme, age_group, language,\n  required_elements,\n  node_choice_counts\n)\n→ PromptPackage with:\n  - Markdown format instructions\n  - Required elements integration\n  - Variable choice counts per node
 
     PromptHelper -> PromptHelper: **Wrap response in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_response: PromptPackage\n})
 
@@ -123,7 +155,7 @@ group Parallel Prompt Generation [tokio::join!]
 
     |||
 
-    Orchestrator -> Orchestrator: **Wrap constraint request:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_constraint_prompts\n})
+    Orchestrator -> Orchestrator: **Wrap constraint request:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_constraint_prompts(\n    required_elements\n  )\n})
 
     Orchestrator -> NATS: publish("mcp.prompt.generate_constraint")\n**Envelope<McpData>**
     activate NATS
@@ -142,51 +174,20 @@ Orchestrator -> Orchestrator: Collect all prompts\nHashMap<MCPServiceType, Promp
 
 note right of Orchestrator
 **Prompt Generation Complete**
-- Story prompts: ✓
+- Story prompts: ✓ (DAG-aware with choice counts)
 - Validation prompts: ✓ (best-effort)
-- Constraint prompts: ✓ (best-effort)
-
-**Metadata propagated through all calls**
-end note
-
-== Phase 1: Structure Generation ==
-
-Orchestrator -> Orchestrator: Create metadata:\ntenant="{tenant_id}"\nrequest_id=UUID\ntrace_id="{trace_id}"
-
-Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_structure(\n    prompts[StoryGenerator]\n  )\n})
-
-Orchestrator -> NATS: publish("mcp.story.generate_structure")\n**Envelope<McpData>**
-activate NATS
-
-NATS -> StoryGen: forward\n**Envelope<McpData>**
-activate StoryGen
-
-StoryGen -> StoryGen: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id, trace_id\n- Process tool_call
-
-StoryGen -> StoryGen: generate_structure(prompt)\n→ StoryStructure
-
-StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: StoryStructure\n})
-
-StoryGen -> NATS: publish response\n**Envelope<McpData>**
-deactivate StoryGen
-
-NATS -> Orchestrator: deliver\n**Envelope<McpData>**
-deactivate NATS
-
-Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ StoryStructure
-
-note right of Orchestrator
-**Phase 1 Complete**
-Structure: { chapters, scenes, characters }
-tenant_id: {tenant_id}
-trace_id: {trace_id}
+- Constraint prompts: ✓ (with required_elements)
+- Markdown format instructions: ✓
+Progress: 20%
 end note
 
 == Phase 2: Content Generation ==
 
-Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_content(\n    structure, prompts[StoryGenerator]\n  )\n})
+Orchestrator -> Orchestrator: Extract expected_choice_counts from DAG:\n- Count outgoing edges per node\n- Create Vec<usize> for batch
 
-Orchestrator -> NATS: publish("mcp.story.generate_content")\n**Envelope<McpData>**
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_nodes(\n    node_ids, DAG, prompts[StoryGenerator],\n    expected_choice_counts\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.story.generate_nodes")\n**Envelope<McpData>**
 activate NATS
 
 NATS -> StoryGen: forward\n**Envelope<McpData>**
@@ -194,9 +195,11 @@ activate StoryGen
 
 StoryGen -> StoryGen: **EnvelopeHandler::handle_request()**
 
-StoryGen -> StoryGen: generate_content(\n  structure, prompt\n)\n→ ContentGeneration
+StoryGen -> StoryGen: generate_nodes(\n  node_ids, DAG, prompt,\n  expected_choice_counts\n)\n→ Vec<ContentNode>\nwith Markdown parsing:\n- ## Narrative\n- ## Choices (1. 2. 3.)\n- ## Educational Content
 
-StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: ContentGeneration\n})
+StoryGen -> StoryGen: **Validate/truncate choices:**\nMatch actual vs expected_choice_counts\n(eliminates "wrong choice count" warnings)
+
+StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: Vec<ContentNode>\n})
 
 StoryGen -> NATS: publish response\n**Envelope<McpData>**
 deactivate StoryGen
@@ -204,11 +207,13 @@ deactivate StoryGen
 NATS -> Orchestrator: deliver\n**Envelope<McpData>**
 deactivate NATS
 
-Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ ContentGeneration
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ Vec<ContentNode>
 
 note right of Orchestrator
 **Phase 2 Complete**
-Content: { text, metadata }
+Nodes: { narrative, choices[], educational_content }
+Markdown format: ✓
+Choice counts matched: ✓
 tenant_id: {tenant_id}
 trace_id: {trace_id}
 end note

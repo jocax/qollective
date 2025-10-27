@@ -113,7 +113,7 @@ pub async fn handle_generate_story_prompts(
         tenant_id: 0, // Default for prompt generation context
         node_count: None,
         educational_goals: Some(params.educational_goals.clone()),
-        required_elements: None,
+        required_elements: params.required_elements.clone(),
         vocabulary_level: None,
         author_id: None,
         prompt_packages: None,
@@ -131,36 +131,132 @@ pub async fn handle_generate_story_prompts(
 
     // Language-aware meta-prompt for LLM to generate story prompts
     let meta_prompt = match params.language {
-        Language::De => format!(
-            "Generiere System- und Benutzer-Prompts für einen Story-Generator.\n\
-             Thema: {}\n\
-             Altersgruppe: {:?}\n\
-             Sprache: Deutsch\n\
-             Bildungsziele: {}\n\n\
-             Der System-Prompt soll das LLM anweisen, ansprechende, altersgerechte \
-             Story-Inhalte mit Bildungswert zu generieren.\n\
-             Der Benutzer-Prompt soll Kontext für die aktuelle Story-Generierung bieten.\n\n\
-             Gib zwei Prompts getrennt durch '---SEPARATOR---' zurück:\n\
-             Zuerst den System-Prompt, dann den Benutzer-Prompt.",
-            params.theme,
-            params.age_group,
-            params.educational_goals.join(", ")
-        ),
-        Language::En => format!(
-            "Generate system and user prompts for a story generator service.\n\
-             Theme: {}\n\
-             Age Group: {:?}\n\
-             Language: English\n\
-             Educational Goals: {}\n\n\
-             The system prompt should instruct the LLM on how to generate engaging, \
-             age-appropriate story content with educational value.\n\
-             The user prompt should provide context for the current story generation task.\n\n\
-             Return two prompts separated by '---SEPARATOR---':\n\
-             First the system prompt, then the user prompt.",
-            params.theme,
-            params.age_group,
-            params.educational_goals.join(", ")
-        ),
+        Language::De => {
+            let required_elements_instruction = if let Some(ref elements) = params.required_elements {
+                if !elements.is_empty() {
+                    format!(
+                        "\n\nKRITISCHE EINSCHRÄNKUNG: Der generierte System-Prompt MUSS den LLM explizit anweisen, \
+                        diese erforderlichen Story-Elemente in die Erzählung einzubauen: {}\n\
+                        Diese Elemente werden validiert und ihr Fehlen führt zu Validierungsfehlern.\n",
+                        elements.join(", ")
+                    )
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
+            // Add choice count information if provided from DAG
+            let choice_instruction = if let Some(ref counts) = params.node_choice_counts {
+                let sample_counts: Vec<String> = counts.iter()
+                    .take(5)
+                    .map(|(id, count)| format!("Knoten {}: {} Wahlmöglichkeit(en)", id, count))
+                    .collect();
+
+                format!(
+                    "\n\nWAHLANZAHL-ANFORDERUNG: Die Geschichte hat variable Wahlanzahlen pro Knoten:\n{}\n\
+                    Der System-Prompt MUSS den LLM anweisen, dass er die EXAKTE Anzahl an Wahlmöglichkeiten \
+                    im Benutzer-Prompt für jeden Knoten generieren wird.\n",
+                    sample_counts.join("\n")
+                )
+            } else {
+                "\n\nDer System-Prompt MUSS den LLM anweisen, standardmäßig GENAU 3 Wahlmöglichkeiten zu generieren.\n".to_string()
+            };
+
+            format!(
+                "Generiere System- und Benutzer-Prompts für einen Story-Generator.\n\
+                 Thema: {}\n\
+                 Altersgruppe: {:?}\n\
+                 Sprache: Deutsch\n\
+                 Bildungsziele: {}{}{}\n\
+                 Du musst Prompts für INTERAKTIVE STORY-GENERIERUNG erstellen, nicht für durchgehende Erzählungen.\n\n\
+                 Der System-Prompt, den du generierst, MUSS den LLM anweisen, Folgendes zu produzieren:\n\
+                 1. Ein Erzählsegment (~300-500 Wörter je nach Altersgruppe)\n\
+                 2. Leserwahlmöglichkeiten (Anzahl wird im Benutzer-Prompt spezifiziert, jeweils ~20 Wörter)\n\
+                 3. Optionale Bildungsinhalte\n\n\
+                 Der System-Prompt MUSS explizit angeben, dass der LLM seine Antwort mit diesen Markdown-Abschnitten formatieren muss:\n\
+                 - ## Narrative (der Geschichtentext)\n\
+                 - ## Choices (nummerierte Liste: 1., 2., 3., etc.)\n\
+                 - ## Educational Content (optional)\n\n\
+                 Der System-Prompt muss betonen, dass dies eine INTERAKTIVE Geschichte ist, die Leserwahlmöglichkeiten erfordert, KEINE durchgehende Erzählung.\n\n\
+                 Der Benutzer-Prompt soll das Thema, die Altersgruppe und den Kontext für den aktuellen Story-Knoten bereitstellen.\n\n\
+                 Formatiere DEINE Meta-Prompt-Antwort im Markdown-Format mit diesen genauen Überschriften:\n\n\
+                 ## System Prompt\n\
+                 [Dein generierter System-Prompt, der den LLM anweist, interaktive Geschichten mit Narrative + Choices + Educational Content Abschnitten zu erstellen]\n\n\
+                 ## User Prompt\n\
+                 [Dein generierter Benutzer-Prompt mit Thema und Kontext]\n\n\
+                 WICHTIG: Verwende genau diese Überschriften mit ## Präfix.",
+                params.theme,
+                params.age_group,
+                params.educational_goals.join(", "),
+                required_elements_instruction,
+                choice_instruction
+            )
+        },
+        Language::En => {
+            let required_elements_instruction = if let Some(ref elements) = params.required_elements {
+                if !elements.is_empty() {
+                    format!(
+                        "\n\nCRITICAL CONSTRAINT: The generated System Prompt MUST explicitly instruct the LLM \
+                        to incorporate these required story elements into the narrative: {}\n\
+                        These elements will be validated and their absence will cause validation failure.\n",
+                        elements.join(", ")
+                    )
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
+            // Add choice count information if provided from DAG
+            let choice_instruction = if let Some(ref counts) = params.node_choice_counts {
+                let sample_counts: Vec<String> = counts.iter()
+                    .take(5)
+                    .map(|(id, count)| format!("Node {}: {} choice(s)", id, count))
+                    .collect();
+
+                format!(
+                    "\n\nCHOICE COUNT REQUIREMENT: The story has variable choice counts per node:\n{}\n\
+                    The System Prompt MUST instruct the LLM that it will receive the EXACT number of choices \
+                    to generate for each node in the user prompt.\n",
+                    sample_counts.join("\n")
+                )
+            } else {
+                "\n\nThe System Prompt MUST instruct the LLM to generate EXACTLY 3 choices by default.\n".to_string()
+            };
+
+            format!(
+                "Generate system and user prompts for a story generator service.\n\
+                 Theme: {}\n\
+                 Age Group: {:?}\n\
+                 Language: English\n\
+                 Educational Goals: {}{}{}\n\
+                 You must generate prompts for INTERACTIVE STORY GENERATION, not continuous narratives.\n\n\
+                 The System Prompt you generate MUST instruct the LLM to produce:\n\
+                 1. A narrative segment (~300-500 words based on age group)\n\
+                 2. Reader choice options (count will be specified in user prompt, each ~20 words)\n\
+                 3. Optional educational content\n\n\
+                 The System Prompt MUST explicitly state that the LLM must format its response with these Markdown sections:\n\
+                 - ## Narrative (the story text)\n\
+                 - ## Choices (numbered list: 1., 2., 3., etc.)\n\
+                 - ## Educational Content (optional)\n\n\
+                 The System Prompt must emphasize this is an INTERACTIVE story requiring reader choices, NOT a continuous narrative.\n\n\
+                 The User Prompt should provide the theme, age group, and context for the current story node.\n\n\
+                 Format YOUR meta-prompt response in Markdown with these exact headers:\n\n\
+                 ## System Prompt\n\
+                 [Your generated system prompt that instructs the LLM to create interactive stories with Narrative + Choices + Educational Content sections]\n\n\
+                 ## User Prompt\n\
+                 [Your generated user prompt with theme and context]\n\n\
+                 IMPORTANT: Use exactly these header names with ## prefix.",
+                params.theme,
+                params.age_group,
+                params.educational_goals.join(", "),
+                required_elements_instruction,
+                choice_instruction
+            )
+        },
     };
 
     // Try LLM generation
@@ -349,7 +445,12 @@ pub async fn handle_generate_validation_prompts(
          - Educational value assessment\n\
          - Safety and content guidelines\n\n\
          The user prompt should describe what content to validate.\n\n\
-         Return two prompts separated by '---SEPARATOR---'.",
+         Format your response in Markdown with these exact headers:\n\n\
+         ## System Prompt\n\
+         [Your validation system prompt]\n\n\
+         ## User Prompt\n\
+         [Your validation user prompt]\n\n\
+         IMPORTANT: Use exactly these header names with ## prefix.",
         params.content_type, params.age_group, params.language
     );
 
@@ -516,7 +617,12 @@ pub async fn handle_generate_constraint_prompts(
          - Required story element verification\n\
          - Theme consistency checks\n\n\
          The user prompt should describe what content to check for constraints.\n\n\
-         Return two prompts separated by '---SEPARATOR---'.",
+         Format your response in Markdown with these exact headers:\n\n\
+         ## System Prompt\n\
+         [Your constraint system prompt]\n\n\
+         ## User Prompt\n\
+         [Your constraint user prompt]\n\n\
+         IMPORTANT: Use exactly these header names with ## prefix.",
         params.vocabulary_level,
         params.language,
         params.required_elements.join(", ")

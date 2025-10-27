@@ -23,8 +23,10 @@ pub mod custom_metadata;
 pub mod errors;
 pub mod extensions;
 pub mod helpers;
+pub mod markdown_parser;
 pub mod nats_nkey;
 pub mod payloads;
+pub mod text_utils;
 pub mod traits;
 pub mod types;
 pub mod validation;
@@ -36,7 +38,11 @@ pub mod test_utils;
 // Re-export commonly used items
 pub use constants::*;
 pub use errors::{Result, TaleTrailError};
+pub use markdown_parser::MarkdownResponseParser;
 pub use nats_nkey::{connect_with_nkey, load_nkey_from_file};
+
+// Re-export text utilities
+pub use text_utils::{preview_text, truncate_at_char_boundary, truncate_with_ellipsis};
 
 // Re-export generated types from shared-types-generated crate
 pub use shared_types_generated::*;

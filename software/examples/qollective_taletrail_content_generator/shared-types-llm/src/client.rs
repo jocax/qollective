@@ -118,12 +118,22 @@ impl RigDynamicLlmClient {
     }
 
     /// Truncate text for preview logging
+    ///
+    /// Uses character-boundary-aware truncation to safely handle UTF-8 multi-byte characters.
+    ///
+    /// This is a thin wrapper around the centralized `preview_text` utility
+    /// from `shared_types::text_utils`.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to truncate
+    /// * `max_len` - Maximum byte length (not Unicode characters)
+    ///
+    /// # Returns
+    ///
+    /// Truncated text with "... (N chars total)" suffix if truncation occurred
     fn truncate_text(text: &str, max_len: usize) -> String {
-        if text.len() <= max_len {
-            text.to_string()
-        } else {
-            format!("{}... ({} chars total)", &text[..max_len], text.len())
-        }
+        shared_types::preview_text(text, max_len)
     }
 
     /// Dump LLM response to file for debugging
@@ -446,4 +456,15 @@ mod tests {
         assert_eq!(client.max_tokens(), 4096);
         assert_eq!(client.temperature(), 0.7);
     }
+
+    // Integration test - verify wrapper delegates correctly to shared_types::preview_text
+    #[test]
+    fn test_truncate_text_delegates_to_shared_types() {
+        let text = "This is a test";
+        let result = RigDynamicLlmClient::truncate_text(text, 10);
+        let expected = shared_types::preview_text(text, 10);
+        assert_eq!(result, expected);
+    }
+
+    // Comprehensive tests for preview_text are in shared-types/src/text_utils.rs
 }

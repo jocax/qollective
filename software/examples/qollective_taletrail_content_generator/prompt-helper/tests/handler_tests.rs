@@ -88,6 +88,8 @@ async fn test_generate_story_prompts_valid_request() {
         age_group: AgeGroup::_9To11,
         language: Language::En,
         educational_goals: vec!["Learn about planets".to_string()],
+        required_elements: None,
+        node_choice_counts: None,
     };
 
     let request = create_request("generate_story_prompts", params);
@@ -125,6 +127,8 @@ async fn test_generate_story_prompts_llm_failure_fallback() {
         age_group: AgeGroup::_12To14,
         language: Language::De,
         educational_goals: vec!["History learning".to_string()],
+        required_elements: None,
+        node_choice_counts: None,
     };
 
     let request = create_request("generate_story_prompts", params);
@@ -206,6 +210,8 @@ async fn test_generate_story_prompts_all_age_groups() {
             age_group: age_group.clone(),
             language: Language::En,
             educational_goals: vec!["Test goal".to_string()],
+            required_elements: None,
+        node_choice_counts: None,
         };
 
         let request = create_request("generate_story_prompts", params);
@@ -578,6 +584,8 @@ async fn test_all_handlers_with_same_llm_service() {
         age_group: AgeGroup::_9To11,
         language: Language::En,
         educational_goals: vec!["Learn".to_string()],
+        required_elements: None,
+        node_choice_counts: None,
     };
     let story_request = create_request("generate_story_prompts", story_params);
     let story_result = handle_generate_story_prompts(story_request, &mock_llm, &config).await;

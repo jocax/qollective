@@ -26,6 +26,11 @@ pub struct GenerateStoryPromptsParams {
     pub language: Language,
     /// Educational goals to incorporate into the story
     pub educational_goals: Vec<String>,
+    /// Required story elements that must be incorporated
+    pub required_elements: Option<Vec<String>>,
+    /// Node choice counts from DAG (node_id -> number of outgoing edges/choices)
+    /// Used to generate accurate prompts that match the DAG structure
+    pub node_choice_counts: Option<std::collections::HashMap<String, usize>>,
 }
 
 /// Parameters for generating validation prompts

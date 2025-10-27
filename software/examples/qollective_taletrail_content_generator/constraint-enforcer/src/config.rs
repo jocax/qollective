@@ -57,6 +57,27 @@ pub struct ConstraintsConfig {
     pub theme_consistency_enabled: bool,
     pub required_elements_check_enabled: bool,
     pub vocabulary_levels: Vec<String>,
+    #[serde(default)]
+    pub validation: ValidationConfig,
+}
+
+/// Validation configuration for hybrid keyword + LLM semantic matching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationConfig {
+    /// Keyword match threshold (0.0 to 1.0) - percentage of keywords that must match
+    pub keyword_match_threshold: f32,
+    /// Enable LLM semantic fallback when keyword matching is insufficient
+    pub enable_llm_fallback: bool,
+    /// Minimum keyword length to consider (filters short words)
+    pub min_keyword_length: usize,
+    /// Maximum content length to send to LLM (truncated if longer)
+    pub max_llm_content_length: usize,
+    /// English stopwords to filter out during keyword extraction
+    pub stopwords_en: Vec<String>,
+    /// German stopwords to filter out during keyword extraction
+    pub stopwords_de: Vec<String>,
+    /// LLM prompt template for semantic checking
+    pub llm_semantic_prompt: String,
 }
 
 /// Vocabulary configuration for multiple languages
@@ -142,6 +163,24 @@ impl Default for NatsConfig {
     }
 }
 
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        Self {
+            keyword_match_threshold: 0.8,
+            enable_llm_fallback: true,
+            min_keyword_length: 3,
+            max_llm_content_length: 2000,
+            stopwords_en: vec![
+                "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for"
+            ].iter().map(|s| s.to_string()).collect(),
+            stopwords_de: vec![
+                "der", "die", "das", "den", "dem", "des", "ein", "eine", "und", "oder"
+            ].iter().map(|s| s.to_string()).collect(),
+            llm_semantic_prompt: "Does the following content convey or address the concept of '{element}'?\n\nContent:\n{content}\n\nAnswer with ONLY 'yes' or 'no' (no explanation needed).".to_string(),
+        }
+    }
+}
+
 impl Default for ConstraintsConfig {
     fn default() -> Self {
         Self {
@@ -149,6 +188,7 @@ impl Default for ConstraintsConfig {
             theme_consistency_enabled: true,
             required_elements_check_enabled: true,
             vocabulary_levels: vec!["basic".to_string(), "intermediate".to_string(), "advanced".to_string()],
+            validation: ValidationConfig::default(),
         }
     }
 }

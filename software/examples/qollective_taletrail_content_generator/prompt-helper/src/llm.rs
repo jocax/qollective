@@ -43,43 +43,51 @@ impl SharedLlmService {
         })
     }
 
-    /// Parse LLM response to extract system and user prompts
+    /// Parse LLM response in Markdown format
+    ///
+    /// Expected format:
+    /// ```markdown
+    /// ## System Prompt
+    /// [system prompt content]
+    ///
+    /// ## User Prompt
+    /// [user prompt content]
+    /// ```
     fn parse_llm_response(response: &str) -> Result<(String, String), TaleTrailError> {
-        let separators = vec![
-            "---SEPARATOR---",
-            "--- SEPARATOR ---",
-            "---separator---",
-            "--- separator ---",
-            "\n---\n",
-            "###SEPARATOR###",
-        ];
+        use shared_types::MarkdownResponseParser;
 
-        for separator in separators {
-            if let Some((system, user)) = response.split_once(separator) {
-                let system_prompt = system.trim().to_string();
-                let user_prompt = user.trim().to_string();
+        // Extract System Prompt section
+        let system_prompt = MarkdownResponseParser::extract_section(response, "System Prompt")
+            .ok_or_else(|| {
+                error!("LLM response missing '## System Prompt' section: {}", response);
+                TaleTrailError::LLMError(
+                    "LLM response missing '## System Prompt' section. Expected Markdown format.".to_string()
+                )
+            })?;
 
-                if system_prompt.is_empty() {
-                    return Err(TaleTrailError::LLMError(
-                        "System prompt is empty after parsing".to_string(),
-                    ));
-                }
-                if user_prompt.is_empty() {
-                    return Err(TaleTrailError::LLMError(
-                        "User prompt is empty after parsing".to_string(),
-                    ));
-                }
+        // Extract User Prompt section
+        let user_prompt = MarkdownResponseParser::extract_section(response, "User Prompt")
+            .ok_or_else(|| {
+                error!("LLM response missing '## User Prompt' section: {}", response);
+                TaleTrailError::LLMError(
+                    "LLM response missing '## User Prompt' section. Expected Markdown format.".to_string()
+                )
+            })?;
 
-                debug!("Successfully parsed LLM response with separator: {}", separator);
-                return Ok((system_prompt, user_prompt));
-            }
+        // Validate non-empty
+        if system_prompt.is_empty() {
+            return Err(TaleTrailError::LLMError(
+                "System prompt is empty after parsing".to_string(),
+            ));
+        }
+        if user_prompt.is_empty() {
+            return Err(TaleTrailError::LLMError(
+                "User prompt is empty after parsing".to_string(),
+            ));
         }
 
-        error!("LLM response missing separator: {}", response);
-        Err(TaleTrailError::LLMError(
-            "LLM response missing separator. Expected format: 'SYSTEM PROMPT\n---SEPARATOR---\nUSER PROMPT'"
-                .to_string(),
-        ))
+        debug!("Successfully parsed Markdown LLM response");
+        Ok((system_prompt, user_prompt))
     }
 
     /// Build meta-prompt with context information
@@ -264,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_parse_llm_response_success() {
-        let response = "System prompt here\n---SEPARATOR---\nUser prompt here";
+        let response = "## System Prompt\nSystem prompt here\n## User Prompt\nUser prompt here";
         let result = SharedLlmService::parse_llm_response(response);
 
         assert!(result.is_ok());
@@ -275,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_parse_llm_response_missing_separator() {
-        let response = "This has no separator";
+        let response = "This has no markdown headers";
         let result = SharedLlmService::parse_llm_response(response);
 
         assert!(result.is_err());

@@ -32,6 +32,15 @@ note over Orchestrator
 - Timeout: 60 seconds (configurable)
 - Concurrency limit: 100 requests
 - Backpressure via semaphore
+
+**Phase Ordering (Updated):**
+1. Phase 1: Generate DAG Structure (10%)
+2. Phase 1.5: Generate Prompts - DAG-aware (20%)
+   - Includes required_elements
+   - Includes node_choice_counts from DAG
+3. Phase 2: Generate Content with Markdown (batched)
+4. Phase 3-4: Validate and Negotiate
+5. Phase 5: Assemble
 end note
 
 == Discovery Flow ==

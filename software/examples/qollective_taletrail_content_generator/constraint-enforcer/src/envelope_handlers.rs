@@ -33,6 +33,8 @@ use crate::config::ConstraintEnforcerConfig;
 use crate::constraints::enforce_constraints;
 use shared_types::*;
 use shared_types::types::tool_registration::{ToolRegistration, ServiceCapabilities};
+use shared_types_llm::{DefaultDynamicLlmClientProvider, DynamicLlmClient, DynamicLlmClientProvider, LlmParameters};
+use tracing::{debug, error};
 
 /// Request parameters for enforce_constraints tool
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -89,6 +91,7 @@ pub struct SuggestCorrectionsResponse {
 #[derive(Clone)]
 pub struct ConstraintEnforcerHandler {
     config: Arc<ConstraintEnforcerConfig>,
+    llm_provider: Option<Arc<DefaultDynamicLlmClientProvider>>,
 }
 
 impl ConstraintEnforcerHandler {
@@ -98,8 +101,50 @@ impl ConstraintEnforcerHandler {
     ///
     /// * `config` - Constraint enforcer configuration
     pub fn new(config: ConstraintEnforcerConfig) -> Self {
+        // Create LLM provider for on-demand client creation
+        // We don't create the client here because we need language-specific models
+        let llm_provider = Some(Arc::new(DefaultDynamicLlmClientProvider::new(config.llm.clone())));
+
+        debug!("✅ LLM provider initialized for hybrid validation");
+
         Self {
             config: Arc::new(config),
+            llm_provider,
+        }
+    }
+
+    /// Get LLM client for a specific language
+    ///
+    /// # Arguments
+    ///
+    /// * `language` - Language code for selecting appropriate model
+    ///
+    /// # Returns
+    ///
+    /// LLM client or None if provider not available
+    async fn get_llm_client(&self, language: &Language) -> Option<Box<dyn DynamicLlmClient>> {
+        let provider = self.llm_provider.as_ref()?;
+
+        let language_code = match language {
+            Language::En => "en",
+            Language::De => "de",
+        };
+
+        let params = LlmParameters {
+            language_code: language_code.to_string(),
+            ..Default::default()
+        };
+
+        match provider.get_dynamic_llm_client(&params).await {
+            Ok(client) => Some(client),
+            Err(e) => {
+                error!(
+                    error = %e,
+                    language = language_code,
+                    "Failed to create LLM client for language"
+                );
+                None
+            }
         }
     }
 
@@ -167,8 +212,15 @@ impl ConstraintEnforcerHandler {
                     }
                 };
 
-                // Call handler
-                match handle_enforce_constraints(params, &self.config) {
+                // Get LLM client for the request language
+                let llm_client = self.get_llm_client(&params.generation_request.language).await;
+
+                // Call async handler
+                match handle_enforce_constraints(
+                    params,
+                    &self.config,
+                    llm_client.as_ref().map(|b| b.as_ref()),
+                ).await {
                     Ok(response) => {
                         // Serialize response to JSON
                         match serde_json::to_string(&response) {
@@ -228,8 +280,15 @@ impl ConstraintEnforcerHandler {
                     }
                 };
 
-                // Call handler
-                match handle_suggest_corrections(params, &self.config) {
+                // Get LLM client for the request language
+                let llm_client = self.get_llm_client(&params.generation_request.language).await;
+
+                // Call async handler
+                match handle_suggest_corrections(
+                    params,
+                    &self.config,
+                    llm_client.as_ref().map(|b| b.as_ref()),
+                ).await {
                     Ok(response) => {
                         // Serialize response to JSON
                         match serde_json::to_string(&response) {
@@ -335,17 +394,26 @@ impl EnvelopeHandler<McpData, McpData> for ConstraintEnforcerHandler {
 ///
 /// Enforces all constraints (vocabulary, theme, required elements) on a content node
 /// and generates correction suggestions.
-pub fn handle_enforce_constraints(
+pub async fn handle_enforce_constraints(
     params: EnforceConstraintsParams,
-    _config: &ConstraintEnforcerConfig,
-) -> Result<EnforceConstraintsResponse> {
+    config: &ConstraintEnforcerConfig,
+    llm_client: Option<&dyn DynamicLlmClient>,
+) -> shared_types::Result<EnforceConstraintsResponse> {
     tracing::debug!(
         "Enforcing constraints on node {} for theme: {}",
         params.content_node.id,
         params.generation_request.theme
     );
 
-    let constraint_result = enforce_constraints(&params.content_node, &params.generation_request);
+    let constraint_result = match enforce_constraints(
+        &params.content_node,
+        &params.generation_request,
+        &config.constraints.validation,
+        llm_client,
+    ).await {
+        Ok(result) => result,
+        Err(e) => return Err(TaleTrailError::ValidationError(format!("Constraint enforcement failed: {}", e))),
+    };
 
     tracing::info!(
         "Constraint enforcement complete: {} vocab violations, theme score: {:.2}, {} missing elements",
@@ -364,17 +432,26 @@ pub fn handle_enforce_constraints(
 ///
 /// Generates correction suggestions without full constraint analysis.
 /// This is a lighter-weight version that focuses on actionable corrections.
-pub fn handle_suggest_corrections(
+pub async fn handle_suggest_corrections(
     params: SuggestCorrectionsParams,
-    _config: &ConstraintEnforcerConfig,
-) -> Result<SuggestCorrectionsResponse> {
+    config: &ConstraintEnforcerConfig,
+    llm_client: Option<&dyn DynamicLlmClient>,
+) -> shared_types::Result<SuggestCorrectionsResponse> {
     tracing::debug!(
         "Generating correction suggestions for node {}",
         params.content_node.id
     );
 
     // Use full enforcement to get corrections
-    let constraint_result = enforce_constraints(&params.content_node, &params.generation_request);
+    let constraint_result = match enforce_constraints(
+        &params.content_node,
+        &params.generation_request,
+        &config.constraints.validation,
+        llm_client,
+    ).await {
+        Ok(result) => result,
+        Err(e) => return Err(TaleTrailError::ValidationError(format!("Constraint enforcement failed: {}", e))),
+    };
 
     tracing::info!(
         "Generated {} correction suggestions for node {}",
@@ -495,6 +572,7 @@ mod tests {
                     temperature: 0.0,
                     timeout_secs: 0,
                     system_prompt_style: Default::default(),
+                    debug: Default::default(),
                 },
                 tenants: Default::default() },
             constraints: ConstraintsConfig::default(),

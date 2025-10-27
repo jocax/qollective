@@ -76,19 +76,24 @@ impl Negotiator {
         quality_results: Vec<ValidationResult>,
         constraint_results: Vec<ConstraintResult>,
     ) -> Result<Option<CorrectionPlan>> {
-        // Collect all issues from quality and constraint results
-        let mut issues = Vec::new();
+        // Pre-allocate capacity for better performance (estimated issues per result)
+        let estimated_capacity = quality_results.len() * 3 + constraint_results.len() * 3;
+        let mut issues = Vec::with_capacity(estimated_capacity);
 
-        // Use validation_issues module to aggregate issues
-        for result in quality_results {
-            let quality_issues = crate::validation_issues::aggregate_quality_issues(&node.id, &result);
-            issues.extend(quality_issues);
-        }
+        // Use validation_issues module to aggregate issues with batch processing
+        // Batch aggregate quality issues using iterator chaining
+        issues.extend(
+            quality_results
+                .iter()
+                .flat_map(|result| crate::validation_issues::aggregate_quality_issues(&node.id, result))
+        );
 
-        for result in constraint_results {
-            let constraint_issues = crate::validation_issues::aggregate_constraint_issues(&node.id, &result);
-            issues.extend(constraint_issues);
-        }
+        // Batch aggregate constraint issues using iterator chaining
+        issues.extend(
+            constraint_results
+                .iter()
+                .flat_map(|result| crate::validation_issues::aggregate_constraint_issues(&node.id, result))
+        );
 
         // Filter to only Critical and Warning issues - Info issues don't require negotiation
         issues.retain(|issue| {
@@ -114,15 +119,20 @@ impl Negotiator {
         quality_results: Vec<Vec<ValidationResult>>,
         constraint_results: Vec<Vec<ConstraintResult>>,
     ) -> Result<Vec<NegotiationRound>> {
-        let mut rounds = Vec::new();
+        // Pre-allocate rounds vector with max_rounds capacity
+        let mut rounds = Vec::with_capacity(self.max_rounds as usize);
 
         for round_num in 1..=self.max_rounds {
             info!("Starting negotiation round {}/{}", round_num, self.max_rounds);
 
+            // Pre-allocate with estimated capacity based on node count
+            let estimated_issues = nodes.len() * 2;
+            let estimated_corrections = nodes.len();
+
             let mut round = NegotiationRound {
                 iteration: round_num,
-                issues: Vec::new(),
-                corrections_applied: Vec::new(),
+                issues: Vec::with_capacity(estimated_issues),
+                corrections_applied: Vec::with_capacity(estimated_corrections),
                 success: true,
             };
 
@@ -187,10 +197,13 @@ impl Negotiator {
     /// Public method for use by orchestrator phase_negotiate_failures()
     /// Implements decision matrix logic
     pub fn build_correction_plan(&self, issues: &[ValidationIssue]) -> Result<CorrectionPlan> {
+        // Pre-allocate with estimated capacity (issues could map to any category)
+        let estimated_capacity = issues.len() / 3 + 1;
+
         let mut plan = CorrectionPlan {
-            local_fixes: Vec::new(),
-            regenerate_nodes: Vec::new(),
-            skipped_nodes: Vec::new(),
+            local_fixes: Vec::with_capacity(estimated_capacity),
+            regenerate_nodes: Vec::with_capacity(estimated_capacity),
+            skipped_nodes: Vec::with_capacity(estimated_capacity),
         };
 
         for issue in issues {
@@ -259,6 +272,7 @@ mod tests {
                     temperature: 0.7,
                     timeout_secs: 60,
                     system_prompt_style: SystemPromptStyle::Native,
+                    debug: Default::default(),
                 },
                 tenants: HashMap::new(),
             },

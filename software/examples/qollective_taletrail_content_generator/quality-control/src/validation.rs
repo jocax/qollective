@@ -19,7 +19,7 @@ use crate::config::QualityControlConfig;
 ///
 /// # Returns
 /// A complete ValidationResult with scores, issues, and correction suggestions
-pub fn validate_content_node(
+pub async fn validate_content_node(
     content: &ContentNode,
     age_group: AgeGroup,
     educational_goals: &[String],
@@ -59,18 +59,40 @@ pub fn validate_content_node(
         restricted_word_count = restricted_words.as_ref().map(|w| w.len()).unwrap_or(0),
         "Starting content validation"
     );
-    // Call individual rubrics (convert f32 to f64 for scoring)
-    let age_score = crate::rubrics::validate_age_appropriateness(&content.content.text, age_group) as f64;
+
+    // OPTIMIZATION: Run validation checks concurrently using tokio::task::spawn_blocking
+    // to avoid blocking the async runtime with CPU-bound text analysis
+    let text = content.content.text.clone();
+    let age_group_clone = age_group.clone();
+    let educational_goals_vec = educational_goals.to_vec();
+    let restricted_words_clone = restricted_words.clone();
+
+    let (age_score_result, safety_issues_result, edu_score_result) = tokio::join!(
+        tokio::task::spawn_blocking(move || {
+            crate::rubrics::validate_age_appropriateness(&text, age_group_clone) as f64
+        }),
+        tokio::task::spawn_blocking({
+            let text = content.content.text.clone();
+            move || {
+                crate::rubrics::validate_safety(&text, restricted_words_clone.as_deref())
+            }
+        }),
+        tokio::task::spawn_blocking({
+            let text = content.content.text.clone();
+            move || {
+                crate::rubrics::validate_educational_value(&text, &educational_goals_vec) as f64
+            }
+        })
+    );
+
+    // Unwrap results from spawn_blocking (handles JoinError and returns inner value)
+    let age_score = age_score_result.expect("Age validation task failed");
+    let safety_issues = safety_issues_result.expect("Safety validation task failed");
+    let edu_score = edu_score_result.expect("Educational validation task failed");
 
     tracing::info!(
         "Age appropriateness score for node {}: {:.2} (threshold: 0.7)",
         content.id, age_score
-    );
-
-    // Call safety validation with restricted words (may be None)
-    let safety_issues = crate::rubrics::validate_safety(
-        &content.content.text,
-        restricted_words.as_deref(),
     );
 
     tracing::info!(
@@ -83,8 +105,6 @@ pub fn validate_content_node(
             content.id, safety_issues
         );
     }
-
-    let edu_score = crate::rubrics::validate_educational_value(&content.content.text, educational_goals) as f64;
 
     tracing::info!(
         "Educational value score for node {}: {:.2} (threshold: 0.4)",
@@ -242,9 +262,10 @@ fn generate_age_corrections(
     }
 
     // Check choices for age appropriateness
+    // OPTIMIZATION: Direct computation without intermediate Vec allocation
     if !content.choices.is_empty() {
-        let choices_text: Vec<&str> = content.choices.iter().map(|c| c.text.as_str()).collect();
-        let avg_choice_length = choices_text.iter().map(|s| s.len()).sum::<usize>() / choices_text.len();
+        let total_choice_length: usize = content.choices.iter().map(|c| c.text.len()).sum();
+        let avg_choice_length = total_choice_length / content.choices.len();
 
         let expected_max_length = match age_group {
             AgeGroup::_6To8 => 50,
@@ -361,13 +382,27 @@ fn generate_educational_corrections(
         }
 
         // Check vocabulary words usage
+        // OPTIMIZATION: Pre-compute lowercase text and add early exit for performance
         if let Some(vocab_words) = &edu_content.vocabulary_words {
             let text_lower = content.text.to_lowercase();
+            let threshold = vocab_words.len() / 2;
+            let mut unused_count = 0;
+
             let unused_words: Vec<_> = vocab_words.iter()
-                .filter(|word| !text_lower.contains(&word.to_lowercase()))
+                .filter(|word| {
+                    // Early exit if already over threshold
+                    if unused_count > threshold {
+                        return false;
+                    }
+                    let is_unused = !text_lower.contains(&word.to_lowercase());
+                    if is_unused {
+                        unused_count += 1;
+                    }
+                    is_unused
+                })
                 .collect();
 
-            if !unused_words.is_empty() && unused_words.len() > vocab_words.len() / 2 {
+            if !unused_words.is_empty() && unused_words.len() > threshold {
                 corrections.push(CorrectionSuggestion {
                     field: "content.text".to_string(),
                     issue: "Many vocabulary words not used in the text".to_string(),

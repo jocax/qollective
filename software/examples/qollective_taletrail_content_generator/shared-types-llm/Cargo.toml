@@ -8,6 +8,9 @@ edition = "2021"
 mocking = ["mockall"]
 
 [dependencies]
+# Shared types and utilities
+shared-types = { path = "../shared-types" }
+
 # Core LLM integration
 rig-core = { workspace = true }
 

@@ -194,7 +194,7 @@ end note
 
 == Default Flow: Generate Nodes ==
 
-Orchestrator -> NATS: publish("mcp.story.generate_nodes")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_nodes",\n  arguments: {\n    trail: Trail,\n    prompt: PromptPackage\n  }\n}
+Orchestrator -> NATS: publish("mcp.story.generate_nodes")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_nodes",\n  arguments: {\n    node_ids: Vec<String>,\n    dag: DAG,\n    prompt: PromptPackage,\n    expected_choice_counts: Vec<usize>\n  }\n}
 activate NATS
 
 NATS -> StoryGen: forward tool request
@@ -206,23 +206,23 @@ StoryGen -> StoryGen: execute_tool(tool_call)
 
 StoryGen -> StoryGen: handle_generate_nodes(\n  request,\n  llm_service,\n  config\n)
 
-StoryGen -> StoryGen: Parse arguments:\n- trail: Trail (structure)\n- prompt: PromptPackage
+StoryGen -> StoryGen: Parse arguments:\n- node_ids: Vec<String>\n- dag: DAG\n- prompt: PromptPackage\n- expected_choice_counts: Vec<usize>
 
-loop For each node in trail
+loop For each node_id with expected_count
     StoryGen -> LLM: Generate node content
     activate LLM
 
     LLM -> LLM: Build prompt for node
 
-    LLM -> LLM: Call LLM provider
+    LLM -> LLM: Call LLM provider\n(generates Markdown response)
 
-    LLM -> StoryGen: Return ContentNode {\n  id,\n  title,\n  text,\n  choices: Vec<Choice>\n}
+    LLM -> StoryGen: Return Markdown response:\n## Narrative\n[story text]\n\n## Choices\n1. [choice 1]\n2. [choice 2]\n3. [choice 3]\n\n## Educational Content\n[optional]
     deactivate LLM
 
-    StoryGen -> StoryGen: Add content to node
+    StoryGen -> StoryGen: Parse Markdown response:\n- Extract ## Narrative\n- Extract ## Choices (numbered list)\n- Extract ## Educational Content\n- Truncate choices to expected_count\n- Create ContentNode
 end
 
-StoryGen -> StoryGen: Assemble complete trail\nwith all node content
+StoryGen -> StoryGen: Assemble complete nodes\nwith matched choice counts
 
 StoryGen -> StoryGen: **Serialize to JSON string**
 
@@ -238,9 +238,10 @@ deactivate NATS
 
 note over Orchestrator
 **Node Generation Complete**
-✓ All nodes populated
-✓ Choices created
-✓ Trail complete
+✓ All nodes populated with Markdown parsing
+✓ Choices matched to expected counts (no truncation warnings)
+✓ Narrative, Choices, Educational Content extracted
+✓ DAG complete with content
 end note
 
 == Default Flow: Validate Paths ==

@@ -2,11 +2,15 @@
 //!
 //! This library provides comprehensive constraint enforcement for TaleTrail content generation.
 //! It validates vocabulary levels, theme consistency, and required story elements.
+//!
+//! The library supports hybrid validation combining keyword-based matching with LLM semantic
+//! fallback for more flexible content validation.
 
 pub mod config;
 pub mod constraints;
 pub mod discovery;
 pub mod envelope_handlers;
+pub mod llm_semantic;
 pub mod requirements;
 pub mod server;
 pub mod theme;

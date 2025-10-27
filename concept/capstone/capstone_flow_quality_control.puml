@@ -182,6 +182,11 @@ note right of QC
    - Grammar correctness
    - Sentence structure
    - Age-appropriate vocabulary
+
+5. Required Elements Check
+   - Validate presence of required story elements
+   - Check element integration quality
+   - Verify elements from generation_request
 end note
 
 QC -> LLM: Validate content\nusing rig-core

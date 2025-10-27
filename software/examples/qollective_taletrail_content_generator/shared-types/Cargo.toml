@@ -30,6 +30,7 @@ nkeys = "0.4"
 tokio = { workspace = true }
 async-trait = { workspace = true }
 rmcp = { workspace = true }
+regex = "1.10"
 
 # Optional dependencies (enabled by features)
 mockall = { workspace = true, optional = true }

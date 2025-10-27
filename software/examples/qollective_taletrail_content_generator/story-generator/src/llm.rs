@@ -143,127 +143,89 @@ impl StoryLlmClient {
             ));
         }
 
-        prompt.push_str("\nPlease generate:\n");
-        prompt.push_str("1. Narrative text (~400 words)\n");
-        prompt.push_str("2. Three choice options (each ~20 words)\n");
-        prompt.push_str("3. Optional educational content if requested\n");
+        prompt.push_str("\nIMPORTANT: Format your response using Markdown sections:\n\n");
+        prompt.push_str("## Narrative\n");
+        prompt.push_str("[Your story text here, ~400 words]\n\n");
+        prompt.push_str("## Choices\n");
+        prompt.push_str("1. [First choice, ~20 words]\n");
+        prompt.push_str("2. [Second choice, ~20 words]\n");
+        prompt.push_str("3. [Third choice, ~20 words]\n\n");
+        prompt.push_str("## Educational Content\n");
+        prompt.push_str("[Optional educational information]\n");
 
         prompt
     }
 
     /// Parse LLM response to extract narrative, choices, and educational content
+    ///
+    /// Expected Markdown format:
+    /// ```markdown
+    /// ## Narrative
+    /// [Story text]
+    ///
+    /// ## Choices
+    /// 1. [Choice 1]
+    /// 2. [Choice 2]
+    /// 3. [Choice 3]
+    ///
+    /// ## Educational Content
+    /// [Optional content]
+    /// ```
     pub fn parse_content_response(
         response: &str,
     ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
-        // Try JSON parsing first
-        if let Ok(json_result) = Self::try_parse_json_response(response) {
-            return Ok(json_result);
+        use shared_types::MarkdownResponseParser;
+
+        // Extract Narrative section (required)
+        let narrative = MarkdownResponseParser::extract_section(response, "Narrative")
+            .ok_or_else(|| {
+                error!("LLM response missing '## Narrative' section");
+                TaleTrailError::LLMError("Missing '## Narrative' section in Markdown response".to_string())
+            })?;
+
+        if narrative.trim().is_empty() {
+            return Err(TaleTrailError::LLMError("Narrative section is empty".to_string()));
         }
 
-        // Fall back to text-based parsing
-        Self::parse_text_response(response)
-    }
+        // Extract Choices section (required)
+        let choices_section = MarkdownResponseParser::extract_section(response, "Choices")
+            .ok_or_else(|| {
+                error!("LLM response missing '## Choices' section");
+                TaleTrailError::LLMError("Missing '## Choices' section in Markdown response".to_string())
+            })?;
 
-    /// Attempt to parse JSON-structured response
-    pub fn try_parse_json_response(
-        response: &str,
-    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
-        let json: serde_json::Value = serde_json::from_str(response).map_err(|e| {
-            TaleTrailError::LLMError(format!("JSON parse failed: {}", e))
-        })?;
+        let mut choices = MarkdownResponseParser::extract_numbered_list(&choices_section);
 
-        let narrative = json
-            .get("narrative")
-            .or_else(|| json.get("text"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| TaleTrailError::LLMError("Missing narrative field".to_string()))?
-            .to_string();
+        // Validate we have at least one choice
+        if choices.is_empty() {
+            warn!("No numbered choices found in Choices section, attempting line-by-line parse");
+            // Fallback: split by lines and take first 3 non-empty
+            choices = choices_section
+                .lines()
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty() && l.len() > 5)
+                .take(3)
+                .map(|s| s.to_string())
+                .collect();
+        }
 
-        let choices = json
-            .get("choices")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-            })
-            .ok_or_else(|| TaleTrailError::LLMError("Missing choices field".to_string()))?;
+        // Ensure exactly 3 choices (pad or truncate)
+        while choices.len() < 3 {
+            choices.push(format!("Choice {}", choices.len() + 1));
+        }
+        choices.truncate(3);
 
-        let educational = json
-            .get("educational_content")
-            .or_else(|| json.get("educational"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        // Extract Educational Content section (optional)
+        let educational = MarkdownResponseParser::extract_section(response, "Educational Content");
+
+        debug!(
+            "Parsed Markdown response: narrative={} chars, choices={}, educational={}",
+            narrative.len(),
+            choices.len(),
+            educational.is_some()
+        );
 
         Ok((narrative, choices, educational))
-    }
-
-    /// Parse text-based response with delimiters
-    pub fn parse_text_response(
-        response: &str,
-    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
-        let sections: Vec<&str> = response.split("---").collect();
-
-        if sections.len() < 2 {
-            // Fallback: treat entire response as narrative, extract choices if present
-            return Self::extract_from_unstructured(response);
-        }
-
-        let narrative = sections[0].trim().to_string();
-
-        // Extract choices from second section
-        let choices_section = sections[1].trim();
-        let choices = Self::extract_choices(choices_section);
-
-        // Extract educational content if present
-        let educational = if sections.len() > 2 {
-            Some(sections[2].trim().to_string())
-        } else {
-            None
-        };
-
-        Ok((narrative, choices, educational))
-    }
-
-    /// Extract from unstructured response (fallback)
-    fn extract_from_unstructured(
-        response: &str,
-    ) -> Result<(String, Vec<String>, Option<String>), TaleTrailError> {
-        // Look for common patterns
-        let lines: Vec<&str> = response.lines().collect();
-
-        let mut narrative_lines = Vec::new();
-        let mut choice_lines = Vec::new();
-        let mut in_choices = false;
-
-        for line in lines {
-            let trimmed = line.trim();
-
-            // Detect choice section markers
-            if trimmed.to_lowercase().contains("choice")
-                || trimmed.starts_with("1.")
-                || trimmed.starts_with("2.")
-                || trimmed.starts_with("3.")
-            {
-                in_choices = true;
-            }
-
-            if in_choices {
-                if !trimmed.is_empty() {
-                    choice_lines.push(trimmed);
-                }
-            } else {
-                if !trimmed.is_empty() {
-                    narrative_lines.push(trimmed);
-                }
-            }
-        }
-
-        let narrative = narrative_lines.join(" ");
-        let choices = Self::extract_choices(&choice_lines.join("\n"));
-
-        Ok((narrative, choices, None))
     }
 
     /// Extract individual choices from choice section text
@@ -678,14 +640,19 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_json_response() {
-        let response = r#"{
-            "narrative": "This is the story text",
-            "choices": ["Choice 1", "Choice 2", "Choice 3"],
-            "educational_content": "Educational information"
-        }"#;
+    fn test_parse_markdown_response() {
+        let response = r#"## Narrative
+This is the story text
 
-        let result = StoryLlmClient::try_parse_json_response(response);
+## Choices
+1. Choice 1
+2. Choice 2
+3. Choice 3
+
+## Educational Content
+Educational information"#;
+
+        let result = StoryLlmClient::parse_content_response(response);
         assert!(result.is_ok());
 
         let (narrative, choices, educational) = result.unwrap();

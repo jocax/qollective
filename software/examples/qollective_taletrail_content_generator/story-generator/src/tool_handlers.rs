@@ -359,6 +359,7 @@ mod tests {
             prompt_packages: None,
             story_structure: None,
             dag_config: None,
+            validation_policy: None,
         }
     }
 
