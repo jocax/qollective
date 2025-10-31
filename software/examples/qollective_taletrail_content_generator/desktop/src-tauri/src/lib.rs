@@ -152,6 +152,7 @@ pub fn run() {
 			commands::get_template_schema,
 			commands::send_mcp_request,
 			commands::send_mcp_template_request,
+			commands::send_envelope_direct,
 			commands::save_request_to_history,
 			commands::load_request_history,
 			commands::delete_history_entry,

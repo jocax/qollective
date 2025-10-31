@@ -226,13 +226,10 @@
 				// Continue anyway
 			}
 
-			// Call Tauri command to send MCP request - now returns full envelope
-			const result = await invoke<McpResponseEnvelope>("send_mcp_request", {
+			// Call Tauri command to send envelope directly - preserves template metadata
+			const result = await invoke<McpResponseEnvelope>("send_envelope_direct", {
 				subject,
-				toolName,
-				arguments: toolArguments,
-				tenantId,
-				timeoutMs: (req.timeout || 180) * 1000 // Convert seconds to ms
+				envelopeJson: template.envelope
 			});
 
 			const durationMs = Date.now() - startTime;

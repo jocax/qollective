@@ -157,6 +157,53 @@ pub async fn send_mcp_template_request(
         .map_err(|e| e.to_string())
 }
 
+/// Send an MCP request using a complete envelope provided as JSON
+///
+/// Accepts a full Qollective envelope directly as JSON and sends it via NATS.
+/// Preserves all original metadata (request_id, trace_id, tenant, etc.).
+///
+/// # Arguments
+/// * `app` - Tauri application handle
+/// * `subject` - NATS subject to send the request to
+/// * `envelope_json` - Complete envelope as JSON (will be deserialized to Envelope<McpData>)
+///
+/// # Returns
+/// * `Ok(McpResponseEnvelope)` - The complete response envelope with metadata and payload
+/// * `Err(String)` - Error message if deserialization or sending fails
+#[tauri::command]
+pub async fn send_envelope_direct(
+    app: AppHandle,
+    subject: String,
+    envelope_json: serde_json::Value,
+) -> Result<McpResponseEnvelope, String> {
+    use crate::commands::nats_commands::NatsState;
+    use qollective::envelope::Envelope;
+    use qollective::types::mcp::McpData;
+
+    // Debug logging for consistency with other commands
+    eprintln!("[TaleTrail] send_envelope_direct called:");
+    eprintln!("  - subject: {}", subject);
+
+    // Deserialize JSON to Envelope<McpData>
+    let envelope: Envelope<McpData> = serde_json::from_value(envelope_json)
+        .map_err(|e| format!("Failed to deserialize envelope: {}", e))?;
+
+    // Get NATS client from app state
+    let state = app.state::<NatsState>();
+    let client_guard = state.client().read().await;
+
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Not connected to NATS. Please subscribe first.".to_string())?;
+
+    // Send envelope using existing method
+    client
+        .send_envelope(&subject, envelope)
+        .await
+        .map(|envelope| McpResponseEnvelope::from(envelope))
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
