@@ -1,40 +1,58 @@
 {
-	"tool_name": "batch_validate",
-	"arguments": {
-		"content_nodes": [
-			{
-				"id": "node_001",
-				"content": {
-					"type": "interactive_story_node",
-					"node_id": "node_001",
-					"text": "The adventure begins in a magical forest. Birds sing cheerful songs.",
-					"choices": ["Follow the path", "Climb a tree", "Talk to animals"],
-					"convergence_point": false,
-					"next_nodes": [],
-					"educational_content": null,
-					"metadata": {
-						"word_count": 14
-					}
-				}
-			},
-			{
-				"id": "node_002",
-				"content": {
-					"type": "interactive_story_node",
-					"node_id": "node_002",
-					"text": "A friendly dragon appears. He offers to show you his treasure cave.",
-					"choices": ["Accept the offer", "Ask questions first", "Politely decline"],
-					"convergence_point": false,
-					"next_nodes": [],
-					"educational_content": null,
-					"metadata": {
-						"word_count": 15
-					}
-				}
-			}
-		],
-		"age_group": "6-8",
-		"educational_goals": ["curiosity", "respect", "safety"],
-		"language": "en"
-	}
+  "subject": "mcp.quality.validate",
+  "envelope": {
+    "meta": {
+      "request_id": "550e8400-e29b-41d4-a716-446655440010",
+      "tenant": "1",
+      "tracing": {
+        "trace_id": "template-batch-validate",
+        "operation_name": "batch_validate"
+      }
+    },
+    "payload": {
+      "tool_call": {
+        "method": "tools/call",
+        "params": {
+          "name": "batch_validate",
+          "arguments": {
+            "content_nodes": [
+              {
+                "id": "node_001",
+                "content": {
+                  "type": "interactive_story_node",
+                  "node_id": "node_001",
+                  "text": "The adventure begins in a magical forest. Birds sing cheerful songs.",
+                  "choices": ["Follow the path", "Climb a tree", "Talk to animals"],
+                  "convergence_point": false,
+                  "next_nodes": [],
+                  "educational_content": null,
+                  "metadata": {
+                    "word_count": 14
+                  }
+                }
+              },
+              {
+                "id": "node_002",
+                "content": {
+                  "type": "interactive_story_node",
+                  "node_id": "node_002",
+                  "text": "A friendly dragon appears. He offers to show you his treasure cave.",
+                  "choices": ["Accept the offer", "Ask questions first", "Politely decline"],
+                  "convergence_point": false,
+                  "next_nodes": [],
+                  "educational_content": null,
+                  "metadata": {
+                    "word_count": 15
+                  }
+                }
+              }
+            ],
+            "age_group": "6-8",
+            "educational_goals": ["curiosity", "respect", "safety"],
+            "language": "en"
+          }
+        }
+      }
+    }
+  }
 }

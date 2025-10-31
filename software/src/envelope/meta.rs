@@ -610,7 +610,7 @@ impl Meta {
                 debug: None,
                 performance: None,
                 monitoring: None,
-                tracing: None,
+                tracing: orig.tracing.clone(),  // Preserve tracing metadata for distributed tracing
                 extensions: None,
             }
         } else {

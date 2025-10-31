@@ -115,7 +115,7 @@ pub async fn list_execution_directories(
 ///
 /// # Arguments
 /// * `request_id` - Request identifier
-/// * `server` - MCP server name
+/// * `server` - MCP server name (extracted from NATS subject)
 /// * `content` - JSON content to save
 /// * `config` - Application configuration state
 ///
@@ -129,6 +129,8 @@ pub async fn save_request_file(
     content: String,
     config: State<'_, AppConfig>,
 ) -> Result<(), String> {
+    eprintln!("[TaleTrail] Saving request file for server: {}, request_id: {}", server, request_id);
+
     // Validate server name
     if !crate::constants::mcp::AVAILABLE_SERVERS.contains(&server.as_str()) {
         return Err(format!(
@@ -148,6 +150,8 @@ pub async fn save_request_file(
     }
 
     let file_path = execution_path.join("request.json");
+    eprintln!("[TaleTrail] Writing request to: {:?}", file_path);
+
     fs::write(&file_path, content)
         .map_err(|e| format!("Failed to write request file {:?}: {}", file_path, e))?;
 
@@ -160,7 +164,7 @@ pub async fn save_request_file(
 ///
 /// # Arguments
 /// * `request_id` - Request identifier
-/// * `server` - MCP server name
+/// * `server` - MCP server name (extracted from NATS subject)
 /// * `content` - JSON content to save
 /// * `config` - Application configuration state
 ///
@@ -174,6 +178,8 @@ pub async fn save_response_file(
     content: String,
     config: State<'_, AppConfig>,
 ) -> Result<(), String> {
+    eprintln!("[TaleTrail] Saving response file for server: {}, request_id: {}", server, request_id);
+
     // Validate server name
     if !crate::constants::mcp::AVAILABLE_SERVERS.contains(&server.as_str()) {
         return Err(format!(
@@ -193,6 +199,8 @@ pub async fn save_response_file(
     }
 
     let file_path = execution_path.join("response.json");
+    eprintln!("[TaleTrail] Writing response to: {:?}", file_path);
+
     fs::write(&file_path, content)
         .map_err(|e| format!("Failed to write response file {:?}: {}", file_path, e))?;
 

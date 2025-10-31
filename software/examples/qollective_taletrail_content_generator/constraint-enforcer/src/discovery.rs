@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::RwLock;
 
-use crate::envelope_handlers::ConstraintEnforcerHandler;
+use crate::envelope_handlers::{ConstraintEnforcerHandler, get_all_tools};
 
 /// Discovery request handler for listing available tools
 #[derive(Clone)]
@@ -82,7 +82,7 @@ impl EnvelopeHandler<McpData, McpData> for DiscoveryHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "constraint-enforcer".to_string(),
                     server_name: "Constraint Enforcer Service".to_string(),
-                    tools: vec![], // Full details in custom field
+                    tools: get_all_tools(),
                     capabilities: tool_registrations
                         .iter()
                         .flat_map(|t| t.capabilities.clone())
@@ -168,7 +168,7 @@ impl EnvelopeHandler<McpData, McpData> for HealthHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "constraint-enforcer".to_string(),
                     server_name: "Constraint Enforcer Service".to_string(),
-                    tools: vec![],
+                    tools: get_all_tools(),
                     capabilities: vec!["healthy".to_string()],
                     metadata: qollective::types::mcp::ServerMetadata {
                         description: Some(format!(

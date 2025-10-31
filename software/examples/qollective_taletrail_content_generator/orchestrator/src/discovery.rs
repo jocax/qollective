@@ -183,95 +183,51 @@ impl DiscoveryClient {
     fn parse_tool_registrations(
         &self,
         service_name: &str,
-        _discovery_data: &McpDiscoveryData,
+        discovery_data: &McpDiscoveryData,
     ) -> Result<Vec<ToolRegistration>> {
-        // For now, return hardcoded tool registrations based on service name
-        // In a real implementation, this would parse from discovery_data
-        let tools = match service_name {
-            "story-generator" => vec![
-                ToolRegistration::new(
-                    "generate_structure",
-                    serde_json::json!({"type": "object"}),
-                    "story-generator",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Batching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-                ToolRegistration::new(
-                    "generate_nodes",
-                    serde_json::json!({"type": "object"}),
-                    "story-generator",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Batching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-                ToolRegistration::new(
-                    "validate_paths",
-                    serde_json::json!({"type": "object"}),
-                    "story-generator",
-                    "0.0.1",
-                    vec![shared_types::types::tool_registration::ServiceCapabilities::Retry],
-                ),
-            ],
-            "quality-control" => vec![
-                ToolRegistration::new(
-                    "validate_content",
-                    serde_json::json!({"type": "object"}),
-                    "quality-control",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Batching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-                ToolRegistration::new(
-                    "batch_validate",
-                    serde_json::json!({"type": "object"}),
-                    "quality-control",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Batching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-            ],
-            "constraint-enforcer" => vec![
-                ToolRegistration::new(
-                    "enforce_constraints",
-                    serde_json::json!({"type": "object"}),
-                    "constraint-enforcer",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Batching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-            ],
-            "prompt-helper" => vec![
-                ToolRegistration::new(
-                    "generate_story_prompts",
-                    serde_json::json!({"type": "object"}),
-                    "prompt-helper",
-                    "0.0.1",
-                    vec![
-                        shared_types::types::tool_registration::ServiceCapabilities::Caching,
-                        shared_types::types::tool_registration::ServiceCapabilities::Retry,
-                    ],
-                ),
-            ],
-            _ => {
-                return Err(TaleTrailError::DiscoveryError(format!(
-                    "Unknown service: {}",
+        // Extract tools from server_info
+        let server_info = match &discovery_data.server_info {
+            Some(info) => info,
+            None => {
+                tracing::warn!(
+                    "No server_info in discovery response from {}",
                     service_name
-                )))
+                );
+                return Ok(vec![]);
             }
         };
 
-        Ok(tools)
+        // Convert rmcp::model::Tool to ToolRegistration
+        let registrations: Vec<ToolRegistration> = server_info
+            .tools
+            .iter()
+            .map(|tool| {
+                // Convert the Arc<Map<String, Value>> input_schema to serde_json::Value
+                let schema_value = serde_json::Value::Object(
+                    serde_json::Map::from_iter(
+                        tool.input_schema
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                    )
+                );
+
+                ToolRegistration::new(
+                    tool.name.as_ref(),
+                    schema_value,
+                    service_name,
+                    "0.0.1",
+                    vec![], // Capabilities could be extracted from server_info.capabilities if needed
+                )
+            })
+            .collect();
+
+        tracing::debug!(
+            "Parsed {} tool registrations from {}",
+            registrations.len(),
+            service_name
+        );
+
+        Ok(registrations)
     }
 
     /// Discover all services in parallel

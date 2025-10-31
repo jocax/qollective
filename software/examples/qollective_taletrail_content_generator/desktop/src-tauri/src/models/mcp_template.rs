@@ -1,4 +1,6 @@
 /// Data models for MCP template management
+use qollective::envelope::Envelope;
+use qollective::types::mcp::McpData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -24,15 +26,15 @@ pub struct TemplateInfo {
 /// Raw template data parsed from JSON file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
-    /// The MCP tool name to call
-    pub tool_name: String,
+    /// NATS subject to send the request to
+    pub subject: String,
 
-    /// The arguments for the tool call
-    pub arguments: serde_json::Value,
+    /// Complete Qollective envelope with metadata and payload
+    pub envelope: Envelope<McpData>,
 
-    /// Optional description of what this template does
+    /// Optional schema for validation (kept for backward compatibility)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub schema: Option<ToolSchema>,
 }
 
 /// MCP tool schema for form generation

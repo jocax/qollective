@@ -347,17 +347,34 @@ mod tests {
         fs::create_dir(&orchestrator_dir).unwrap();
 
         let orchestrator_template = r#"{
-            "tool_name": "orchestrate_generation",
-            "arguments": {
-                "generation_request": {
-                    "theme": "Test Theme",
-                    "age_group": "9-11",
-                    "language": "en",
-                    "tenant_id": 1,
-                    "node_count": 10
+            "subject": "mcp.orchestrator.request",
+            "envelope": {
+                "meta": {
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "tenant": "1",
+                    "tracing": {
+                        "trace_id": "test-trace",
+                        "operation_name": "orchestrate_generation"
+                    }
+                },
+                "payload": {
+                    "tool_call": {
+                        "method": "tools/call",
+                        "params": {
+                            "name": "orchestrate_generation",
+                            "arguments": {
+                                "generation_request": {
+                                    "theme": "Test Theme",
+                                    "age_group": "9-11",
+                                    "language": "en",
+                                    "tenant_id": 1,
+                                    "node_count": 10
+                                }
+                            }
+                        }
+                    }
                 }
-            },
-            "description": "Test orchestration template"
+            }
         }"#;
 
         fs::write(
@@ -371,13 +388,30 @@ mod tests {
         fs::create_dir(&story_dir).unwrap();
 
         let story_template = r#"{
-            "tool_name": "generate_structure",
-            "arguments": {
-                "theme": "Space Adventure",
-                "node_count": 15,
-                "structure_type": "branching"
-            },
-            "description": "Generate story structure"
+            "subject": "mcp.story-generator.request",
+            "envelope": {
+                "meta": {
+                    "request_id": "550e8400-e29b-41d4-a716-446655440001",
+                    "tenant": "1",
+                    "tracing": {
+                        "trace_id": "test-story-trace",
+                        "operation_name": "generate_structure"
+                    }
+                },
+                "payload": {
+                    "tool_call": {
+                        "method": "tools/call",
+                        "params": {
+                            "name": "generate_structure",
+                            "arguments": {
+                                "theme": "Space Adventure",
+                                "node_count": 15,
+                                "structure_type": "branching"
+                            }
+                        }
+                    }
+                }
+            }
         }"#;
 
         fs::write(story_dir.join("structure.json"), story_template).unwrap();
@@ -387,10 +421,28 @@ mod tests {
         fs::create_dir(&qc_dir).unwrap();
 
         let qc_template = r#"{
-            "tool_name": "validate_content",
-            "arguments": {
-                "content": "Test content",
-                "validation_rules": ["grammar", "spelling"]
+            "subject": "mcp.quality-control.request",
+            "envelope": {
+                "meta": {
+                    "request_id": "550e8400-e29b-41d4-a716-446655440002",
+                    "tenant": "1",
+                    "tracing": {
+                        "trace_id": "test-qc-trace",
+                        "operation_name": "validate_content"
+                    }
+                },
+                "payload": {
+                    "tool_call": {
+                        "method": "tools/call",
+                        "params": {
+                            "name": "validate_content",
+                            "arguments": {
+                                "content": "Test content",
+                                "validation_rules": ["grammar", "spelling"]
+                            }
+                        }
+                    }
+                }
             }
         }"#;
 
@@ -425,12 +477,10 @@ mod tests {
         assert!(result.is_ok());
 
         let template_data = result.unwrap();
-        assert_eq!(template_data.tool_name, "orchestrate_generation");
-        assert_eq!(
-            template_data.description,
-            Some("Test orchestration template".to_string())
-        );
-        assert!(template_data.arguments.is_object());
+        assert_eq!(template_data.subject, "mcp.orchestrator.request");
+        assert!(template_data.envelope.payload.tool_call.is_some());
+        let tool_call = template_data.envelope.payload.tool_call.as_ref().unwrap();
+        assert_eq!(tool_call.params.name.as_ref(), "orchestrate_generation");
     }
 
     #[tokio::test]

@@ -12,7 +12,7 @@
 			</div>
 
 			<!-- Primary Tabs: MCP Server Selection -->
-			<UTabs v-model="selectedServerIndex" :items="mcpServerTabs" class="flex-1 overflow-hidden">
+			<UTabs v-model="selectedServerName" :items="mcpServerTabs" class="flex-1 overflow-hidden">
 				<template v-for="(serverTab, idx) in mcpServerTabs" :key="idx" #[serverTab.slot]>
 					<!-- Secondary Tabs: Panel Selection for this MCP server -->
 					<div class="mt-4 flex flex-col h-full overflow-hidden">
@@ -39,7 +39,7 @@
 								<div class="mt-4 overflow-auto" style="max-height: calc(100vh - 400px)">
 									<McpResponseViewer
 										:response="store.currentResponse"
-										:loading="store.isLoading"
+										:loading="store.isLoadingResponse"
 										:error="store.error"
 									/>
 								</div>
@@ -65,7 +65,7 @@
 </template>
 
 <script lang="ts" setup>
-	import type { CallToolResult, ServerName, TemplateData } from "@/types/mcp";
+	import type { CallToolResult, McpResponseEnvelope, ServerName, TemplateData } from "@/types/mcp";
 	import { invoke } from "@tauri-apps/api/core";
 	import { computed, nextTick, ref, watch } from "vue";
 	import { useMcpTesterStore } from "@/stores/mcpTester";
@@ -89,7 +89,7 @@
 	// Local State
 	// ============================================================================
 
-	const selectedServerIndex = ref(0);
+	const selectedServerName = ref<ServerName>("orchestrator");
 	const activePanelTab = ref(0);
 
 	// ============================================================================
@@ -120,18 +120,21 @@
 	// ============================================================================
 
 	// Sync tab selection with store
-	watch(selectedServerIndex, (newIndex) => {
-		const server = mcpServerTabs.value[newIndex]?.value;
-		if (server) {
-			store.setServer(server as ServerName);
+	watch(selectedServerName, (newServerName, oldServerName) => {
+		console.log(`[MCP Tester] selectedServerName changed: ${oldServerName} → ${newServerName}`);
+		if (newServerName) {
+			console.log(`[MCP Tester] Calling store.setServer("${newServerName}")`);
+			store.setServer(newServerName);
+			console.log(`[MCP Tester] After setServer, store.selectedServer =`, store.selectedServer);
 		}
 	});
 
 	// Watch store changes to sync tab
-	watch(() => store.selectedServer, (newServer) => {
-		const index = mcpServerTabs.value.findIndex((tab) => tab.value === newServer);
-		if (index !== -1 && index !== selectedServerIndex.value) {
-			selectedServerIndex.value = index;
+	watch(() => store.selectedServer, (newServer, oldServer) => {
+		console.log(`[MCP Tester] store.selectedServer changed: ${oldServer} → ${newServer}`);
+		if (newServer && newServer !== selectedServerName.value) {
+			console.log(`[MCP Tester] Updating selectedServerName: ${selectedServerName.value} → ${newServer}`);
+			selectedServerName.value = newServer;
 		}
 	}, { immediate: true });
 
@@ -162,16 +165,31 @@
 
 		// Set loading state in store
 		store.setLoading(true);
+		store.setLoadingResponse(true);
+		store.setCurrentResponse(null); // Clear previous response
 
-		// Generate request ID if not present
-		const requestId = req.request_id || crypto.randomUUID();
+		// Extract data from the full template
+		const template = req.template;
+		const toolName = template.envelope?.payload?.tool_call?.params?.name || "unknown";
+		const toolArguments = template.envelope?.payload?.tool_call?.params?.arguments || {};
+		const requestId = template.envelope?.meta?.request_id || crypto.randomUUID();
+		const tenantId = parseInt(template.envelope?.meta?.tenant || "1");
+
+		// Build the NATS subject based on selected server (or use from template)
+		const subject = template.subject || `mcp.${store.selectedServer}.request`;
+
+		// Extract server name from subject (e.g., "mcp.prompt-helper.request" → "prompt-helper")
+		const subjectParts = subject.split('.');
+		const targetServer = (subjectParts.length === 3 && subjectParts[0] === 'mcp' && subjectParts[2] === 'request')
+			? subjectParts[1]
+			: store.selectedServer; // Fallback to UI tab if subject doesn't match pattern
 
 		// Build proper CallToolRequest for history
 		const tool_call_request = {
 			method: "tools/call",
 			params: {
-				name: req.tool_name || "unknown",
-				arguments: req.arguments || {}
+				name: toolName,
+				arguments: toolArguments
 			},
 			extensions: {}
 		};
@@ -188,17 +206,16 @@
 				// Continue anyway - this is not critical
 			}
 
-			// Build the NATS subject based on selected server
-			const subject = `mcp.${store.selectedServer}.request`;
+			console.log(`[MCP Tester] Subject: ${subject}, Target Server: ${targetServer}, Selected Server: ${store.selectedServer}`);
 
 			// Save request file before sending
 			try {
 				await invoke("save_request_file", {
 					requestId,
-					server: store.selectedServer,
+					server: targetServer,
 					content: JSON.stringify({
-						tool_name: req.tool_name || "unknown",
-						arguments: req.arguments || {},
+						tool_name: toolName,
+						arguments: toolArguments,
 						request_id: requestId,
 						timestamp: new Date().toISOString()
 					}, null, 2)
@@ -209,29 +226,29 @@
 				// Continue anyway
 			}
 
-			// Call Tauri command to send MCP request
-			const result = await invoke<CallToolResult>("send_mcp_request", {
+			// Call Tauri command to send MCP request - now returns full envelope
+			const result = await invoke<McpResponseEnvelope>("send_mcp_request", {
 				subject,
-				toolName: req.tool_name || "unknown",
-				arguments: req.arguments || {},
-				tenantId: 1,
+				toolName,
+				arguments: toolArguments,
+				tenantId,
 				timeoutMs: (req.timeout || 180) * 1000 // Convert seconds to ms
 			});
 
 			const durationMs = Date.now() - startTime;
 
-			// Update store with response
+			// Update store with response (now the full envelope)
 			store.setResponse(result);
 
 			// Save response file after successful response
 			try {
 				await invoke("save_response_file", {
 					requestId,
-					server: store.selectedServer,
+					server: targetServer,
 					content: JSON.stringify({
-						response: result,
+						response: result, // Full envelope
 						duration_ms: durationMs,
-						success: !result.isError,
+						success: !result.payload.tool_response?.isError,
 						timestamp: new Date().toISOString()
 					}, null, 2)
 				});
@@ -242,13 +259,19 @@
 			}
 
 			// Save to history with correct flat parameters
+			// Extract the inner CallToolResult for backward compatibility with history
 			try {
+				const toolResponse = result.payload.tool_response || {
+					content: [],
+					isError: false
+				};
+
 				await invoke("save_request_to_history", {
 					serverName: store.selectedServer,
 					tenantId: 1,
-					durationMs: durationMs,
+					durationMs,
 					request: tool_call_request,
-					response: result
+					response: toolResponse
 				});
 			} catch (historyError) {
 				console.error("Failed to save to history:", historyError);
@@ -266,10 +289,12 @@
 			});
 
 			console.log("MCP request completed successfully", {
-				tool: req.tool_name,
+				tool: toolName,
 				duration: durationMs,
-				itemCount: result.content?.length || 0,
-				requestId
+				itemCount: result.payload.tool_response?.content?.length || 0,
+				requestId,
+				tenant: result.meta.tenant,
+				trace_id: result.meta.tracing?.trace_id
 			});
 		} catch (e: any) {
 			const durationMs = Date.now() - startTime;
@@ -277,7 +302,7 @@
 			store.setError(errorMessage);
 
 			console.error("MCP request failed:", {
-				tool: req.tool_name,
+				tool: toolName,
 				error: errorMessage,
 				duration: durationMs,
 				requestId
@@ -297,7 +322,7 @@
 
 				await invoke("save_response_file", {
 					requestId,
-					server: store.selectedServer,
+					server: targetServer,
 					content: JSON.stringify({
 						response: errorResponse,
 						duration_ms: durationMs,
@@ -327,8 +352,8 @@
 				const error_tool_call_request = {
 					method: "tools/call",
 					params: {
-						name: req.tool_name || "unknown",
-						arguments: req.arguments || {}
+						name: toolName,
+						arguments: toolArguments
 					},
 					extensions: {}
 				};
@@ -337,7 +362,7 @@
 				await invoke("save_request_to_history", {
 					serverName: store.selectedServer,
 					tenantId: 1,
-					durationMs: durationMs,
+					durationMs,
 					request: error_tool_call_request,
 					response: errorResponse
 				});
@@ -356,14 +381,29 @@
 			});
 		} finally {
 			store.setLoading(false);
+			store.setLoadingResponse(false);
 		}
 	}
 
 	function handleReplay(historyEntry: any) {
-		// Reconstruct template data from history entry
+		// Reconstruct template data from history entry using envelope structure
 		const templateData: TemplateData = {
-			tool_name: historyEntry.tool_name,
-			arguments: historyEntry.request
+			subject: `mcp.${historyEntry.server}.request`,
+			envelope: {
+				meta: {
+					request_id: crypto.randomUUID(),
+					tenant: "1"
+				},
+				payload: {
+					tool_call: {
+						method: "tools/call",
+						params: {
+							name: historyEntry.tool_name,
+							arguments: historyEntry.request
+						}
+					}
+				}
+			}
 		};
 
 		// Set the server to match the history entry

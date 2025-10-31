@@ -119,6 +119,49 @@ pub fn group_templates_by_server(templates: Vec<TemplateInfo>) -> GroupedTemplat
     grouped
 }
 
+/// Extracts the server name from a NATS subject pattern.
+///
+/// # Examples
+/// - "mcp.prompt-helper.request" → Some("prompt-helper")
+/// - "mcp.orchestrator.request" → Some("orchestrator")
+/// - "invalid.subject" → None
+/// - "mcp..request" → None (empty server name)
+///
+/// # Arguments
+/// * `subject` - The NATS subject string
+///
+/// # Returns
+/// * `Some(String)` - The extracted server name
+/// * `None` - If subject doesn't match pattern or server name is empty
+pub fn extract_server_from_subject(subject: &str) -> Option<String> {
+    let parts: Vec<&str> = subject.split('.').collect();
+
+    // Verify it has exactly 3 parts
+    if parts.len() != 3 {
+        return None;
+    }
+
+    // Verify first part is "mcp"
+    if parts[0] != "mcp" {
+        return None;
+    }
+
+    // Verify last part is "request"
+    if parts[2] != "request" {
+        return None;
+    }
+
+    // Extract middle part as server name
+    let server_name = parts[1].trim();
+
+    // Return None if server name is empty
+    if server_name.is_empty() {
+        return None;
+    }
+
+    Some(server_name.to_string())
+}
+
 /// Load all templates from the base directory and convert to TemplateInfo
 ///
 /// # Arguments
@@ -165,12 +208,21 @@ pub fn load_all_templates(base_path: &str) -> Result<Vec<TemplateInfo>, AppError
             }
         };
 
+        // Extract tool name from envelope's MCP tool_call
+        let tool_name = template_data
+            .envelope
+            .payload
+            .tool_call
+            .as_ref()
+            .map(|tc| tc.params.name.as_ref().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
         templates.push(TemplateInfo {
             server_name,
             template_name,
             file_path: path.to_string_lossy().to_string(),
-            description: template_data.description,
-            tool_name: template_data.tool_name,
+            description: None, // Description is no longer part of TemplateData
+            tool_name,
         });
     }
 
@@ -192,15 +244,32 @@ mod tests {
         fs::create_dir(&orchestrator_dir).unwrap();
 
         let template_content = r#"{
-            "tool_name": "orchestrate_generation",
-            "arguments": {
-                "generation_request": {
-                    "theme": "Test Theme",
-                    "age_group": "9-11",
-                    "language": "en"
+            "subject": "mcp.orchestrator.request",
+            "envelope": {
+                "meta": {
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "tenant": "1",
+                    "tracing": {
+                        "trace_id": "test-trace",
+                        "operation_name": "orchestrate_generation"
+                    }
+                },
+                "payload": {
+                    "tool_call": {
+                        "method": "tools/call",
+                        "params": {
+                            "name": "orchestrate_generation",
+                            "arguments": {
+                                "generation_request": {
+                                    "theme": "Test Theme",
+                                    "age_group": "9-11",
+                                    "language": "en"
+                                }
+                            }
+                        }
+                    }
                 }
-            },
-            "description": "Test orchestrator template"
+            }
         }"#;
 
         fs::write(
@@ -214,9 +283,27 @@ mod tests {
         fs::create_dir(&story_dir).unwrap();
 
         let story_template = r#"{
-            "tool_name": "generate_structure",
-            "arguments": {
-                "theme": "Space Adventure"
+            "subject": "mcp.story-generator.request",
+            "envelope": {
+                "meta": {
+                    "request_id": "550e8400-e29b-41d4-a716-446655440001",
+                    "tenant": "1",
+                    "tracing": {
+                        "trace_id": "test-story-trace",
+                        "operation_name": "generate_structure"
+                    }
+                },
+                "payload": {
+                    "tool_call": {
+                        "method": "tools/call",
+                        "params": {
+                            "name": "generate_structure",
+                            "arguments": {
+                                "theme": "Space Adventure"
+                            }
+                        }
+                    }
+                }
             }
         }"#;
 
@@ -252,11 +339,11 @@ mod tests {
         assert!(result.is_ok());
 
         let template_data = result.unwrap();
-        assert_eq!(template_data.tool_name, "orchestrate_generation");
-        assert_eq!(
-            template_data.description,
-            Some("Test orchestrator template".to_string())
-        );
+        assert_eq!(template_data.subject, "mcp.orchestrator.request");
+        // Verify envelope structure
+        assert!(template_data.envelope.payload.tool_call.is_some());
+        let tool_call = template_data.envelope.payload.tool_call.as_ref().unwrap();
+        assert_eq!(tool_call.params.name.as_ref(), "orchestrate_generation");
     }
 
     #[test]
@@ -326,10 +413,7 @@ mod tests {
             .unwrap();
         assert_eq!(orch_template.template_name, "test_template");
         assert_eq!(orch_template.tool_name, "orchestrate_generation");
-        assert_eq!(
-            orch_template.description,
-            Some("Test orchestrator template".to_string())
-        );
+        assert_eq!(orch_template.description, None);
 
         // Check story-generator template
         let story_template = templates
@@ -338,5 +422,90 @@ mod tests {
             .unwrap();
         assert_eq!(story_template.template_name, "space_story");
         assert_eq!(story_template.tool_name, "generate_structure");
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_valid() {
+        // Test valid subject for prompt-helper
+        let result = extract_server_from_subject("mcp.prompt-helper.request");
+        assert_eq!(result, Some("prompt-helper".to_string()));
+
+        // Test valid subject for orchestrator
+        let result = extract_server_from_subject("mcp.orchestrator.request");
+        assert_eq!(result, Some("orchestrator".to_string()));
+
+        // Test valid subject for story-generator
+        let result = extract_server_from_subject("mcp.story-generator.request");
+        assert_eq!(result, Some("story-generator".to_string()));
+
+        // Test valid subject for quality-control
+        let result = extract_server_from_subject("mcp.quality-control.request");
+        assert_eq!(result, Some("quality-control".to_string()));
+
+        // Test valid subject for constraint-enforcer
+        let result = extract_server_from_subject("mcp.constraint-enforcer.request");
+        assert_eq!(result, Some("constraint-enforcer".to_string()));
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_invalid_pattern() {
+        // Test invalid subject with wrong number of parts
+        let result = extract_server_from_subject("invalid.pattern");
+        assert_eq!(result, None);
+
+        // Test invalid subject with too many parts
+        let result = extract_server_from_subject("mcp.server.request.extra");
+        assert_eq!(result, None);
+
+        // Test invalid subject with single part
+        let result = extract_server_from_subject("invalid");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_empty_server_name() {
+        // Test empty server name
+        let result = extract_server_from_subject("mcp..request");
+        assert_eq!(result, None);
+
+        // Test whitespace-only server name
+        let result = extract_server_from_subject("mcp.   .request");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_wrong_prefix() {
+        // Test wrong prefix
+        let result = extract_server_from_subject("rpc.server.request");
+        assert_eq!(result, None);
+
+        // Test wrong prefix (different protocol)
+        let result = extract_server_from_subject("http.server.request");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_wrong_suffix() {
+        // Test wrong suffix
+        let result = extract_server_from_subject("mcp.server.response");
+        assert_eq!(result, None);
+
+        // Test wrong suffix (different operation)
+        let result = extract_server_from_subject("mcp.server.reply");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_whitespace_trimming() {
+        // Test that whitespace in server name is trimmed (though unlikely in practice)
+        let result = extract_server_from_subject("mcp. orchestrator .request");
+        assert_eq!(result, Some("orchestrator".to_string()));
+    }
+
+    #[test]
+    fn test_extract_server_from_subject_empty_string() {
+        // Test empty string
+        let result = extract_server_from_subject("");
+        assert_eq!(result, None);
     }
 }

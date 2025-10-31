@@ -204,6 +204,9 @@ pub mod defaults {
 
     /// Default NATS connection timeout in seconds
     pub const NATS_TIMEOUT_SECS: u64 = 5;
+
+    /// Envelope protocol version
+    pub const ENVELOPE_VERSION: &str = "1.0.0";
 }
 
 /// Request timeout configuration

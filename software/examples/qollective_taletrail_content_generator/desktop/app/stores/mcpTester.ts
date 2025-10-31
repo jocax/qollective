@@ -1,5 +1,6 @@
 import type {
 	CallToolResult,
+	McpResponseEnvelope,
 	GroupedTemplates,
 	JsonSchema,
 	ServerName,
@@ -35,12 +36,13 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 	const requestParams = ref<Record<string, any>>({});
 	const requestJson = ref<string>("");
 	const currentRequest = ref<any>(null);
-	const currentResponse = ref<CallToolResult | null>(null);
+	const currentResponse = ref<McpResponseEnvelope | null>(null);
 
 	// UI state
 	const showHistory = ref(false);
 	const showVerboseMode = ref(false);
 	const isLoading = ref(false);
+	const isLoadingResponse = ref(false);
 	const error = ref<string | null>(null);
 
 	// ============================================================================
@@ -65,9 +67,10 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 
 	function setTemplateContent(content: TemplateData) {
 		templateContent.value = content;
-		// Initialize request params with template arguments
-		requestParams.value = { ...content.arguments };
-		requestJson.value = JSON.stringify(content.arguments, null, 2);
+		// Initialize request params with template arguments from envelope
+		const args = content.envelope?.payload?.tool_call?.params?.arguments || {};
+		requestParams.value = { ...args };
+		requestJson.value = JSON.stringify(args, null, 2);
 	}
 
 	function setTemplateSchema(schema: JsonSchema) {
@@ -111,11 +114,11 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 	// Actions - Response Management
 	// ============================================================================
 
-	function setCurrentResponse(response: CallToolResult | null) {
+	function setCurrentResponse(response: McpResponseEnvelope | null) {
 		currentResponse.value = response;
 	}
 
-	function setResponse(response: CallToolResult) {
+	function setResponse(response: McpResponseEnvelope) {
 		currentResponse.value = response;
 		error.value = null;
 	}
@@ -139,6 +142,10 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 
 	function setLoading(loading: boolean) {
 		isLoading.value = loading;
+	}
+
+	function setLoadingResponse(loading: boolean) {
+		isLoadingResponse.value = loading;
 	}
 
 	function setError(err: string | null) {
@@ -201,6 +208,7 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 		showHistory,
 		showVerboseMode,
 		isLoading,
+		isLoadingResponse,
 		error,
 
 		// Actions
@@ -219,6 +227,7 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 		toggleHistory,
 		toggleVerboseMode,
 		setLoading,
+		setLoadingResponse,
 		setError,
 		clearState,
 		reset,

@@ -6,15 +6,6 @@
 					Response Viewer
 				</h3>
 				<div class="flex items-center gap-2">
-					<!-- Verbose Mode Toggle -->
-					<UButton
-						v-if="response"
-						:icon="showVerbose ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
-						variant="ghost"
-						size="xs"
-						:title="showVerbose ? 'Hide envelope metadata' : 'Show envelope metadata'"
-						@click="showVerbose = !showVerbose"
-					/>
 					<!-- Copy Button -->
 					<UButton
 						v-if="response"
@@ -43,7 +34,7 @@
 				<div class="flex flex-col items-center gap-2">
 					<div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
 					<p class="text-sm text-gray-500">
-						Sending request...
+						Waiting for response...
 					</p>
 				</div>
 			</div>
@@ -63,49 +54,14 @@
 				</div>
 			</div>
 
-			<!-- Success State with Response -->
-			<div v-else-if="response" class="flex-1 flex flex-col overflow-hidden">
-				<!-- Status Banner -->
-				<div
-					class="px-4 py-2 border-b" :class="[
-						isResponseError ? 'bg-error-50 dark:bg-error-900/20 border-error-200 dark:border-error-800' : 'bg-success-50 dark:bg-success-900/20 border-success-200 dark:border-success-800'
-					]"
-				>
-					<div class="flex items-center gap-2">
-						<UIcon
-							:name="isResponseError ? 'i-heroicons-x-circle' : 'i-heroicons-check-circle'"
-							:class="isResponseError ? 'text-error-500' : 'text-success-500'"
-							class="w-5 h-5"
-						/>
-						<p
-							class="text-sm font-medium" :class="[
-								isResponseError ? 'text-error-700 dark:text-error-400' : 'text-success-700 dark:text-success-400'
-							]"
-						>
-							{{ isResponseError ? 'Response Error' : 'Response Received' }}
-						</p>
-						<span class="text-xs text-gray-500 ml-auto">
-							{{ contentItemCount }} item{{ contentItemCount !== 1 ? 's' : '' }}
-						</span>
-					</div>
-				</div>
-
-				<!-- Envelope Inspector (Verbose Mode) -->
-				<div v-if="showVerbose" class="border-b p-4 bg-gray-50 dark:bg-gray-900">
-					<McpEnvelopeInspector :response="response" />
-				</div>
-
-				<!-- Response Content -->
-				<div class="flex-1 overflow-y-auto p-4 space-y-4">
-					<!-- Content Items -->
-					<div
-						v-for="(item, index) in response.content"
-						:key="index"
-						class="content-item"
-					>
-						<McpContentItem :item="item" :index="index" />
-					</div>
-				</div>
+			<!-- Response Content -->
+			<div v-else-if="response" class="flex-1 overflow-auto p-4">
+				<UTextarea
+					:model-value="JSON.stringify(response, null, 2)"
+					readonly
+					class="h-full font-mono text-sm"
+					:rows="25"
+				/>
 			</div>
 
 			<!-- Empty State -->
@@ -125,21 +81,13 @@
 </template>
 
 <script lang="ts" setup>
-	import type { CallToolResult } from "@/types/mcp";
-	import { computed, ref } from "vue";
+	import type { McpResponseEnvelope } from "@/types/mcp";
 
 	const props = defineProps<{
-		response: CallToolResult | null
+		response: McpResponseEnvelope | null
 		loading: boolean
 		error: string | null
 	}>();
-
-	// State
-	const showVerbose = ref(false);
-
-	// Computed
-	const isResponseError = computed(() => props.response?.isError || false);
-	const contentItemCount = computed(() => props.response?.content?.length || 0);
 
 	// Functions
 	function copyResponse() {

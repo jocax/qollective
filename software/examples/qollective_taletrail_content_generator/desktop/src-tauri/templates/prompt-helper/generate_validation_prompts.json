@@ -1,8 +1,26 @@
 {
-	"tool_name": "generate_validation_prompts",
-	"arguments": {
-		"age_group": "6-8",
-		"language": "en",
-		"content_type": "story"
-	}
+  "subject": "mcp.prompt.helper",
+  "envelope": {
+    "meta": {
+      "request_id": "550e8400-e29b-41d4-a716-446655440004",
+      "tenant": "1",
+      "tracing": {
+        "trace_id": "template-generate-validation-prompts",
+        "operation_name": "generate_validation_prompts"
+      }
+    },
+    "payload": {
+      "tool_call": {
+        "method": "tools/call",
+        "params": {
+          "name": "generate_validation_prompts",
+          "arguments": {
+            "age_group": "6-8",
+            "language": "en",
+            "content_type": "story"
+          }
+        }
+      }
+    }
+  }
 }

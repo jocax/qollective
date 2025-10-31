@@ -14,6 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
 use crate::envelope_handlers::StoryGeneratorHandler;
+use crate::mcp_tools;
 
 /// Discovery request handler for listing available tools
 #[derive(Clone)]
@@ -82,7 +83,7 @@ impl EnvelopeHandler<McpData, McpData> for DiscoveryHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "story-generator".to_string(),
                     server_name: "Story Generator Service".to_string(),
-                    tools: vec![], // Full details in custom field
+                    tools: mcp_tools::get_all_tools(),
                     capabilities: tool_registrations
                         .iter()
                         .flat_map(|t| t.capabilities.clone())
@@ -168,7 +169,7 @@ impl EnvelopeHandler<McpData, McpData> for HealthHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "story-generator".to_string(),
                     server_name: "Story Generator Service".to_string(),
-                    tools: vec![],
+                    tools: mcp_tools::get_all_tools(),
                     capabilities: vec!["healthy".to_string()],
                     metadata: qollective::types::mcp::ServerMetadata {
                         description: Some(format!(

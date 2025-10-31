@@ -261,17 +261,17 @@
 
 			// If not connected, try to reconnect
 			if (!status) {
-				await invoke('start_nats_monitoring');
-				console.log('[Monitoring] Reconnected to NATS successfully');
+				await invoke("start_nats_monitoring");
+				console.log("[Monitoring] Reconnected to NATS successfully");
 
 				// Update status after reconnect
 				const newStatus = await invoke<boolean>("get_monitoring_status");
 				connected.value = newStatus;
 			} else {
-				console.log('[Monitoring] Already connected to NATS');
+				console.log("[Monitoring] Already connected to NATS");
 			}
 		} catch (e) {
-			console.error('[Monitoring] Failed to reconnect:', e);
+			console.error("[Monitoring] Failed to reconnect:", e);
 			connected.value = false;
 		} finally {
 			reconnecting.value = false;

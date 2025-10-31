@@ -1,5 +1,6 @@
 use async_nats::{Client, ConnectOptions, Subscriber};
 use async_trait::async_trait;
+use chrono::Utc;
 use crate::error::{AppError, AppResult};
 use crate::models::{GenerationEvent, GenerationRequest};
 use crate::services::traits::NatsService;
@@ -259,6 +260,9 @@ impl NatsClient {
         let trace_id = Uuid::new_v4().to_string();
 
         let mut metadata = Meta::default();
+        metadata.request_id = Some(Uuid::new_v4());
+        metadata.timestamp = Some(Utc::now());
+        metadata.version = Some(crate::constants::defaults::ENVELOPE_VERSION.to_string());
         metadata.tenant = Some(request.tenant_id.clone());
         metadata.tracing = Some(TracingMeta {
             trace_id: Some(trace_id.clone()),
@@ -316,16 +320,17 @@ impl NatsClient {
     /// Send MCP tool call request via NATS
     ///
     /// Wraps the CallToolRequest in a Qollective envelope and sends it to the specified
-    /// NATS subject using request-reply pattern. Returns the CallToolResult from the
-    /// response envelope.
+    /// NATS subject using request-reply pattern. Returns the complete response envelope
+    /// with all metadata preserved.
     ///
     /// # Arguments
     /// * `subject` - NATS subject to send the request to
     /// * `tool_call` - rmcp CallToolRequest to send
     /// * `tenant_id` - Tenant ID for multi-tenancy support
+    /// * `timeout` - Optional timeout duration (uses config default if None)
     ///
     /// # Returns
-    /// * `Ok(CallToolResult)` - The MCP tool result from the server
+    /// * `Ok(Envelope<McpData>)` - The complete response envelope with metadata
     /// * `Err(AppError)` - Error if request fails
     ///
     /// # Errors
@@ -340,7 +345,8 @@ impl NatsClient {
         subject: &str,
         tool_call: rmcp::model::CallToolRequest,
         tenant_id: i32,
-    ) -> AppResult<rmcp::model::CallToolResult> {
+        timeout: Option<std::time::Duration>,
+    ) -> AppResult<qollective::envelope::Envelope<qollective::types::mcp::McpData>> {
         use qollective::envelope::{Envelope, Meta, TracingMeta};
         use qollective::types::mcp::McpData;
         use qollective::envelope::nats_codec::NatsEnvelopeCodec;
@@ -363,6 +369,9 @@ impl NatsClient {
             .unwrap_or_else(|| "unknown_tool".to_string());
 
         let mut metadata = Meta::default();
+        metadata.request_id = Some(Uuid::new_v4());
+        metadata.timestamp = Some(Utc::now());
+        metadata.version = Some(crate::constants::defaults::ENVELOPE_VERSION.to_string());
         metadata.tenant = Some(tenant_id.to_string());
         metadata.tracing = Some(TracingMeta {
             trace_id: Some(trace_id.clone()),
@@ -385,19 +394,38 @@ impl NatsClient {
         let payload = NatsEnvelopeCodec::encode(&envelope)
             .map_err(|e| AppError::NatsError(format!("Failed to encode envelope: {}", e)))?;
 
-        // Send request and wait for response
-        let response = client
-            .request(subject.to_string(), payload.into())
+        // Use custom timeout if provided, otherwise use default from config
+        let request_timeout = timeout.unwrap_or_else(|| {
+            std::time::Duration::from_secs(self.config.timeout_secs)
+        });
+
+        eprintln!("[TaleTrail NATS] Sending MCP tool request:");
+        eprintln!("  - subject: {}", subject);
+        eprintln!("  - timeout: {:?}", request_timeout);
+
+        // Send request and wait for response with timeout using tokio timeout
+        let response = tokio::time::timeout(
+            request_timeout,
+            client.request(subject.to_string(), payload.into())
+        )
             .await
-            .map_err(|e| AppError::NatsError(format!("Failed to send request to {}: {}", subject, e)))?;
+            .map_err(|_| {
+                eprintln!("[TaleTrail NATS] Request timed out after {:?}", request_timeout);
+                AppError::NatsError(format!("Request to {} timed out after {:?}", subject, request_timeout))
+            })?
+            .map_err(|e| {
+                eprintln!("[TaleTrail NATS] Request failed: {}", e);
+                AppError::NatsError(format!("Failed to send request to {}: {}", subject, e))
+            })?;
+
+        eprintln!("[TaleTrail NATS] Response received: {} bytes", response.payload.len());
 
         // Decode response envelope
         let response_envelope: Envelope<McpData> = NatsEnvelopeCodec::decode(&response.payload)
             .map_err(|e| AppError::NatsError(format!("Failed to decode response: {}", e)))?;
 
-        // Extract CallToolResult from response
-        if let Some(tool_response) = response_envelope.payload.tool_response {
-            // Check if response indicates an error
+        // Check if response indicates an error in the tool_response
+        if let Some(ref tool_response) = response_envelope.payload.tool_response {
             if tool_response.is_error == Some(true) {
                 // Extract error message from content
                 let error_msg = tool_response.content
@@ -412,13 +440,76 @@ impl NatsClient {
                     })
                     .collect::<Vec<_>>()
                     .join("; ");
-                return Err(AppError::NatsError(format!("MCP tool error: {}", error_msg)));
+                eprintln!("[TaleTrail NATS] MCP tool returned error: {}", error_msg);
+                // Note: We still return the complete envelope so the frontend can display the error
             }
-
-            Ok(tool_response)
-        } else {
-            Err(AppError::NatsError("No tool response in envelope".to_string()))
         }
+
+        // Return the complete envelope with all metadata
+        Ok(response_envelope)
+    }
+
+    /// Send a pre-built envelope via NATS
+    ///
+    /// This method sends a complete Envelope<McpData> that was loaded from a template,
+    /// allowing full control over metadata (request_id, tenant, tracing) and payload.
+    ///
+    /// # Arguments
+    /// * `subject` - NATS subject to send to
+    /// * `envelope` - Pre-built envelope from template
+    ///
+    /// # Returns
+    /// * `Ok(Envelope<McpData>)` - The complete response envelope with metadata
+    /// * `Err(AppError)` - If request fails
+    pub async fn send_envelope(
+        &self,
+        subject: &str,
+        envelope: qollective::envelope::Envelope<qollective::types::mcp::McpData>,
+    ) -> AppResult<qollective::envelope::Envelope<qollective::types::mcp::McpData>> {
+        use qollective::envelope::nats_codec::NatsEnvelopeCodec;
+        use qollective::envelope::Envelope;
+        use qollective::types::mcp::McpData;
+
+        let client_guard = self.client.read().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| AppError::ConnectionError("Not connected to NATS".to_string()))?;
+
+        // Encode envelope
+        let payload = NatsEnvelopeCodec::encode(&envelope)
+            .map_err(|e| AppError::NatsError(format!("Failed to encode envelope: {}", e)))?;
+
+        // Send request and wait for response
+        let response = client
+            .request(subject.to_string(), payload.into())
+            .await
+            .map_err(|e| AppError::NatsError(format!("Failed to send request to {}: {}", subject, e)))?;
+
+        // Decode response envelope
+        let response_envelope: Envelope<McpData> = NatsEnvelopeCodec::decode(&response.payload)
+            .map_err(|e| AppError::NatsError(format!("Failed to decode response: {}", e)))?;
+
+        // Check if response indicates an error in the tool_response
+        if let Some(ref tool_response) = response_envelope.payload.tool_response {
+            if tool_response.is_error == Some(true) {
+                let error_msg = tool_response.content
+                    .iter()
+                    .filter_map(|c| {
+                        if let Ok(json) = serde_json::to_value(c) {
+                            json.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                eprintln!("[TaleTrail NATS] MCP tool returned error: {}", error_msg);
+                // Note: We still return the complete envelope so the frontend can display the error
+            }
+        }
+
+        // Return the complete envelope with all metadata
+        Ok(response_envelope)
     }
 }
 

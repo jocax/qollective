@@ -1,28 +1,46 @@
 {
-	"tool_name": "validate_content",
-	"arguments": {
-		"content_node": {
-			"id": "node_003",
-			"content": {
-				"type": "interactive_story_node",
-				"node_id": "node_003",
-				"text": "Sarah and her robot friend Beep explored the colorful garden. They found a tiny fairy who needed help finding her lost wand. Together, they searched under flowers and behind rocks.",
-				"choices": [
-					"Look in the fountain",
-					"Ask the butterflies for help",
-					"Check the tree hollow"
-				],
-				"convergence_point": false,
-				"next_nodes": [],
-				"educational_content": null,
-				"metadata": {
-					"word_count": 35,
-					"reading_level": "basic"
-				}
-			}
-		},
-		"age_group": "6-8",
-		"educational_goals": ["friendship", "problem-solving", "teamwork"],
-		"language": "en"
-	}
+  "subject": "mcp.quality.validate",
+  "envelope": {
+    "meta": {
+      "request_id": "550e8400-e29b-41d4-a716-446655440009",
+      "tenant": "1",
+      "tracing": {
+        "trace_id": "template-validate-content",
+        "operation_name": "validate_content"
+      }
+    },
+    "payload": {
+      "tool_call": {
+        "method": "tools/call",
+        "params": {
+          "name": "validate_content",
+          "arguments": {
+            "content_node": {
+              "id": "node_003",
+              "content": {
+                "type": "interactive_story_node",
+                "node_id": "node_003",
+                "text": "Sarah and her robot friend Beep explored the colorful garden. They found a tiny fairy who needed help finding her lost wand. Together, they searched under flowers and behind rocks.",
+                "choices": [
+                  "Look in the fountain",
+                  "Ask the butterflies for help",
+                  "Check the tree hollow"
+                ],
+                "convergence_point": false,
+                "next_nodes": [],
+                "educational_content": null,
+                "metadata": {
+                  "word_count": 35,
+                  "reading_level": "basic"
+                }
+              }
+            },
+            "age_group": "6-8",
+            "educational_goals": ["friendship", "problem-solving", "teamwork"],
+            "language": "en"
+          }
+        }
+      }
+    }
+  }
 }

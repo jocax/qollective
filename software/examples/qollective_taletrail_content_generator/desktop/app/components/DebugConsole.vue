@@ -43,9 +43,9 @@
 	import { nextTick, onMounted, onUnmounted, ref } from "vue";
 
 	interface LogEntry {
-		timestamp: string;
-		level: "log" | "error" | "warn" | "info";
-		message: string;
+		timestamp: string
+		level: "log" | "error" | "warn" | "info"
+		message: string
 	}
 
 	const isVisible = ref(false);

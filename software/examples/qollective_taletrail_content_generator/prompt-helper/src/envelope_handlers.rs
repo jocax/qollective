@@ -231,8 +231,10 @@ impl EnvelopeHandler<McpData, McpData> for PromptHelperHandler {
             discovery_data: None,
         };
 
-        // Create response envelope (preserving metadata)
-        Ok(Envelope::new(meta, response_data))
+        // Create response envelope (preserving metadata including tracing)
+        use qollective::envelope::Meta;
+        let response_meta = Meta::preserve_for_response(Some(&meta));
+        Ok(Envelope::new(response_meta, response_data))
         }
     }
 }

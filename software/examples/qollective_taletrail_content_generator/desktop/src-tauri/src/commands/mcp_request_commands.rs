@@ -3,13 +3,48 @@
 /// Provides Tauri commands for sending MCP tool call requests via NATS
 /// using rmcp types directly without custom wrappers.
 use crate::commands::mcp_template_commands::load_mcp_template;
-use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam, CallToolResult};
+use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam};
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+
+/// Serializable wrapper for MCP response envelope
+/// This ensures proper JSON serialization to TypeScript frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpResponseEnvelope {
+    pub meta: qollective::envelope::Meta,
+    pub payload: qollective::types::mcp::McpData,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<qollective::envelope::EnvelopeError>,
+}
+
+impl From<qollective::envelope::Envelope<qollective::types::mcp::McpData>> for McpResponseEnvelope {
+    fn from(envelope: qollective::envelope::Envelope<qollective::types::mcp::McpData>) -> Self {
+        Self {
+            meta: envelope.meta,
+            payload: envelope.payload,
+            error: envelope.error,
+        }
+    }
+}
+
+/// Converts hyphens to dots in NATS subject to match server naming convention
+///
+/// Server names with hyphens (e.g., "prompt-helper") get dots in NATS subjects (e.g., "mcp.prompt.helper").
+/// This function normalizes subjects by replacing all hyphens with dots.
+///
+/// # Examples
+/// - "mcp.prompt-helper.request" → "mcp.prompt.helper.request"
+/// - "mcp.story-generator.request" → "mcp.story.generator.request"
+/// - "mcp.orchestrator.request" → "mcp.orchestrator.request" (no change)
+fn normalize_nats_subject(subject: &str) -> String {
+    subject.replace('-', ".")
+}
 
 /// Send an MCP tool call request via NATS
 ///
 /// Wraps the CallToolRequest in a Qollective envelope and sends it to the specified
-/// NATS subject using request-reply pattern. Returns the CallToolResult directly.
+/// NATS subject using request-reply pattern. Returns the complete response envelope
+/// with all metadata (tenant, request_id, tracing, etc.) preserved.
 ///
 /// # Arguments
 /// * `app` - Tauri application handle
@@ -17,9 +52,10 @@ use tauri::{AppHandle, Manager};
 /// * `tool_name` - Name of the MCP tool to call
 /// * `arguments` - Generic JSON arguments for the tool
 /// * `tenant_id` - Tenant ID for multi-tenancy support
+/// * `timeout_ms` - Optional timeout in milliseconds (defaults to DEFAULT_REQUEST_TIMEOUT_MS if None)
 ///
 /// # Returns
-/// * `Ok(CallToolResult)` - The MCP tool result from the server
+/// * `Ok(McpResponseEnvelope)` - The complete response envelope with metadata and payload
 /// * `Err(String)` - Error message if the request fails
 #[tauri::command]
 pub async fn send_mcp_request(
@@ -28,8 +64,22 @@ pub async fn send_mcp_request(
     tool_name: String,
     arguments: serde_json::Value,
     tenant_id: i32,
-) -> Result<CallToolResult, String> {
+    timeout_ms: Option<u64>,
+) -> Result<McpResponseEnvelope, String> {
     use crate::commands::nats_commands::NatsState;
+
+    // Debug logging
+    eprintln!("[TaleTrail] send_mcp_request called:");
+    eprintln!("  - subject: {}", subject);
+    eprintln!("  - tool_name: {}", tool_name);
+    eprintln!("  - tenant_id: {}", tenant_id);
+    eprintln!("  - timeout_ms: {:?}", timeout_ms);
+
+    // Normalize subject: convert hyphens to dots to match server naming convention
+    let normalized_subject = normalize_nats_subject(&subject);
+    eprintln!("[TaleTrail] Subject normalization:");
+    eprintln!("  - Original: {}", subject);
+    eprintln!("  - Normalized: {}", normalized_subject);
 
     // Get NATS client from app state
     let state = app.state::<NatsState>();
@@ -49,46 +99,62 @@ pub async fn send_mcp_request(
         extensions: Default::default(),
     };
 
-    // Use NatsClient method to send MCP tool call
+    // Convert timeout_ms to Duration, or use default
+    let timeout_duration = timeout_ms
+        .map(|ms| std::time::Duration::from_millis(ms))
+        .or_else(|| {
+            // Use default from constants
+            Some(std::time::Duration::from_millis(
+                crate::constants::network::DEFAULT_REQUEST_TIMEOUT_MS,
+            ))
+        });
+
+    eprintln!("[TaleTrail] Using timeout: {:?}", timeout_duration);
+
+    // Use NatsClient method to send MCP tool call with timeout
     client
-        .send_mcp_tool_call(&subject, tool_call_request, tenant_id)
+        .send_mcp_tool_call(&normalized_subject, tool_call_request, tenant_id, timeout_duration)
         .await
+        .map(|envelope| McpResponseEnvelope::from(envelope))
         .map_err(|e| e.to_string())
 }
 
-/// Send an MCP request using a saved template
+/// Send an MCP request using a template with full envelope
 ///
-/// This convenience command loads a template file and sends the MCP request
-/// to the specified subject in a single operation.
+/// This command loads a template file containing a complete Qollective envelope
+/// (with metadata and MCP payload) and sends it to the specified NATS subject.
 ///
 /// # Arguments
 /// * `app` - Tauri application handle
 /// * `template_path` - Path to the template JSON file
-/// * `subject` - NATS subject to send the request to
-/// * `tenant_id` - Tenant ID for multi-tenancy support
 ///
 /// # Returns
-/// * `Ok(CallToolResult)` - The MCP tool result from the server
+/// * `Ok(McpResponseEnvelope)` - The complete response envelope with metadata and payload
 /// * `Err(String)` - Error message if loading or sending fails
 #[tauri::command]
 pub async fn send_mcp_template_request(
     app: AppHandle,
     template_path: String,
-    subject: String,
-    tenant_id: i32,
-) -> Result<CallToolResult, String> {
-    // Load template using Task 1's command
+) -> Result<McpResponseEnvelope, String> {
+    use crate::commands::nats_commands::NatsState;
+
+    // Load template with full envelope
     let template_data = load_mcp_template(template_path).await?;
 
-    // Send the request using send_mcp_request
-    send_mcp_request(
-        app,
-        subject,
-        template_data.tool_name,
-        template_data.arguments,
-        tenant_id,
-    )
-    .await
+    // Get NATS client from app state
+    let state = app.state::<NatsState>();
+    let client_guard = state.client().read().await;
+
+    let client = client_guard
+        .as_ref()
+        .ok_or_else(|| "Not connected to NATS. Please subscribe first.".to_string())?;
+
+    // Send envelope directly from template
+    client
+        .send_envelope(&template_data.subject, template_data.envelope)
+        .await
+        .map(|envelope| McpResponseEnvelope::from(envelope))
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -207,9 +273,12 @@ mod tests {
         let meta = Meta::default();
         let envelope = Envelope::new(meta, mcp_data);
 
+        // Convert to McpResponseEnvelope
+        let response_envelope = McpResponseEnvelope::from(envelope);
+
         // Verify response structure
-        assert!(envelope.payload.tool_response.is_some());
-        let response = envelope.payload.tool_response.unwrap();
+        assert!(response_envelope.payload.tool_response.is_some());
+        let response = response_envelope.payload.tool_response.unwrap();
         assert_eq!(response.is_error, Some(false));
         assert_eq!(response.content.len(), 1);
     }
@@ -235,9 +304,12 @@ mod tests {
         let meta = Meta::default();
         let envelope = Envelope::new(meta, mcp_data);
 
+        // Convert to McpResponseEnvelope
+        let response_envelope = McpResponseEnvelope::from(envelope);
+
         // Verify error response
-        assert!(envelope.payload.tool_response.is_some());
-        let response = envelope.payload.tool_response.unwrap();
+        assert!(response_envelope.payload.tool_response.is_some());
+        let response = response_envelope.payload.tool_response.unwrap();
         assert_eq!(response.is_error, Some(true));
     }
 

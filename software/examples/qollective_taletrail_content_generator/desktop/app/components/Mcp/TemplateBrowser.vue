@@ -160,7 +160,7 @@
 			console.log(`[TemplateBrowser] Templates for ${props.server}:`, serverTemplates.length, "found");
 		} catch (e) {
 			console.error("[TemplateBrowser] Failed to check templates:", e);
-			hasTemplates.value = false;  // Show init section if we can't check
+			hasTemplates.value = false; // Show init section if we can't check
 		}
 	}
 
@@ -177,7 +177,7 @@
 			// Check if new server has templates
 			await checkTemplatesExist();
 		}
-	}, { immediate: true });  // Run on mount
+	}, { immediate: true }); // Run on mount
 
 	async function openFilePicker() {
 		try {
@@ -221,12 +221,15 @@
 				templatePath: selected
 			});
 
+			// Extract tool name from envelope structure
+			const toolName = templateData.envelope?.payload?.tool_call?.params?.name || "unknown";
+
 			// Create template info object
 			const templateInfo: TemplateInfo & { file_path: string } = {
 				file_name: selected.split("/").pop() || "",
 				file_path: selected,
-				tool_name: templateData.tool_name,
-				description: `Tool: ${templateData.tool_name}`
+				tool_name: toolName,
+				description: `Tool: ${toolName}`
 			};
 
 			selectedTemplate.value = templateInfo;
@@ -237,7 +240,7 @@
 			// Emit to parent
 			emit("select", templateData);
 
-			console.log("[TemplateBrowser] Template selected and loaded:", templateData.tool_name);
+			console.log("[TemplateBrowser] Template selected and loaded:", toolName);
 		} catch (e: any) {
 			error.value = `Failed to load template: ${e}`;
 			console.error("Failed to load template:", e);

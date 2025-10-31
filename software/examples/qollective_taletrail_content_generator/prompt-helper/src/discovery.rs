@@ -82,7 +82,7 @@ impl EnvelopeHandler<McpData, McpData> for DiscoveryHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "prompt-helper".to_string(),
                     server_name: "Prompt Helper Service".to_string(),
-                    tools: vec![],
+                    tools: mcp_tools::get_all_tools(),
                     capabilities: tool_registrations
                         .iter()
                         .flat_map(|t| t.capabilities.clone())
@@ -166,7 +166,7 @@ impl EnvelopeHandler<McpData, McpData> for HealthHandler {
                 server_info: Some(qollective::types::mcp::McpServerInfo {
                     server_id: "prompt-helper".to_string(),
                     server_name: "Prompt Helper Service".to_string(),
-                    tools: vec![],
+                    tools: mcp_tools::get_all_tools(),
                     capabilities: vec!["healthy".to_string()],
                     metadata: qollective::types::mcp::ServerMetadata {
                         description: Some(format!(
