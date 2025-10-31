@@ -122,6 +122,43 @@ pub mod monitoring {
         "Failed",
         "ToolExecution",
     ];
+
+    // ========================================================================
+    // NATS Monitoring Configuration
+    // ========================================================================
+
+    /// Number of retry attempts for event emission
+    pub const EMISSION_RETRY_ATTEMPTS: usize = 3;
+
+    /// Delay between emission retry attempts in milliseconds
+    pub const EMISSION_RETRY_DELAY_MS: u64 = 100;
+
+    /// Interval for sending diagnostics updates in seconds
+    pub const DIAGNOSTICS_INTERVAL_SECS: u64 = 5;
+
+    /// Number of retry attempts for auto-start connection
+    pub const AUTO_START_RETRY_ATTEMPTS: usize = 3;
+
+    /// Delay between auto-start retry attempts in seconds
+    pub const AUTO_START_RETRY_DELAY_SECS: u64 = 2;
+
+    /// Timeout for graceful shutdown in seconds
+    pub const SHUTDOWN_TIMEOUT_SECS: u64 = 5;
+
+    /// NATS monitoring event names
+    pub mod events {
+        /// Event for NATS messages received
+        pub const NATS_MESSAGE: &str = "nats-message";
+
+        /// Event for periodic diagnostics updates
+        pub const DIAGNOSTICS: &str = "nats-monitor-diagnostics";
+
+        /// Event for emission errors
+        pub const ERROR: &str = "nats-monitor-error";
+
+        /// Event for connection status updates
+        pub const STATUS: &str = "nats-monitor-status";
+    }
 }
 
 // ============================================================================

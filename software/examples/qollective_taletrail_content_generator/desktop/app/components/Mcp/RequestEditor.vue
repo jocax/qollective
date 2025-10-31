@@ -124,41 +124,41 @@
 
 	// Subject mismatch detection
 	const showSubjectMismatch = ref(false);
-	const targetServerName = ref('');
-	const currentServerName = ref('');
+	const targetServerName = ref("");
+	const currentServerName = ref("");
 
 	// Check for subject mismatch
 	const checkSubjectMismatch = () => {
-		console.log('[RequestEditor] checkSubjectMismatch() called');
-		console.log('[RequestEditor] Current store.selectedServer:', mcpStore.selectedServer);
+		console.log("[RequestEditor] checkSubjectMismatch() called");
+		console.log("[RequestEditor] Current store.selectedServer:", mcpStore.selectedServer);
 
 		try {
 			const template = mcpStore.templateContent;
 			if (!template) {
-				console.log('[RequestEditor] No template, hiding warning');
+				console.log("[RequestEditor] No template, hiding warning");
 				showSubjectMismatch.value = false;
 				return;
 			}
 
-			const subject = template.subject || '';
-			console.log('[RequestEditor] Template subject:', subject);
-			const subjectParts = subject.split('.');
+			const subject = template.subject || "";
+			console.log("[RequestEditor] Template subject:", subject);
+			const subjectParts = subject.split(".");
 
-			if (subjectParts.length === 3 && subjectParts[0] === 'mcp' && subjectParts[2] === 'request') {
+			if (subjectParts.length === 3 && subjectParts[0] === "mcp" && subjectParts[2] === "request") {
 				targetServerName.value = subjectParts[1];
 				currentServerName.value = mcpStore.selectedServer;
 				showSubjectMismatch.value = targetServerName.value !== currentServerName.value;
 
-				console.log('[RequestEditor] Subject analysis:');
-				console.log('  - Target server (from subject):', targetServerName.value);
-				console.log('  - Current server (from store):', currentServerName.value);
-				console.log('  - Mismatch:', showSubjectMismatch.value);
+				console.log("[RequestEditor] Subject analysis:");
+				console.log("  - Target server (from subject):", targetServerName.value);
+				console.log("  - Current server (from store):", currentServerName.value);
+				console.log("  - Mismatch:", showSubjectMismatch.value);
 			} else {
-				console.log('[RequestEditor] Subject pattern did not match, hiding warning');
+				console.log("[RequestEditor] Subject pattern did not match, hiding warning");
 				showSubjectMismatch.value = false;
 			}
 		} catch (error) {
-			console.error('[RequestEditor] Error in checkSubjectMismatch:', error);
+			console.error("[RequestEditor] Error in checkSubjectMismatch:", error);
 			showSubjectMismatch.value = false;
 		}
 	};
@@ -182,7 +182,7 @@
 
 	// Watch for selected server changes to update mismatch detection
 	watch(() => mcpStore.selectedServer, (newServer, oldServer) => {
-		console.log('[RequestEditor] Watcher triggered: mcpStore.selectedServer changed from', oldServer, 'to', newServer);
+		console.log("[RequestEditor] Watcher triggered: mcpStore.selectedServer changed from", oldServer, "to", newServer);
 		checkSubjectMismatch();
 	}, { immediate: true });
 
@@ -190,9 +190,9 @@
 	function getToolName() {
 		try {
 			const parsed = JSON.parse(localJson.value);
-			return parsed.envelope?.payload?.tool_call?.params?.name || 'unknown';
+			return parsed.envelope?.payload?.tool_call?.params?.name || "unknown";
 		} catch {
-			return 'unknown';
+			return "unknown";
 		}
 	}
 

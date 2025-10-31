@@ -173,14 +173,14 @@
 		const toolName = template.envelope?.payload?.tool_call?.params?.name || "unknown";
 		const toolArguments = template.envelope?.payload?.tool_call?.params?.arguments || {};
 		const requestId = template.envelope?.meta?.request_id || crypto.randomUUID();
-		const tenantId = parseInt(template.envelope?.meta?.tenant || "1");
+		const tenantId = Number.parseInt(template.envelope?.meta?.tenant || "1");
 
 		// Build the NATS subject based on selected server (or use from template)
 		const subject = template.subject || `mcp.${store.selectedServer}.request`;
 
 		// Extract server name from subject (e.g., "mcp.prompt-helper.request" → "prompt-helper")
-		const subjectParts = subject.split('.');
-		const targetServer = (subjectParts.length === 3 && subjectParts[0] === 'mcp' && subjectParts[2] === 'request')
+		const subjectParts = subject.split(".");
+		const targetServer = (subjectParts.length === 3 && subjectParts[0] === "mcp" && subjectParts[2] === "request")
 			? subjectParts[1]
 			: store.selectedServer; // Fallback to UI tab if subject doesn't match pattern
 

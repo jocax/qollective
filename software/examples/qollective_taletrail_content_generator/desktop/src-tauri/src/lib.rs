@@ -3,7 +3,8 @@
 use tauri::{
 	menu::{Menu, MenuItem},
 	tray::TrayIconBuilder,
-	Manager
+	Manager,
+	Emitter
 };
 
 pub mod error;
@@ -79,18 +80,105 @@ pub fn run() {
 				println!("[TaleTrail] Example templates initialized from: {:?}", source_templates_path);
 			}
 
-			// Auto-start NATS monitoring
+			// Auto-start NATS monitoring with retry logic
 			let app_handle = app.handle().clone();
 			let config_for_monitoring = app_config_for_setup.clone();
 			tauri::async_runtime::spawn(async move {
+				use constants::monitoring::{AUTO_START_RETRY_ATTEMPTS, AUTO_START_RETRY_DELAY_SECS, events};
+				use chrono::Utc;
+
 				let nats_url = config_for_monitoring.nats.url.clone();
 				let ca_cert_path = config_for_monitoring.ca_cert_path();
 				let nkey_path = config_for_monitoring.nkey_path();
 
-				match nats::monitoring::start_monitoring(nats_url, app_handle, ca_cert_path, nkey_path).await {
-					Ok(_) => eprintln!("[TaleTrail] NATS monitoring started successfully"),
-					Err(e) => eprintln!("[TaleTrail] Warning: Failed to start NATS monitoring: {}", e),
+				// DIAGNOSTIC: Log configuration details
+				eprintln!("[TaleTrail] [{}] [DIAGNOSTIC] Monitoring auto-start configuration:", Utc::now().to_rfc3339());
+				eprintln!("  - NATS URL: {}", nats_url);
+				eprintln!("  - CA Cert Path: {:?}", ca_cert_path);
+				eprintln!("  - NKey Path: {:?}", nkey_path);
+				eprintln!("  - Max Retry Attempts: {}", AUTO_START_RETRY_ATTEMPTS);
+				eprintln!("  - Retry Delay: {} seconds", AUTO_START_RETRY_DELAY_SECS);
+
+				let mut last_error = None;
+
+				for attempt in 1..=AUTO_START_RETRY_ATTEMPTS {
+					eprintln!(
+						"[TaleTrail] [{}] [INFO] NATS monitoring auto-start attempt {}/{}",
+						Utc::now().to_rfc3339(),
+						attempt,
+						AUTO_START_RETRY_ATTEMPTS
+					);
+
+					// DIAGNOSTIC: Log attempt details
+					eprintln!(
+						"[TaleTrail] [{}] [DIAGNOSTIC] Attempting connection with:",
+						Utc::now().to_rfc3339()
+					);
+					eprintln!("  - URL: {}", nats_url);
+
+					match nats::monitoring::start_monitoring(
+						nats_url.clone(),
+						app_handle.clone(),
+						ca_cert_path.clone(),
+						nkey_path.clone()
+					).await {
+						Ok(_) => {
+							eprintln!(
+								"[TaleTrail] [{}] [INFO] NATS monitoring started successfully on attempt {}",
+								Utc::now().to_rfc3339(),
+								attempt
+							);
+
+							// Emit success status to frontend
+							let status_payload = serde_json::json!({
+								"connected": true,
+								"message": format!("NATS monitoring connected on attempt {}", attempt),
+								"timestamp": Utc::now().to_rfc3339(),
+								"attempt": attempt
+							});
+							let _ = app_handle.emit(events::STATUS, &status_payload);
+
+							return; // Success, exit retry loop
+						}
+						Err(e) => {
+							last_error = Some(e.to_string());
+							eprintln!(
+								"[TaleTrail] [{}] [WARN] NATS monitoring attempt {}/{} failed: {}",
+								Utc::now().to_rfc3339(),
+								attempt,
+								AUTO_START_RETRY_ATTEMPTS,
+								e
+							);
+
+							if attempt < AUTO_START_RETRY_ATTEMPTS {
+								eprintln!(
+									"[TaleTrail] [{}] [INFO] Retrying in {} seconds...",
+									Utc::now().to_rfc3339(),
+									AUTO_START_RETRY_DELAY_SECS
+								);
+								tokio::time::sleep(tokio::time::Duration::from_secs(AUTO_START_RETRY_DELAY_SECS)).await;
+							}
+						}
+					}
 				}
+
+				// All attempts failed, emit error status
+				let error_message = last_error.unwrap_or_else(|| "Unknown error".to_string());
+				eprintln!(
+					"[TaleTrail] [{}] [ERROR] Failed to start NATS monitoring after {} attempts: {}",
+					Utc::now().to_rfc3339(),
+					AUTO_START_RETRY_ATTEMPTS,
+					error_message
+				);
+
+				let error_payload = serde_json::json!({
+					"connected": false,
+					"message": format!("Failed to connect after {} attempts", AUTO_START_RETRY_ATTEMPTS),
+					"error": error_message,
+					"timestamp": Utc::now().to_rfc3339(),
+					"attempts": AUTO_START_RETRY_ATTEMPTS
+				});
+				let _ = app_handle.emit(events::STATUS, &error_payload);
 			});
 
 			// Auto-start NATS connection for MCP requests

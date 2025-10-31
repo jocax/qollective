@@ -1,24 +1,24 @@
 {
-  "subject": "mcp.prompt.helper",
-  "envelope": {
-    "meta": {
-      "request_id": "550e8400-e29b-41d4-a716-446655440002",
-      "tenant": "1",
-      "tracing": {
-        "trace_id": "template-get-model-for-language",
-        "operation_name": "get_model_for_language"
-      }
-    },
-    "payload": {
-      "tool_call": {
-        "method": "tools/call",
-        "params": {
-          "name": "get_model_for_language",
-          "arguments": {
-            "language": "en"
-          }
-        }
-      }
-    }
-  }
+	"subject": "mcp.prompt.helper",
+	"envelope": {
+		"meta": {
+			"request_id": "550e8400-e29b-41d4-a716-446655440002",
+			"tenant": "1",
+			"tracing": {
+				"trace_id": "template-get-model-for-language",
+				"operation_name": "get_model_for_language"
+			}
+		},
+		"payload": {
+			"tool_call": {
+				"method": "tools/call",
+				"params": {
+					"name": "get_model_for_language",
+					"arguments": {
+						"language": "en"
+					}
+				}
+			}
+		}
+	}
 }

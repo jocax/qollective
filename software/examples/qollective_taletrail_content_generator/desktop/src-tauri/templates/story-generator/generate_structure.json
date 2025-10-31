@@ -1,40 +1,40 @@
 {
-  "subject": "mcp.story.generate",
-  "envelope": {
-    "meta": {
-      "request_id": "550e8400-e29b-41d4-a716-446655440006",
-      "tenant": "1",
-      "tracing": {
-        "trace_id": "template-generate-structure",
-        "operation_name": "generate_structure"
-      }
-    },
-    "payload": {
-      "tool_call": {
-        "method": "tools/call",
-        "params": {
-          "name": "generate_structure",
-          "arguments": {
-            "generation_request": {
-              "theme": "Space Adventure",
-              "age_group": "6-8",
-              "language": "en",
-              "node_count": 8,
-              "tenant_id": 1,
-              "educational_goals": [
-                "Problem solving",
-                "Basic astronomy",
-                "Teamwork"
-              ],
-              "vocabulary_level": "basic",
-              "required_elements": [
-                "Moral lesson",
-                "Educational content"
-              ]
-            }
-          }
-        }
-      }
-    }
-  }
+	"subject": "mcp.story.generate",
+	"envelope": {
+		"meta": {
+			"request_id": "550e8400-e29b-41d4-a716-446655440006",
+			"tenant": "1",
+			"tracing": {
+				"trace_id": "template-generate-structure",
+				"operation_name": "generate_structure"
+			}
+		},
+		"payload": {
+			"tool_call": {
+				"method": "tools/call",
+				"params": {
+					"name": "generate_structure",
+					"arguments": {
+						"generation_request": {
+							"theme": "Space Adventure",
+							"age_group": "6-8",
+							"language": "en",
+							"node_count": 8,
+							"tenant_id": 1,
+							"educational_goals": [
+								"Problem solving",
+								"Basic astronomy",
+								"Teamwork"
+							],
+							"vocabulary_level": "basic",
+							"required_elements": [
+								"Moral lesson",
+								"Educational content"
+							]
+						}
+					}
+				}
+			}
+		}
+	}
 }

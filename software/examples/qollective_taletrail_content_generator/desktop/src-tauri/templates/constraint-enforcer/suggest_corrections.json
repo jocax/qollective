@@ -1,52 +1,52 @@
 {
-  "subject": "mcp.constraint.enforce",
-  "envelope": {
-    "meta": {
-      "request_id": "550e8400-e29b-41d4-a716-446655440012",
-      "tenant": "1",
-      "tracing": {
-        "trace_id": "template-suggest-corrections",
-        "operation_name": "suggest_corrections"
-      }
-    },
-    "payload": {
-      "tool_call": {
-        "method": "tools/call",
-        "params": {
-          "name": "suggest_corrections",
-          "arguments": {
-            "content_node": {
-              "id": "node_002",
-              "content": {
-                "type": "interactive_story_node",
-                "node_id": "node_002",
-                "text": "The astronaut utilized sophisticated astronomical instrumentation to analyze the extraterrestrial crystalline formations.",
-                "choices": [
-                  "Implement comprehensive analysis protocols",
-                  "Terminate investigation procedures"
-                ],
-                "convergence_point": false,
-                "next_nodes": [],
-                "educational_content": null,
-                "metadata": {
-                  "word_count": 15,
-                  "reading_level": "advanced"
-                }
-              }
-            },
-            "generation_request": {
-              "theme": "Space Adventure",
-              "age_group": "6-8",
-              "language": "en",
-              "node_count": 8,
-              "tenant_id": 1,
-              "educational_goals": ["science", "problem-solving"],
-              "vocabulary_level": "basic",
-              "required_elements": ["moral lesson"]
-            }
-          }
-        }
-      }
-    }
-  }
+	"subject": "mcp.constraint.enforce",
+	"envelope": {
+		"meta": {
+			"request_id": "550e8400-e29b-41d4-a716-446655440012",
+			"tenant": "1",
+			"tracing": {
+				"trace_id": "template-suggest-corrections",
+				"operation_name": "suggest_corrections"
+			}
+		},
+		"payload": {
+			"tool_call": {
+				"method": "tools/call",
+				"params": {
+					"name": "suggest_corrections",
+					"arguments": {
+						"content_node": {
+							"id": "node_002",
+							"content": {
+								"type": "interactive_story_node",
+								"node_id": "node_002",
+								"text": "The astronaut utilized sophisticated astronomical instrumentation to analyze the extraterrestrial crystalline formations.",
+								"choices": [
+									"Implement comprehensive analysis protocols",
+									"Terminate investigation procedures"
+								],
+								"convergence_point": false,
+								"next_nodes": [],
+								"educational_content": null,
+								"metadata": {
+									"word_count": 15,
+									"reading_level": "advanced"
+								}
+							}
+						},
+						"generation_request": {
+							"theme": "Space Adventure",
+							"age_group": "6-8",
+							"language": "en",
+							"node_count": 8,
+							"tenant_id": 1,
+							"educational_goals": ["science", "problem-solving"],
+							"vocabulary_level": "basic",
+							"required_elements": ["moral lesson"]
+						}
+					}
+				}
+			}
+		}
+	}
 }

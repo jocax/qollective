@@ -1,85 +1,85 @@
 {
-  "subject": "mcp.story.generate",
-  "envelope": {
-    "meta": {
-      "request_id": "550e8400-e29b-41d4-a716-446655440008",
-      "tenant": "1",
-      "tracing": {
-        "trace_id": "template-validate-paths",
-        "operation_name": "validate_paths"
-      }
-    },
-    "payload": {
-      "tool_call": {
-        "method": "tools/call",
-        "params": {
-          "name": "validate_paths",
-          "arguments": {
-            "dag": {
-              "nodes": {
-                "start": {
-                  "id": "start",
-                  "incoming_edges": 0,
-                  "outgoing_edges": 2,
-                  "content": {
-                    "type": "interactive_story_node",
-                    "node_id": "start",
-                    "text": "Beginning of story",
-                    "choices": [],
-                    "convergence_point": false,
-                    "next_nodes": []
-                  }
-                },
-                "node1": {
-                  "id": "node1",
-                  "incoming_edges": 1,
-                  "outgoing_edges": 1,
-                  "content": {
-                    "type": "interactive_story_node",
-                    "node_id": "node1",
-                    "text": "Middle of story",
-                    "choices": [],
-                    "convergence_point": false,
-                    "next_nodes": []
-                  }
-                },
-                "end": {
-                  "id": "end",
-                  "incoming_edges": 2,
-                  "outgoing_edges": 0,
-                  "content": {
-                    "type": "interactive_story_node",
-                    "node_id": "end",
-                    "text": "End of story",
-                    "choices": [],
-                    "convergence_point": false,
-                    "next_nodes": []
-                  }
-                }
-              },
-              "edges": [
-                {
-                  "from_node_id": "start",
-                  "to_node_id": "node1",
-                  "choice_id": "choice_start_to_node1"
-                },
-                {
-                  "from_node_id": "start",
-                  "to_node_id": "end",
-                  "choice_id": "choice_start_to_end"
-                },
-                {
-                  "from_node_id": "node1",
-                  "to_node_id": "end",
-                  "choice_id": "choice_node1_to_end"
-                }
-              ],
-              "start_node_id": "start",
-              "convergence_points": []
-            }
-          }
-        }
-      }
-    }
-  }
+	"subject": "mcp.story.generate",
+	"envelope": {
+		"meta": {
+			"request_id": "550e8400-e29b-41d4-a716-446655440008",
+			"tenant": "1",
+			"tracing": {
+				"trace_id": "template-validate-paths",
+				"operation_name": "validate_paths"
+			}
+		},
+		"payload": {
+			"tool_call": {
+				"method": "tools/call",
+				"params": {
+					"name": "validate_paths",
+					"arguments": {
+						"dag": {
+							"nodes": {
+								"start": {
+									"id": "start",
+									"incoming_edges": 0,
+									"outgoing_edges": 2,
+									"content": {
+										"type": "interactive_story_node",
+										"node_id": "start",
+										"text": "Beginning of story",
+										"choices": [],
+										"convergence_point": false,
+										"next_nodes": []
+									}
+								},
+								"node1": {
+									"id": "node1",
+									"incoming_edges": 1,
+									"outgoing_edges": 1,
+									"content": {
+										"type": "interactive_story_node",
+										"node_id": "node1",
+										"text": "Middle of story",
+										"choices": [],
+										"convergence_point": false,
+										"next_nodes": []
+									}
+								},
+								"end": {
+									"id": "end",
+									"incoming_edges": 2,
+									"outgoing_edges": 0,
+									"content": {
+										"type": "interactive_story_node",
+										"node_id": "end",
+										"text": "End of story",
+										"choices": [],
+										"convergence_point": false,
+										"next_nodes": []
+									}
+								}
+							},
+							"edges": [
+								{
+									"from_node_id": "start",
+									"to_node_id": "node1",
+									"choice_id": "choice_start_to_node1"
+								},
+								{
+									"from_node_id": "start",
+									"to_node_id": "end",
+									"choice_id": "choice_start_to_end"
+								},
+								{
+									"from_node_id": "node1",
+									"to_node_id": "end",
+									"choice_id": "choice_node1_to_end"
+								}
+							],
+							"start_node_id": "start",
+							"convergence_points": []
+						}
+					}
+				}
+			}
+		}
+	}
 }

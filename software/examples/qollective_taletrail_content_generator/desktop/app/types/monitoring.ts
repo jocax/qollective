@@ -29,3 +29,25 @@ export type EndpointFilter
 		| "quality-control"
 		| "constraint-enforcer"
 		| "prompt-helper";
+
+/**
+ * Monitoring Diagnostics Interface
+ * Tracks message flow and connection health
+ */
+export interface MonitoringDiagnostics {
+	received: number // Total messages received from backend
+	emitted: number // Total messages successfully displayed
+	failures: number // Number of emission failures
+	lastMessage?: string // ISO timestamp of last message received
+	connected: string // ISO timestamp when connection was established
+}
+
+/**
+ * Monitoring Error Interface
+ * Represents errors that occur during monitoring
+ */
+export interface MonitoringError {
+	message: string // Error message
+	timestamp: string // ISO timestamp when error occurred
+	severity: "warning" | "error" // Error severity level
+}

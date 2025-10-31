@@ -381,7 +381,7 @@ impl NatsClient {
             sampling_rate: None,
             sampled: None,
             trace_state: None,
-            operation_name: Some(tool_name),
+            operation_name: Some(tool_name.clone()),
             span_kind: None,
             span_status: None,
             tags: Default::default(),
@@ -390,9 +390,19 @@ impl NatsClient {
         // Create envelope
         let envelope = Envelope::new(metadata, mcp_data);
 
+        // DIAGNOSTIC: Log envelope creation
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Preparing MCP request:");
+        eprintln!("  - Tool name: {}", tool_name);
+        eprintln!("  - Tenant ID: {}", tenant_id);
+        eprintln!("  - Trace ID: {}", trace_id);
+        eprintln!("  - Request ID: {:?}", envelope.meta.request_id);
+
         // Encode envelope
         let payload = NatsEnvelopeCodec::encode(&envelope)
             .map_err(|e| AppError::NatsError(format!("Failed to encode envelope: {}", e)))?;
+
+        // DIAGNOSTIC: Log encoding success
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Envelope encoded: {} bytes", payload.len());
 
         // Use custom timeout if provided, otherwise use default from config
         let request_timeout = timeout.unwrap_or_else(|| {
@@ -402,11 +412,12 @@ impl NatsClient {
         eprintln!("[TaleTrail NATS] Sending MCP tool request:");
         eprintln!("  - subject: {}", subject);
         eprintln!("  - timeout: {:?}", request_timeout);
+        eprintln!("  - payload size: {} bytes", payload.len());
 
         // Send request and wait for response with timeout using tokio timeout
         let response = tokio::time::timeout(
             request_timeout,
-            client.request(subject.to_string(), payload.into())
+            client.request(subject.to_string(), payload.clone().into())
         )
             .await
             .map_err(|_| {
@@ -420,9 +431,27 @@ impl NatsClient {
 
         eprintln!("[TaleTrail NATS] Response received: {} bytes", response.payload.len());
 
+        // DIAGNOSTIC: Publish copy for monitoring (fire-and-forget)
+        // This ensures monitoring wildcard subscription 'mcp.>' receives the message
+        // since request-reply pattern uses private _INBOX that doesn't hit wildcards
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Publishing monitoring copy to {}", subject);
+        match client.publish(subject.to_string(), payload.into()).await {
+            Ok(_) => {
+                eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Successfully published monitoring copy");
+            }
+            Err(e) => {
+                eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Warning: Failed to publish monitoring copy: {}", e);
+                // Non-fatal - don't return error, monitoring is nice-to-have
+            }
+        }
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Response subject: {}", response.subject);
+
         // Decode response envelope
         let response_envelope: Envelope<McpData> = NatsEnvelopeCodec::decode(&response.payload)
             .map_err(|e| AppError::NatsError(format!("Failed to decode response: {}", e)))?;
+
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Response envelope decoded successfully");
+        eprintln!("  - Response request_id: {:?}", response_envelope.meta.request_id);
 
         // Check if response indicates an error in the tool_response
         if let Some(ref tool_response) = response_envelope.payload.tool_response {
@@ -481,9 +510,28 @@ impl NatsClient {
 
         // Send request and wait for response
         let response = client
-            .request(subject.to_string(), payload.into())
+            .request(subject.to_string(), payload.clone().into())
             .await
             .map_err(|e| AppError::NatsError(format!("Failed to send request to {}: {}", subject, e)))?;
+
+        // DIAGNOSTIC: Publish copy for monitoring (fire-and-forget)
+        // This ensures monitoring wildcard subscription 'mcp.>' receives the message
+        // since request-reply pattern uses private _INBOX that doesn't hit wildcards
+        eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Publishing monitoring copy to {}", subject);
+        match client.publish(subject.to_string(), payload.into()).await {
+            Ok(_) => {
+                eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Successfully published monitoring copy");
+            }
+            Err(e) => {
+                eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Warning: Failed to publish monitoring copy: {}", e);
+                // Non-fatal - don't return error, monitoring is nice-to-have
+            }
+        }
+
+        // Flush to ensure message is sent immediately to monitoring
+        if let Err(e) = client.flush().await {
+            eprintln!("[TaleTrail NATS] [DIAGNOSTIC] Warning: Failed to flush after publish: {}", e);
+        }
 
         // Decode response envelope
         let response_envelope: Envelope<McpData> = NatsEnvelopeCodec::decode(&response.payload)

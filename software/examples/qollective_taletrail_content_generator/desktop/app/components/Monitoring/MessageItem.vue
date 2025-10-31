@@ -177,7 +177,7 @@
 					toast.add({
 						title: "Copied",
 						description: "Payload copied to clipboard",
-						color: "green"
+						color: "primary"
 					});
 				})
 				.catch((err) => {
@@ -185,14 +185,14 @@
 					toast.add({
 						title: "Copy Failed",
 						description: "Failed to copy to clipboard",
-						color: "red"
+						color: "error"
 					});
 				});
 		} else {
 			toast.add({
 				title: "Copy Failed",
 				description: "Clipboard not available",
-				color: "red"
+				color: "warning"
 			});
 		}
 	}

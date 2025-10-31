@@ -1,8 +1,7 @@
 import type {
-	CallToolResult,
-	McpResponseEnvelope,
 	GroupedTemplates,
 	JsonSchema,
+	McpResponseEnvelope,
 	ServerName,
 	TemplateData,
 	TemplateInfo

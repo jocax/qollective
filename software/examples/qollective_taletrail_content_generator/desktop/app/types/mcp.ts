@@ -206,7 +206,7 @@ export interface MonitoringMeta {
  * MCP payload section of the envelope
  */
 export interface McpPayload {
-	tool_call?: any  // CallToolRequest
+	tool_call?: any // CallToolRequest
 	tool_response?: CallToolResult
 	tool_registration?: any
 	discovery_data?: any

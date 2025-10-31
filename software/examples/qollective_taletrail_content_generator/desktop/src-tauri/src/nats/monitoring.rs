@@ -7,7 +7,7 @@ use async_nats::{Client, ConnectOptions, Subscriber};
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
 use chrono::Utc;
 use tauri::Emitter;
 use futures::StreamExt;
@@ -16,11 +16,44 @@ use futures::StreamExt;
 static MONITOR_STATE: once_cell::sync::Lazy<Arc<RwLock<Option<MonitoringState>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(None)));
 
+/// Monitoring diagnostics for tracking connection health and message flow
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonitoringDiagnostics {
+    /// When monitoring connection was established (ISO 8601)
+    pub connection_timestamp: String,
+    /// Total number of messages received from NATS
+    pub messages_received: u64,
+    /// Total number of messages successfully emitted to frontend
+    pub messages_emitted: u64,
+    /// Total number of emission failures
+    pub emission_failures: u64,
+    /// Timestamp of last received message (ISO 8601)
+    pub last_message_timestamp: Option<String>,
+    /// Current connection status
+    pub is_connected: bool,
+}
+
+impl MonitoringDiagnostics {
+    /// Create new diagnostics with default values
+    pub fn new() -> Self {
+        Self {
+            connection_timestamp: Utc::now().to_rfc3339(),
+            messages_received: 0,
+            messages_emitted: 0,
+            emission_failures: 0,
+            last_message_timestamp: None,
+            is_connected: true,
+        }
+    }
+}
+
 /// Internal monitoring state
 struct MonitoringState {
     client: Client,
     subscribers: Vec<Subscriber>,
     is_connected: bool,
+    diagnostics: Arc<RwLock<MonitoringDiagnostics>>,
+    shutdown_tx: broadcast::Sender<()>,
 }
 
 /// NATS message structure for frontend
@@ -112,6 +145,67 @@ fn extract_request_id(payload: &str) -> Option<String> {
     }
 }
 
+/// Emit event with retry logic
+async fn emit_with_retry<T: Serialize + Clone>(
+    app_handle: &tauri::AppHandle,
+    event: &str,
+    payload: &T,
+) -> Result<(), String> {
+    use crate::constants::monitoring::{EMISSION_RETRY_ATTEMPTS, EMISSION_RETRY_DELAY_MS};
+
+    for attempt in 1..=EMISSION_RETRY_ATTEMPTS {
+        match app_handle.emit(event, payload) {
+            Ok(_) => {
+                if attempt > 1 {
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] Successfully emitted '{}' on attempt {}",
+                        Utc::now().to_rfc3339(),
+                        event,
+                        attempt
+                    );
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!(
+                    "[NATS Monitor] [{}] [WARN] Emission attempt {}/{} failed for '{}': {}",
+                    Utc::now().to_rfc3339(),
+                    attempt,
+                    EMISSION_RETRY_ATTEMPTS,
+                    event,
+                    e
+                );
+
+                if attempt < EMISSION_RETRY_ATTEMPTS {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(EMISSION_RETRY_DELAY_MS)).await;
+                } else {
+                    return Err(format!("Failed after {} attempts: {}", EMISSION_RETRY_ATTEMPTS, e));
+                }
+            }
+        }
+    }
+
+    Err("All retry attempts exhausted".to_string())
+}
+
+/// Emit diagnostics to frontend
+async fn emit_diagnostics(
+    app_handle: &tauri::AppHandle,
+    diagnostics: &Arc<RwLock<MonitoringDiagnostics>>,
+) {
+    use crate::constants::monitoring::events;
+
+    let diag = diagnostics.read().await.clone();
+
+    if let Err(e) = emit_with_retry(app_handle, events::DIAGNOSTICS, &diag).await {
+        eprintln!(
+            "[NATS Monitor] [{}] [ERROR] Failed to emit diagnostics: {}",
+            Utc::now().to_rfc3339(),
+            e
+        );
+    }
+}
+
 /// Start NATS monitoring
 ///
 /// Connects to NATS and subscribes to wildcard subjects:
@@ -125,13 +219,26 @@ pub async fn start_monitoring(
     ca_cert_path: std::path::PathBuf,
     nkey_file_path: std::path::PathBuf,
 ) -> AppResult<()> {
+    use crate::constants::monitoring::events;
+
     // Check if already monitoring
     {
         let state = MONITOR_STATE.read().await;
         if state.is_some() {
+            eprintln!(
+                "[NATS Monitor] [{}] [INFO] Already monitoring, skipping start",
+                Utc::now().to_rfc3339()
+            );
             return Ok(()); // Already monitoring
         }
     }
+
+    let start_time = Utc::now();
+    eprintln!(
+        "[NATS Monitor] [{}] [INFO] Starting NATS monitoring connection to {}",
+        start_time.to_rfc3339(),
+        nats_url
+    );
 
     // Build connect options
     let mut opts = ConnectOptions::new()
@@ -171,7 +278,11 @@ pub async fn start_monitoring(
         .await
         .map_err(|e| AppError::ConnectionError(format!("Failed to connect to NATS at {}: {}", nats_url, e)))?;
 
-    eprintln!("[NATS Monitor] Connected to {} for monitoring", nats_url);
+    eprintln!(
+        "[NATS Monitor] [{}] [INFO] Connected to {} for monitoring",
+        Utc::now().to_rfc3339(),
+        nats_url
+    );
 
     // Subscribe to wildcard subjects
     let mcp_subscriber = client
@@ -184,36 +295,250 @@ pub async fn start_monitoring(
         .await
         .map_err(|e| AppError::NatsError(format!("Failed to subscribe to taletrail.>: {}", e)))?;
 
-    eprintln!("[NATS Monitor] Subscribed to mcp.> and taletrail.>");
+    eprintln!(
+        "[NATS Monitor] [{}] [INFO] Subscribed to mcp.> and taletrail.>",
+        Utc::now().to_rfc3339()
+    );
+
+    // DIAGNOSTIC: Test if subscription is working by publishing a test message to itself
+    eprintln!("[NATS Monitor] [DIAGNOSTIC] Testing subscription by publishing test message to mcp.test");
+    if let Err(e) = client.publish("mcp.test".to_string(), "test-payload".into()).await {
+        eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to publish test message: {}", e);
+    } else {
+        eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message published successfully");
+        // Flush to ensure it's sent immediately
+        if let Err(e) = client.flush().await {
+            eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to flush test message: {}", e);
+        } else {
+            eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message flushed successfully");
+        }
+    }
+
+    // DIAGNOSTIC: Log subscription details
+    eprintln!(
+        "[NATS Monitor] [{}] [DIAGNOSTIC] Monitoring subscriptions established:",
+        Utc::now().to_rfc3339()
+    );
+    eprintln!("  - MCP subscription: mcp.> (catches all mcp.* subjects)");
+    eprintln!("  - TaleTrail subscription: taletrail.> (catches all taletrail.* subjects)");
+    eprintln!("  - Connection: {}", nats_url);
+
+    // Create diagnostics tracker
+    let diagnostics = Arc::new(RwLock::new(MonitoringDiagnostics::new()));
+
+    // Create shutdown channel
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Spawn background task for MCP messages
     let mcp_handle = app_handle.clone();
+    let mcp_diagnostics = diagnostics.clone();
+    let mut mcp_shutdown_rx = shutdown_tx.subscribe();
     tauri::async_runtime::spawn(async move {
         let mut mcp_sub = mcp_subscriber;
-        while let Some(msg) = mcp_sub.next().await {
-            let nats_message = NatsMessage::new(msg.subject.to_string(), msg.payload.to_vec());
+        eprintln!(
+            "[NATS Monitor] [{}] [DIAGNOSTIC] MCP subscription loop started, waiting for messages on 'mcp.>'",
+            Utc::now().to_rfc3339()
+        );
+        loop {
+            tokio::select! {
+                Some(msg) = mcp_sub.next() => {
+                    let timestamp = Utc::now();
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] Received MCP message on subject: {}",
+                        timestamp.to_rfc3339(),
+                        msg.subject
+                    );
 
-            // Emit to frontend
-            if let Err(e) = mcp_handle.emit("nats-message", &nats_message) {
-                eprintln!("[NATS Monitor] Failed to emit message: {}", e);
+                    // DIAGNOSTIC: Log message details
+                    eprintln!(
+                        "[NATS Monitor] [{}] [DIAGNOSTIC] MCP message details:",
+                        timestamp.to_rfc3339()
+                    );
+                    eprintln!("  - Subject: {}", msg.subject);
+                    eprintln!("  - Payload size: {} bytes", msg.payload.len());
+                    eprintln!("  - Reply subject: {:?}", msg.reply);
+                    let payload_preview = String::from_utf8_lossy(&msg.payload[..msg.payload.len().min(100)]);
+                    eprintln!("  - Payload preview: {}...", payload_preview);
+
+                    // Update diagnostics
+                    {
+                        let mut diag = mcp_diagnostics.write().await;
+                        diag.messages_received += 1;
+                        diag.last_message_timestamp = Some(timestamp.to_rfc3339());
+                    }
+
+                    let nats_message = NatsMessage::new(msg.subject.to_string(), msg.payload.to_vec());
+
+                    // DIAGNOSTIC: Log before emission attempt
+                    eprintln!(
+                        "[NATS Monitor] [{}] [DIAGNOSTIC] Attempting to emit to frontend event '{}'",
+                        Utc::now().to_rfc3339(),
+                        events::NATS_MESSAGE
+                    );
+
+                    // Emit to frontend with retry
+                    match emit_with_retry(&mcp_handle, events::NATS_MESSAGE, &nats_message).await {
+                        Ok(_) => {
+                            let mut diag = mcp_diagnostics.write().await;
+                            diag.messages_emitted += 1;
+                            eprintln!(
+                                "[NATS Monitor] [{}] [INFO] Successfully emitted MCP message to frontend",
+                                Utc::now().to_rfc3339()
+                            );
+                            eprintln!(
+                                "[NATS Monitor] [{}] [DIAGNOSTIC] Total emitted: {}, Total received: {}",
+                                Utc::now().to_rfc3339(),
+                                diag.messages_emitted,
+                                diag.messages_received
+                            );
+                        }
+                        Err(e) => {
+                            let mut diag = mcp_diagnostics.write().await;
+                            diag.emission_failures += 1;
+                            eprintln!(
+                                "[NATS Monitor] [{}] [ERROR] Failed to emit MCP message after retries: {}",
+                                Utc::now().to_rfc3339(),
+                                e
+                            );
+
+                            // Emit error event to frontend
+                            let error_payload = serde_json::json!({
+                                "subject": msg.subject.to_string(),
+                                "error": e,
+                                "timestamp": Utc::now().to_rfc3339()
+                            });
+                            let _ = mcp_handle.emit(events::ERROR, &error_payload);
+                        }
+                    }
+                }
+                _ = mcp_shutdown_rx.recv() => {
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] MCP subscription received shutdown signal",
+                        Utc::now().to_rfc3339()
+                    );
+                    break;
+                }
             }
         }
-        eprintln!("[NATS Monitor] MCP subscription ended");
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] MCP subscription ended",
+            Utc::now().to_rfc3339()
+        );
     });
 
     // Spawn background task for TaleTrail messages
     let taletrail_handle = app_handle.clone();
+    let taletrail_diagnostics = diagnostics.clone();
+    let mut taletrail_shutdown_rx = shutdown_tx.subscribe();
     tauri::async_runtime::spawn(async move {
         let mut taletrail_sub = taletrail_subscriber;
-        while let Some(msg) = taletrail_sub.next().await {
-            let nats_message = NatsMessage::new(msg.subject.to_string(), msg.payload.to_vec());
+        eprintln!(
+            "[NATS Monitor] [{}] [DIAGNOSTIC] TaleTrail subscription loop started, waiting for messages on 'taletrail.>'",
+            Utc::now().to_rfc3339()
+        );
+        loop {
+            tokio::select! {
+                Some(msg) = taletrail_sub.next() => {
+                    let timestamp = Utc::now();
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] Received TaleTrail message on subject: {}",
+                        timestamp.to_rfc3339(),
+                        msg.subject
+                    );
 
-            // Emit to frontend
-            if let Err(e) = taletrail_handle.emit("nats-message", &nats_message) {
-                eprintln!("[NATS Monitor] Failed to emit message: {}", e);
+                    // DIAGNOSTIC: Log message details
+                    eprintln!(
+                        "[NATS Monitor] [{}] [DIAGNOSTIC] TaleTrail message details:",
+                        timestamp.to_rfc3339()
+                    );
+                    eprintln!("  - Subject: {}", msg.subject);
+                    eprintln!("  - Payload size: {} bytes", msg.payload.len());
+
+                    // Update diagnostics
+                    {
+                        let mut diag = taletrail_diagnostics.write().await;
+                        diag.messages_received += 1;
+                        diag.last_message_timestamp = Some(timestamp.to_rfc3339());
+                    }
+
+                    let nats_message = NatsMessage::new(msg.subject.to_string(), msg.payload.to_vec());
+
+                    // Emit to frontend with retry
+                    match emit_with_retry(&taletrail_handle, events::NATS_MESSAGE, &nats_message).await {
+                        Ok(_) => {
+                            let mut diag = taletrail_diagnostics.write().await;
+                            diag.messages_emitted += 1;
+                            eprintln!(
+                                "[NATS Monitor] [{}] [INFO] Successfully emitted TaleTrail message to frontend",
+                                Utc::now().to_rfc3339()
+                            );
+                            eprintln!(
+                                "[NATS Monitor] [{}] [DIAGNOSTIC] Total emitted: {}, Total received: {}",
+                                Utc::now().to_rfc3339(),
+                                diag.messages_emitted,
+                                diag.messages_received
+                            );
+                        }
+                        Err(e) => {
+                            let mut diag = taletrail_diagnostics.write().await;
+                            diag.emission_failures += 1;
+                            eprintln!(
+                                "[NATS Monitor] [{}] [ERROR] Failed to emit TaleTrail message after retries: {}",
+                                Utc::now().to_rfc3339(),
+                                e
+                            );
+
+                            // Emit error event to frontend
+                            let error_payload = serde_json::json!({
+                                "subject": msg.subject.to_string(),
+                                "error": e,
+                                "timestamp": Utc::now().to_rfc3339()
+                            });
+                            let _ = taletrail_handle.emit(events::ERROR, &error_payload);
+                        }
+                    }
+                }
+                _ = taletrail_shutdown_rx.recv() => {
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] TaleTrail subscription received shutdown signal",
+                        Utc::now().to_rfc3339()
+                    );
+                    break;
+                }
             }
         }
-        eprintln!("[NATS Monitor] TaleTrail subscription ended");
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] TaleTrail subscription ended",
+            Utc::now().to_rfc3339()
+        );
+    });
+
+    // Spawn diagnostics reporting task
+    let diagnostics_handle = app_handle.clone();
+    let diagnostics_reporter = diagnostics.clone();
+    let mut diagnostics_shutdown_rx = shutdown_tx.subscribe();
+    tauri::async_runtime::spawn(async move {
+        use crate::constants::monitoring::DIAGNOSTICS_INTERVAL_SECS;
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(DIAGNOSTICS_INTERVAL_SECS));
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    emit_diagnostics(&diagnostics_handle, &diagnostics_reporter).await;
+                }
+                _ = diagnostics_shutdown_rx.recv() => {
+                    eprintln!(
+                        "[NATS Monitor] [{}] [INFO] Diagnostics reporter received shutdown signal",
+                        Utc::now().to_rfc3339()
+                    );
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] Diagnostics reporter ended",
+            Utc::now().to_rfc3339()
+        );
     });
 
     // Store state (without subscribers since they're moved to background tasks)
@@ -223,26 +548,67 @@ pub async fn start_monitoring(
             client,
             subscribers: vec![], // Subscribers are owned by background tasks
             is_connected: true,
+            diagnostics: diagnostics.clone(),
+            shutdown_tx: shutdown_tx.clone(),
         });
     }
 
-    // Emit connection status event
-    if let Err(e) = app_handle.emit("nats-monitor-status", &serde_json::json!({
+    // Emit connection status event with retry
+    let status_payload = serde_json::json!({
         "connected": true,
-        "message": "NATS monitoring started"
-    })) {
-        eprintln!("[NATS Monitor] Failed to emit status: {}", e);
+        "message": "NATS monitoring started successfully",
+        "timestamp": Utc::now().to_rfc3339()
+    });
+
+    if let Err(e) = emit_with_retry(&app_handle, events::STATUS, &status_payload).await {
+        eprintln!(
+            "[NATS Monitor] [{}] [ERROR] Failed to emit connection status: {}",
+            Utc::now().to_rfc3339(),
+            e
+        );
     }
+
+    // Emit initial diagnostics
+    emit_diagnostics(&app_handle, &diagnostics).await;
+
+    eprintln!(
+        "[NATS Monitor] [{}] [INFO] Monitoring started successfully",
+        Utc::now().to_rfc3339()
+    );
 
     Ok(())
 }
 
 /// Stop NATS monitoring
 pub async fn stop_monitoring() -> AppResult<()> {
+    use crate::constants::monitoring::SHUTDOWN_TIMEOUT_SECS;
+
     let mut state = MONITOR_STATE.write().await;
 
     if let Some(monitoring_state) = state.take() {
-        // Unsubscribe all
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] Initiating graceful shutdown",
+            Utc::now().to_rfc3339()
+        );
+
+        // Send shutdown signal to all background tasks
+        let _ = monitoring_state.shutdown_tx.send(());
+
+        // Update diagnostics to reflect disconnection
+        {
+            let mut diag = monitoring_state.diagnostics.write().await;
+            diag.is_connected = false;
+        }
+
+        // Wait for background tasks to complete (with timeout)
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] Waiting for background tasks to complete (timeout: {}s)",
+            Utc::now().to_rfc3339(),
+            SHUTDOWN_TIMEOUT_SECS
+        );
+        tokio::time::sleep(tokio::time::Duration::from_secs(SHUTDOWN_TIMEOUT_SECS)).await;
+
+        // Unsubscribe all (subscribers vec is empty as they're owned by tasks, but keeping for future use)
         for mut subscriber in monitoring_state.subscribers {
             let _ = subscriber.unsubscribe().await;
         }
@@ -251,7 +617,15 @@ pub async fn stop_monitoring() -> AppResult<()> {
         monitoring_state.client.flush().await
             .map_err(|e| AppError::NatsError(format!("Failed to flush NATS client: {}", e)))?;
 
-        eprintln!("[NATS Monitor] Stopped monitoring");
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] NATS monitoring stopped successfully",
+            Utc::now().to_rfc3339()
+        );
+    } else {
+        eprintln!(
+            "[NATS Monitor] [{}] [INFO] No active monitoring to stop",
+            Utc::now().to_rfc3339()
+        );
     }
 
     Ok(())
