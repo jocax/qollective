@@ -1,0 +1,22 @@
+{
+	"tool_name": "orchestrate_generation",
+	"arguments": {
+		"generation_request": {
+			"theme": "Medieval Quest for the Sacred Artifact",
+			"age_group": "12-14",
+			"language": "en",
+			"tenant_id": 1,
+			"educational_goals": ["medieval history", "ethics", "strategy"],
+			"vocabulary_level": "intermediate",
+			"required_elements": ["honor code", "strategic thinking"],
+			"tags": ["medieval", "quest", "strategy"],
+			"dag_config": {
+				"node_count": 20,
+				"convergence_pattern": "MultipleConvergence",
+				"convergence_point_ratio": 0.33,
+				"max_depth": 15,
+				"branching_factor": 2
+			}
+		}
+	}
+}

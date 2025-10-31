@@ -1,0 +1,17 @@
+{
+	"tool_name": "orchestrate_generation",
+	"arguments": {
+		"generation_request": {
+			"theme": "Victorian Era Criminal Investigation and Early Forensics",
+			"age_group": "+18",
+			"language": "en",
+			"tenant_id": 1,
+			"node_count": 9,
+			"educational_goals": ["History", "Criminology", "Law Enforcement", "Medical Development", "Forensic Science"],
+			"vocabulary_level": "advanced",
+			"required_elements": ["industrialization", "state authority", "historical context", "social inequalities", "societal tensions"],
+			"tags": ["Victorian history", "criminal justice", "society", "forensics"],
+			"story_structure": "epic"
+		}
+	}
+}

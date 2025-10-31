@@ -1,0 +1,16 @@
+{
+	"tool_name": "orchestrate_generation",
+	"arguments": {
+		"generation_request": {
+			"theme": "Flora und Fauna an der Ostsee",
+			"age_group": "9-11",
+			"language": "de",
+			"tenant_id": 1,
+			"node_count": 15,
+			"educational_goals": ["Natur", "Tiere und Pflanzen", "Kausalität", "Plastik"],
+			"vocabulary_level": "advanced",
+			"tags": ["Politik der EU", "Geschichte", "Gesellschaft", "Natur"],
+			"story_structure": "epic"
+		}
+	}
+}

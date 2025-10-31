@@ -1,0 +1,21 @@
+{
+	"tool_name": "batch_validate",
+	"arguments": {
+		"content_nodes": [
+			{
+				"node_id": "node_001",
+				"content": "The adventure begins in a magical forest. Birds sing cheerful songs.",
+				"choices": ["Follow the path", "Climb a tree", "Talk to animals"],
+				"metadata": { "word_count": 14 }
+			},
+			{
+				"node_id": "node_002",
+				"content": "A friendly dragon appears. He offers to show you his treasure cave.",
+				"choices": ["Accept the offer", "Ask questions first", "Politely decline"],
+				"metadata": { "word_count": 15 }
+			}
+		],
+		"age_group": "6-8",
+		"educational_goals": ["curiosity", "respect", "safety"]
+	}
+}

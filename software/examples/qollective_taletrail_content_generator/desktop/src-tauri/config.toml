@@ -1,0 +1,339 @@
+# TaleTrail Desktop Application Configuration
+# This file contains default configuration values.
+# Override via .env file or system environment variables.
+#
+# ============================================================================
+# PATH RESOLUTION STRATEGY
+# ============================================================================
+#
+# Development Mode (cargo tauri dev):
+#   - Paths are relative to qollective_taletrail_content_generator/ directory
+#   - Example: "certs" → .../qollective_taletrail_content_generator/certs
+#
+# Production Mode (bundled Tauri app):
+#   - Option 1: Use relative paths (resolved from executable directory)
+#     certs_dir = "certs"     → <exe_dir>/certs
+#   - Option 2: Use absolute paths for system-wide installations
+#     certs_dir = "/etc/taletrail/certs"
+#     templates_dir = "/usr/share/taletrail/templates"
+#
+# See examples at bottom of this file for common production scenarios.
+
+[application]
+name = "TaleTrail Desktop"
+version = "0.1.0"
+
+# ============================================================================
+# NATS Configuration
+# ============================================================================
+
+[nats]
+# NATS server URL
+# Env override: TALETRAIL_NATS_URL
+url = "nats://localhost:5222"
+
+# Connection timeout in milliseconds
+# Env override: TALETRAIL_NATS_TIMEOUT_MS
+connection_timeout_ms = 5000
+
+# Request timeout in milliseconds (3 minutes for long-running content generation)
+# Env override: TALETRAIL_NATS_REQUEST_TIMEOUT_MS
+request_timeout_ms = 180000
+
+# Enable TLS for NATS connection
+# Env override: TALETRAIL_NATS_TLS_ENABLED
+tls_enabled = true
+
+# ============================================================================
+# TLS/Certificate Configuration
+# ============================================================================
+
+[tls]
+# Path to certificates directory
+# Development: relative to project root (qollective_taletrail_content_generator/)
+# Production: absolute path (e.g., /etc/taletrail/certs) or relative to executable
+# Env override: TALETRAIL_CERTS_DIR
+certs_dir = "certs"
+
+# CA certificate filename
+# Env override: TALETRAIL_CA_CERT_FILE
+ca_cert_file = "ca.pem"
+
+# NKeys directory path
+# Development: relative to project root
+# Production: absolute or relative to executable
+# Env override: TALETRAIL_NKEYS_DIR
+nkeys_dir = "nkeys"
+
+# Desktop NKey file
+# Env override: TALETRAIL_DESKTOP_NKEY_FILE
+desktop_nkey_file = "desktop.nk"
+
+# ============================================================================
+# Path Configuration
+# ============================================================================
+
+[paths]
+# Root directory for TaleTrail data
+# All data directories (templates, execution) are created under this root
+# Development: relative to executable (default: "taletrail-data")
+# Production: absolute path or relative to executable
+# Env override: TALETRAIL_ROOT_DIRECTORY
+root_directory = "taletrail-data"
+
+# Templates directory path
+# Development: relative to project root (qollective_taletrail_content_generator/)
+# Production: absolute path or relative to executable
+# Env override: TALETRAIL_TEMPLATES_DIR
+templates_dir = "nats-cli/templates"
+
+# Default trails directory path
+# Development: relative to project root
+# Production: absolute path or relative to executable
+# Env override: TALETRAIL_TRAILS_DIR
+trails_dir = "test-trails"
+
+# ============================================================================
+# MCP Configuration
+# ============================================================================
+
+[mcp]
+# Default MCP request timeout in milliseconds
+# Env override: TALETRAIL_MCP_TIMEOUT_MS
+default_timeout_ms = 180000
+
+# Available MCP servers (comma-separated in env override)
+# Env override: TALETRAIL_MCP_SERVERS
+servers = [
+  "orchestrator",
+  "story-generator",
+  "quality-control",
+  "constraint-enforcer",
+  "prompt-helper"
+]
+
+# ============================================================================
+# Monitoring Configuration
+# ============================================================================
+
+[monitoring]
+# Maximum number of events to buffer in memory
+# Env override: TALETRAIL_MAX_EVENT_BUFFER
+max_event_buffer_size = 1000
+
+# Request cleanup timeout in seconds (1 hour)
+# Env override: TALETRAIL_REQUEST_CLEANUP_TIMEOUT
+request_cleanup_timeout_secs = 3600
+
+# Event types for filtering (comma-separated in env override)
+event_types = [
+  "Started",
+  "Progress",
+  "Completed",
+  "Failed",
+  "ToolExecution"
+]
+# ============================================================================
+# Validation Configuration
+# ============================================================================
+
+[validation]
+# Story structure presets (comma-separated in env override)
+# Env override: TALETRAIL_VALID_STORY_STRUCTURES
+valid_story_structures = [
+  "guided",
+  "adventure",
+  "epic",
+  "choose_your_path"
+]
+
+# Node count constraints
+# Env overrides: TALETRAIL_MIN_NODE_COUNT, TALETRAIL_MAX_NODE_COUNT
+min_node_count = 5
+max_node_count = 50
+
+# Choices per node constraints
+# Env overrides: TALETRAIL_DEFAULT_MAX_CHOICES_PER_NODE, etc.
+default_max_choices_per_node = 4
+min_choices_per_node = 2
+max_choices_per_node = 10
+
+# Story length constraints (characters)
+# Env overrides: TALETRAIL_MIN_STORY_LENGTH, TALETRAIL_MAX_STORY_LENGTH
+min_story_length = 100
+max_story_length = 10000
+# ============================================================================
+# Timeout Configuration
+# ============================================================================
+
+[timeouts]
+# Default request timeout in seconds (3 minutes)
+# Env override: TALETRAIL_DEFAULT_REQUEST_TIMEOUT_SECS
+default_request_timeout_secs = 180
+
+# Minimum allowed timeout in seconds
+# Env override: TALETRAIL_MIN_REQUEST_TIMEOUT_SECS
+min_request_timeout_secs = 30
+
+# Maximum allowed timeout in seconds (5 minutes)
+# Env override: TALETRAIL_MAX_REQUEST_TIMEOUT_SECS
+max_request_timeout_secs = 300
+# ============================================================================
+# History Management Configuration
+# ============================================================================
+
+[history]
+# Tauri store key for MCP history
+# Env override: TALETRAIL_HISTORY_STORE_KEY
+store_key = "mcp_history"
+
+# Tauri store file name
+# Env override: TALETRAIL_HISTORY_STORE_FILE
+store_file = "mcp-history.json"
+
+# Pagination settings
+# Env overrides: TALETRAIL_HISTORY_DEFAULT_PAGE_SIZE, etc.
+default_page_size = 50
+max_page_size = 200
+min_page_size = 10
+# ============================================================================
+# Development Settings
+# ============================================================================
+
+[development]
+# Enable debug logging
+# Env override: TALETRAIL_DEBUG
+debug = false
+
+# Frontend dev server port
+# Env override: TALETRAIL_DEV_PORT
+dev_server_port = 3030
+
+# HMR WebSocket port
+# Env override: TALETRAIL_HMR_PORT
+hmr_port = 3031
+
+# ============================================================================
+# NATS Subjects Configuration
+# ============================================================================
+
+[nats.subjects]
+# Base subject for generation events (subscribed by desktop)
+# Env override: TALETRAIL_GENERATION_EVENTS_BASE
+generation_events_base = "taletrail.generation.events"
+
+# Tenant-specific generation events pattern (use {tenant_id} placeholder)
+# Env override: TALETRAIL_GENERATION_EVENTS_TENANT_PATTERN
+generation_events_tenant_pattern = "taletrail.generation.events.{tenant_id}"
+
+# Orchestrator request subject
+# Env override: TALETRAIL_ORCHESTRATOR_REQUEST_SUBJECT
+orchestrator_request_subject = "mcp.orchestrator.request"
+
+# ============================================================================
+# MCP Server Request Subjects
+# ============================================================================
+
+[nats.subjects.mcp_servers]
+# Individual MCP server request subjects
+# Env overrides: TALETRAIL_MCP_SUBJECT_ORCHESTRATOR, etc.
+orchestrator = "mcp.orchestrator.request"
+story_generator = "mcp.story-generator.request"
+quality_control = "mcp.quality-control.request"
+constraint_enforcer = "mcp.constraint-enforcer.request"
+prompt_helper = "mcp.prompt-helper.request"
+
+# ============================================================================
+# MCP Template Paths Configuration
+# ============================================================================
+
+[paths.mcp_templates]
+# MCP server template subdirectories
+# These are subdirectories within templates_dir (inherits path resolution from parent)
+# Env overrides: TALETRAIL_MCP_TEMPLATES_ORCHESTRATOR, etc.
+orchestrator = "orchestrator"
+story_generator = "story-generator"
+quality_control = "quality-control"
+constraint_enforcer = "constraint-enforcer"
+prompt_helper = "prompt-helper"
+
+# Template file extension
+# Env override: TALETRAIL_TEMPLATE_FILE_EXTENSION
+template_file_extension = ".json"
+
+# ============================================================================
+# PRODUCTION DEPLOYMENT EXAMPLES
+# ============================================================================
+#
+# Example 1: Self-Contained Application Bundle
+# ----------------------------------------------
+# All resources bundled with the application executable.
+# Suitable for: macOS .app bundles, Windows portable apps
+#
+# [tls]
+# certs_dir = "certs"                    # Relative to .app/Contents/MacOS/
+# nkeys_dir = "nkeys"
+#
+# [paths]
+# templates_dir = "templates"
+# trails_dir = "trails"
+#
+#
+# Example 2: System-Wide Installation (Linux/Unix)
+# -------------------------------------------------
+# Resources installed in standard FHS locations.
+# Suitable for: Linux distributions, server deployments
+#
+# [tls]
+# certs_dir = "/etc/taletrail/certs"
+# nkeys_dir = "/etc/taletrail/nkeys"
+#
+# [paths]
+# templates_dir = "/usr/share/taletrail/templates"
+# trails_dir = "/var/lib/taletrail/trails"
+#
+#
+# Example 3: User-Specific Installation (All Platforms)
+# ------------------------------------------------------
+# Resources in user's home directory.
+# Suitable for: Per-user installations, development-like setups
+#
+# For environment variable expansion, use shell-style paths and set via env:
+#
+# $ export TALETRAIL_CERTS_DIR="$HOME/.config/taletrail/certs"
+# $ export TALETRAIL_TEMPLATES_DIR="$HOME/.local/share/taletrail/templates"
+#
+#
+# Example 4: Docker Container Deployment
+# ---------------------------------------
+# Resources mounted via Docker volumes.
+# Suitable for: Containerized deployments
+#
+# [tls]
+# certs_dir = "/app/certs"               # Mounted volume
+# nkeys_dir = "/app/nkeys"               # Mounted volume
+#
+# [paths]
+# templates_dir = "/app/templates"       # Mounted volume
+# trails_dir = "/data/trails"            # Persistent volume
+#
+# Docker run example:
+# docker run -v /host/certs:/app/certs \
+#            -v /host/templates:/app/templates \
+#            -v /host/trails:/data/trails \
+#            taletrail-desktop
+#
+#
+# Example 5: Hybrid Approach (Mixed Paths)
+# -----------------------------------------
+# System-wide shared resources + user-specific data.
+# Suitable for: Enterprise deployments with shared templates
+#
+# [tls]
+# certs_dir = "/etc/taletrail/certs"     # System-wide certificates
+#
+# [paths]
+# templates_dir = "/usr/share/taletrail/templates"  # Shared templates
+# trails_dir = "trails"                   # User-specific data (relative to exe)
+#
+# ============================================================================

@@ -1,0 +1,16 @@
+{
+	"tool_name": "orchestrate_generation",
+	"arguments": {
+		"generation_request": {
+			"theme": "Underwater Mystery and Treasure Hunt",
+			"age_group": "6-8",
+			"language": "en",
+			"tenant_id": 1,
+			"educational_goals": ["counting", "colors", "ocean animals"],
+			"vocabulary_level": "basic",
+			"required_elements": ["friendship", "courage"],
+			"tags": ["underwater", "mystery", "treasure"],
+			"story_structure": "choose_your_path"
+		}
+	}
+}
