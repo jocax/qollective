@@ -99,7 +99,7 @@ export const PATHS = {
 	/**
 	 * Default trails directory name (user can override)
 	 */
-	DEFAULT_TRAILS_DIR: "test-trails",
+	DEFAULT_TRAILS_DIR: "taletrail-data/trails",
 
 	/**
 	 * Default root directory for TaleTrail data
@@ -111,11 +111,13 @@ export const PATHS = {
 	 * │   ├── quality-control/
 	 * │   ├── constraint-enforcer/
 	 * │   └── prompt-helper/
-	 * └── execution/          (Request/response data organized by request ID)
-	 *     └── [request-id]/
-	 *         └── [mcp-server]/
-	 *             ├── request.json
-	 *             └── response.json
+	 * ├── execution/          (Request/response data organized by request ID)
+	 * │   └── [request-id]/
+	 * │       └── [mcp-server]/
+	 * │           ├── request.json
+	 * │           └── response.json
+	 * └── trails/            (Generated story trails)
+	 *     └── [story_files].json
 	 */
 	DEFAULT_ROOT_DIRECTORY: "taletrail-data"
 } as const;

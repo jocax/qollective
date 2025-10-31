@@ -28,9 +28,11 @@ use rmcp::model::{CallToolRequest, CallToolResult, Content as McpContent, Tool};
 use schemars::{schema_for, JsonSchema};
 use std::sync::Arc;
 use std::future::Future;
+use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::orchestrator::Orchestrator;
+use crate::execution_logger::ExecutionLogger;
 use shared_types::*;
 
 /// Request parameters for orchestrate_generation tool
@@ -181,6 +183,8 @@ impl OrchestratorHandler {
 impl EnvelopeHandler<McpData, McpData> for OrchestratorHandler {
     fn handle(&self, envelope: Envelope<McpData>) -> impl Future<Output = Result<Envelope<McpData>>> + Send {
         async move {
+            let start_time = Instant::now();
+
             // Extract metadata and payload
             let (meta, data) = envelope.extract();
 
@@ -191,13 +195,44 @@ impl EnvelopeHandler<McpData, McpData> for OrchestratorHandler {
                 )
             })?;
 
+            // Extract request_id from envelope metadata
+            let request_id = meta.request_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| {
+                    eprintln!("[WARN] No request_id in envelope metadata, using UUID");
+                    uuid::Uuid::new_v4().to_string()
+                });
+
+            // Initialize execution logger (non-failing)
+            let mut logger = match ExecutionLogger::new(
+                request_id.clone(),
+                "orchestrator".to_string(),
+                &self.orchestrator.config.execution,
+            ) {
+                Ok(l) => {
+                    eprintln!("[DEBUG] Execution logger initialized for request: {}", request_id);
+                    Some(l)
+                }
+                Err(e) => {
+                    eprintln!("[WARN] Failed to initialize execution logger: {}", e);
+                    None
+                }
+            };
+
+            // Log request
+            let tool_name = tool_call.params.name.clone();
+            let tool_arguments = serde_json::to_value(&tool_call.params.arguments).unwrap_or_default();
+            if let Some(ref mut logger) = logger {
+                let _ = logger.log_request(&tool_name, &tool_arguments);
+            }
+
             // Extract trace_id from tracing metadata if present
             let trace_id = meta.tracing.as_ref()
                 .and_then(|t| t.trace_id.clone());
 
             tracing::info!(
                 "Processing tool: {} (tenant: {:?}, request_id: {:?}, trace_id: {:?})",
-                tool_call.params.name,
+                tool_name,
                 meta.tenant,
                 meta.request_id,
                 trace_id
@@ -210,6 +245,15 @@ impl EnvelopeHandler<McpData, McpData> for OrchestratorHandler {
                 "Tool execution complete (is_error: {:?})",
                 result.is_error
             );
+
+            // Log response and write metadata
+            if let Some(ref mut logger) = logger {
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                let success = !result.is_error.unwrap_or(false);
+
+                let _ = logger.log_response(&serde_json::to_value(&result).unwrap_or_default(), duration_ms);
+                let _ = logger.write_metadata(&tool_name, success, duration_ms);
+            }
 
             // Create response McpData
             let response_data = McpData {

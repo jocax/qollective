@@ -27,9 +27,11 @@ use schemars::{schema_for, JsonSchema};
 use serde_json::json;
 use std::sync::Arc;
 use std::future::Future;
+use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::config::ConstraintEnforcerConfig;
+use crate::execution_logger::ExecutionLogger;
 use crate::constraints::enforce_constraints;
 use shared_types::*;
 use shared_types::types::tool_registration::{ToolRegistration, ServiceCapabilities};
@@ -346,6 +348,9 @@ impl ConstraintEnforcerHandler {
 impl EnvelopeHandler<McpData, McpData> for ConstraintEnforcerHandler {
     fn handle(&self, envelope: Envelope<McpData>) -> impl Future<Output = Result<Envelope<McpData>>> + Send {
         async move {
+            // Start timing
+            let start_time = Instant::now();
+
             // Extract metadata and payload
             let (meta, data) = envelope.extract();
 
@@ -356,13 +361,46 @@ impl EnvelopeHandler<McpData, McpData> for ConstraintEnforcerHandler {
                 )
             })?;
 
+            // Extract request_id
+            let request_id = meta.request_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| {
+                    eprintln!("[WARN] No request_id in envelope metadata, using UUID");
+                    uuid::Uuid::new_v4().to_string()
+                });
+
+            // Store tool name for logging
+            let tool_name = tool_call.params.name.clone();
+
+            // Initialize execution logger (non-failing)
+            let mut logger: Option<ExecutionLogger> = match ExecutionLogger::new(
+                request_id.clone(),
+                "constraint-enforcer".to_string(),
+                &self.config.execution,
+            ) {
+                Ok(l) => {
+                    eprintln!("[DEBUG] Execution logger initialized for request: {}", request_id);
+                    Some(l)
+                }
+                Err(e) => {
+                    eprintln!("[WARN] Failed to initialize execution logger: {}", e);
+                    None
+                }
+            };
+
+            // Log request
+            if let Some(ref mut logger) = logger {
+                let tool_args = serde_json::to_value(&tool_call.params.arguments).unwrap_or_default();
+                let _ = logger.log_request(&tool_name, &tool_args);
+            }
+
             // Extract trace_id from tracing metadata if present
             let trace_id = meta.tracing.as_ref()
                 .and_then(|t| t.trace_id.clone());
 
             tracing::info!(
                 "Processing tool: {} (tenant: {:?}, request_id: {:?}, trace_id: {:?})",
-                tool_call.params.name,
+                tool_name,
                 meta.tenant,
                 meta.request_id,
                 trace_id
@@ -375,6 +413,16 @@ impl EnvelopeHandler<McpData, McpData> for ConstraintEnforcerHandler {
                 "Tool execution complete (is_error: {:?})",
                 result.is_error
             );
+
+            // Log response and write metadata
+            if let Some(ref mut logger) = logger {
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                let success = !result.is_error.unwrap_or(false);
+
+                let result_json = serde_json::to_value(&result).unwrap_or_default();
+                let _ = logger.log_response(&result_json, duration_ms);
+                let _ = logger.write_metadata(&tool_name, success, duration_ms);
+            }
 
             // Create response McpData
             let response_data = McpData {

@@ -2,16 +2,23 @@
 	"tool_name": "enforce_constraints",
 	"arguments": {
 		"content_node": {
-			"node_id": "node_001",
-			"content": "The brave astronaut explored the mysterious planet. She discovered strange glowing crystals that sparkled like stars.",
-			"choices": [
-				"Collect the crystals to study them",
-				"Leave the crystals alone and explore further",
-				"Contact the spaceship for advice"
-			],
-			"metadata": {
-				"word_count": 23,
-				"reading_level": "basic"
+			"id": "node_001",
+			"content": {
+				"type": "interactive_story_node",
+				"node_id": "node_001",
+				"text": "The brave astronaut explored the mysterious planet. She discovered strange glowing crystals that sparkled like stars.",
+				"choices": [
+					"Collect the crystals to study them",
+					"Leave the crystals alone and explore further",
+					"Contact the spaceship for advice"
+				],
+				"convergence_point": false,
+				"next_nodes": [],
+				"educational_content": null,
+				"metadata": {
+					"word_count": 23,
+					"reading_level": "basic"
+				}
 			}
 		},
 		"generation_request": {

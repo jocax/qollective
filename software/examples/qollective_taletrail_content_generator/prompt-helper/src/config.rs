@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use shared_types::*;
 use shared_types_llm::LlmConfig as SharedLlmConfig;
 use figment::{Figment, providers::{Env, Format, Toml}};
+use crate::execution_logger::ExecutionConfig;
 
 /// Prompt Helper configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,6 +13,7 @@ pub struct PromptHelperConfig {
     pub nats: NatsConfig,
     pub llm: SharedLlmConfig,
     pub prompt: PromptConfig,
+    pub execution: ExecutionConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

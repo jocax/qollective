@@ -108,3 +108,11 @@ can_fix_locally_min_score = 0.6
 can_fix_locally_max_violations = 3
 needs_revision_min_score = 0.3
 needs_revision_max_violations = 6
+
+[execution]
+# Root directory for execution logs (relative to MCP server working directory)
+root_directory = "../taletrail-data/execution"
+# Enable request-ID subdirectory organization
+use_request_subdirs = true
+# Log level for execution logging
+log_level = "info"

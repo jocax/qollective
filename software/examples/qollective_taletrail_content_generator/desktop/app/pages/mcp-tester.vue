@@ -58,13 +58,16 @@
 				</template>
 			</UTabs>
 		</div>
+
+		<!-- Debug Console -->
+		<DebugConsole />
 	</UContainer>
 </template>
 
 <script lang="ts" setup>
 	import type { CallToolResult, ServerName, TemplateData } from "@/types/mcp";
 	import { invoke } from "@tauri-apps/api/core";
-	import { computed, ref, watch } from "vue";
+	import { computed, nextTick, ref, watch } from "vue";
 	import { useMcpTesterStore } from "@/stores/mcpTester";
 
 	definePageMeta({
@@ -132,14 +135,26 @@
 		}
 	}, { immediate: true });
 
+	// Watch for panel tab changes
+	watch(activePanelTab, (newVal, oldVal) => {
+		console.log(`[MCP Tester] Panel tab changed: ${oldVal} → ${newVal}`);
+	});
+
 	// ============================================================================
 	// Event Handlers
 	// ============================================================================
 
-	function handleTemplateSelect() {
-		// Template is already handled in TemplateBrowser via store
+	async function handleTemplateSelect() {
+		console.log("[MCP Tester] Template selected, switching to Request Editor");
+		console.log("[MCP Tester] Template content:", store.templateContent);
+		console.log("[MCP Tester] Current panel tab before switch:", activePanelTab.value);
+
 		// Auto-switch to editor tab when template selected
-		activePanelTab.value = 1;
+		await nextTick(() => {
+			activePanelTab.value = 1;
+			console.log("[MCP Tester] Panel tab switched to Request Editor (index 1)");
+			console.log("[MCP Tester] New panel tab value:", activePanelTab.value);
+		});
 	}
 
 	async function handleSendRequest(req: any) {
@@ -150,6 +165,16 @@
 
 		// Generate request ID if not present
 		const requestId = req.request_id || crypto.randomUUID();
+
+		// Build proper CallToolRequest for history
+		const tool_call_request = {
+			method: "tools/call",
+			params: {
+				name: req.tool_name || "unknown",
+				arguments: req.arguments || {}
+			},
+			extensions: {}
+		};
 
 		try {
 			// Prepare execution directory for this request
@@ -216,28 +241,29 @@
 				// Continue anyway
 			}
 
-			// Save to history
+			// Save to history with correct flat parameters
 			try {
 				await invoke("save_request_to_history", {
-					entry: {
-						id: requestId,
-						timestamp: new Date().toISOString(),
-						server: store.selectedServer,
-						tool_name: req.tool_name || "unknown",
-						request: req.arguments || {},
-						response: result,
-						duration_ms: durationMs,
-						success: !result.isError,
-						tenant_id: 1
-					}
+					serverName: store.selectedServer,
+					tenantId: 1,
+					durationMs: durationMs,
+					request: tool_call_request,
+					response: result
 				});
 			} catch (historyError) {
 				console.error("Failed to save to history:", historyError);
 				// Don't fail the main request if history save fails
 			}
 
-			// Auto-switch to history tab after sending
-			activePanelTab.value = 3;
+			// Auto-switch to response tab after sending
+			console.log("[MCP Tester] Request successful, switching to Response tab");
+			console.log("[MCP Tester] Current panel tab before switch:", activePanelTab.value);
+
+			await nextTick(() => {
+				activePanelTab.value = 2;
+				console.log("[MCP Tester] Panel tab switched to Response (index 2)");
+				console.log("[MCP Tester] New panel tab value:", activePanelTab.value);
+			});
 
 			console.log("MCP request completed successfully", {
 				tool: req.tool_name,
@@ -297,25 +323,37 @@
 					isError: true
 				};
 
+				// Build error request with proper CallToolRequest structure
+				const error_tool_call_request = {
+					method: "tools/call",
+					params: {
+						name: req.tool_name || "unknown",
+						arguments: req.arguments || {}
+					},
+					extensions: {}
+				};
+
+				// Save error to history with correct flat parameters
 				await invoke("save_request_to_history", {
-					entry: {
-						id: requestId,
-						timestamp: new Date().toISOString(),
-						server: store.selectedServer,
-						tool_name: req.tool_name || "unknown",
-						request: req.arguments || {},
-						response: errorResponse,
-						duration_ms: durationMs,
-						success: false,
-						tenant_id: 1
-					}
+					serverName: store.selectedServer,
+					tenantId: 1,
+					durationMs: durationMs,
+					request: error_tool_call_request,
+					response: errorResponse
 				});
 			} catch (historyError) {
 				console.error("Failed to save error to history:", historyError);
 			}
 
-			// Auto-switch to history tab even on error
-			activePanelTab.value = 3;
+			// Auto-switch to response tab even on error
+			console.log("[MCP Tester] Request failed, switching to Response tab to show error");
+			console.log("[MCP Tester] Current panel tab before switch:", activePanelTab.value);
+
+			await nextTick(() => {
+				activePanelTab.value = 2;
+				console.log("[MCP Tester] Panel tab switched to Response (index 2)");
+				console.log("[MCP Tester] New panel tab value:", activePanelTab.value);
+			});
 		} finally {
 			store.setLoading(false);
 		}

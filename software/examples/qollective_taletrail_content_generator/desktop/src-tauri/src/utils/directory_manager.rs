@@ -17,6 +17,9 @@ pub mod directory_names {
 
     /// Execution directory name
     pub const EXECUTION: &str = "execution";
+
+    /// Trails directory name (generated story trails)
+    pub const TRAILS: &str = "trails";
 }
 
 /// Ensure the complete directory structure exists under the root path
@@ -26,6 +29,10 @@ pub mod directory_names {
 /// - [root]/templates/
 /// - [root]/templates/[mcp_server]/ for each MCP server
 /// - [root]/execution/
+/// - [root]/trails/
+///
+/// IMPORTANT: This function NEVER deletes existing content. It only creates
+/// directories if they don't exist. User data is preserved across all runs.
 ///
 /// # Arguments
 /// * `root_path` - Root directory path to create structure under
@@ -61,6 +68,13 @@ pub fn ensure_directory_structure(root_path: &Path) -> Result<(), String> {
     if !execution_path.exists() {
         fs::create_dir_all(&execution_path)
             .map_err(|e| format!("Failed to create execution directory {:?}: {}", execution_path, e))?;
+    }
+
+    // Create trails directory (for generated story trails)
+    let trails_path = root_path.join(directory_names::TRAILS);
+    if !trails_path.exists() {
+        fs::create_dir_all(&trails_path)
+            .map_err(|e| format!("Failed to create trails directory {:?}: {}", trails_path, e))?;
     }
 
     Ok(())
@@ -171,6 +185,124 @@ pub fn get_execution_path(root_path: &Path, request_id: &str, mcp_server: &str) 
         .join(directory_names::EXECUTION)
         .join(request_id)
         .join(mcp_server)
+}
+
+/// Initialize runtime templates from source templates (first run only)
+///
+/// Copies template files from source directory (desktop/src-tauri/templates/) to
+/// runtime directory (taletrail-data/templates/) with "_example.json" suffix.
+///
+/// IMPORTANT: This function NEVER deletes or overwrites existing templates.
+/// It only copies example templates if the runtime templates directory is empty
+/// or if specific template subdirectories don't exist.
+///
+/// Example transformation:
+/// - Source: desktop/src-tauri/templates/orchestrator/generate_story.json
+/// - Runtime: taletrail-data/templates/orchestrator/generate_story_example.json
+///
+/// # Arguments
+/// * `root_path` - Root directory path (taletrail-data/)
+/// * `source_templates_path` - Source templates directory (desktop/src-tauri/templates/)
+///
+/// # Returns
+/// * `Ok(())` - Templates initialized successfully (or already exist)
+/// * `Err(String)` - Error message if initialization fails
+pub fn initialize_templates_from_source(
+    root_path: &Path,
+    source_templates_path: &Path,
+) -> Result<(), String> {
+    eprintln!("[TaleTrail] Starting template initialization...");
+    eprintln!("[TaleTrail] Source path: {:?}", source_templates_path);
+    eprintln!("[TaleTrail] Runtime path: {:?}", root_path);
+
+    // Ensure source templates directory exists
+    if !source_templates_path.exists() {
+        eprintln!("[TaleTrail] ERROR: Source templates directory does not exist: {:?}", source_templates_path);
+        return Err(format!(
+            "Source templates directory does not exist: {:?}",
+            source_templates_path
+        ));
+    }
+    eprintln!("[TaleTrail] Source templates directory exists");
+
+    let runtime_templates_path = root_path.join(directory_names::TEMPLATES);
+
+    // Process each MCP server
+    for server in MCP_SERVERS {
+        eprintln!("[TaleTrail] Processing templates for server: {}", server);
+        let source_server_path = source_templates_path.join(server);
+        let runtime_server_path = runtime_templates_path.join(server);
+
+        // Skip if source server directory doesn't exist
+        if !source_server_path.exists() {
+            continue;
+        }
+
+        // Create runtime server directory if it doesn't exist
+        if !runtime_server_path.exists() {
+            fs::create_dir_all(&runtime_server_path).map_err(|e| {
+                format!(
+                    "Failed to create runtime template directory for {}: {}",
+                    server, e
+                )
+            })?;
+        }
+
+        // Check if runtime server directory already has templates
+        let has_templates = fs::read_dir(&runtime_server_path)
+            .ok()
+            .and_then(|mut d| d.next())
+            .is_some();
+
+        if has_templates {
+            eprintln!("[TaleTrail] Server {} already has templates - skipping", server);
+            // Templates already exist for this server - skip to preserve user content
+            continue;
+        }
+        eprintln!("[TaleTrail] Server {} has no templates - copying from source", server);
+
+        // Copy templates from source to runtime with _example suffix
+        let entries = fs::read_dir(&source_server_path).map_err(|e| {
+            format!(
+                "Failed to read source templates directory for {}: {}",
+                server, e
+            )
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+            let path = entry.path();
+
+            // Only process JSON files
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let file_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| format!("Invalid file name: {:?}", path))?;
+
+                eprintln!("[TaleTrail] Copying template: {} -> {}_example.json", file_name, file_name);
+
+                // Create new filename with _example suffix
+                let new_file_name = format!("{}_example.json", file_name);
+                let dest_path = runtime_server_path.join(new_file_name);
+
+                // Copy file
+                fs::copy(&path, &dest_path).map_err(|e| {
+                    let err_msg = format!(
+                        "Failed to copy template {:?} to {:?}: {}",
+                        path, dest_path, e
+                    );
+                    eprintln!("[TaleTrail] ERROR: {}", err_msg);
+                    err_msg
+                })?;
+
+                eprintln!("[TaleTrail] Successfully copied: {:?}", dest_path);
+            }
+        }
+    }
+
+    eprintln!("[TaleTrail] Template initialization completed successfully");
+    Ok(())
 }
 
 #[cfg(test)]

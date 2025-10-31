@@ -72,26 +72,53 @@ desktop_nkey_file = "desktop.nk"
 # ============================================================================
 # Path Configuration
 # ============================================================================
+#
+# Directory Structure Overview:
+# ==============================
+#
+# 1. Source Templates (Read-Only, Shipped with Application)
+#    Location: desktop/src-tauri/templates/
+#    Purpose: Original template files bundled with the application
+#    Lifecycle: Never modified at runtime, checked into source control
+#
+# 2. User Workspace (Persistent, User-Managed)
+#    Location: taletrail-data/ (configurable via root_directory)
+#    Purpose: User's persistent workspace for all runtime data
+#    Lifecycle: NEVER auto-deleted, user controls lifecycle manually
+#
+#    taletrail-data/
+#    ├── templates/    - User-editable templates (copied once from source on first run)
+#    │                   Users can add/modify/delete templates at any time
+#    ├── execution/    - Per-request execution tracking (never auto-deleted)
+#    │                   Contains request/response logs for debugging
+#    └── trails/       - Generated story trails (never auto-deleted)
+#                        Final output of content generation
+#
+# IMPORTANT: All content under taletrail-data/ persists across application restarts.
+#            The application NEVER auto-deletes user workspace content.
+#            Only users manually manage their data lifecycle.
 
 [paths]
 # Root directory for TaleTrail data
-# All data directories (templates, execution) are created under this root
+# All data directories (templates, execution, trails) are created under this root
 # Development: relative to executable (default: "taletrail-data")
 # Production: absolute path or relative to executable
 # Env override: TALETRAIL_ROOT_DIRECTORY
 root_directory = "taletrail-data"
 
-# Templates directory path
+# Templates directory path (user workspace for editable templates)
 # Development: relative to project root (qollective_taletrail_content_generator/)
 # Production: absolute path or relative to executable
 # Env override: TALETRAIL_TEMPLATES_DIR
-templates_dir = "nats-cli/templates"
+# Note: Source templates are automatically copied here with "_example.json" suffix on first run
+templates_dir = "taletrail-data/templates"
 
-# Default trails directory path
+# Trails directory path (user workspace for generated story trails)
 # Development: relative to project root
 # Production: absolute path or relative to executable
 # Env override: TALETRAIL_TRAILS_DIR
-trails_dir = "test-trails"
+# Note: This is where final generated story trails are saved
+trails_dir = "taletrail-data/trails"
 
 # ============================================================================
 # MCP Configuration

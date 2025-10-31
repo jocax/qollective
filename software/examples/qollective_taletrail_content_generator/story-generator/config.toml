@@ -52,3 +52,11 @@ dump_all_responses = false
 [llm.models]
 en = "meta-llama-3-8b-instruct"
 de = "leolm-70b-chat"
+
+[execution]
+# Root directory for execution logs (relative to MCP server working directory)
+root_directory = "../taletrail-data/execution"
+# Enable request-ID subdirectory organization
+use_request_subdirs = true
+# Log level for execution logging
+log_level = "info"

@@ -80,7 +80,7 @@ describe("constants", () => {
 		it("should export PATHS object", () => {
 			expect(PATHS).toBeDefined();
 			expect(PATHS.TEMPLATES_DIR_RELATIVE).toBe("templates");
-			expect(PATHS.DEFAULT_TRAILS_DIR).toBe("test-trails");
+			expect(PATHS.DEFAULT_TRAILS_DIR).toBe("taletrail-data/trails");
 		});
 
 		it("should not contain absolute paths", () => {

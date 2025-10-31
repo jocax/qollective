@@ -36,20 +36,11 @@ use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
 use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
-mod config;
-mod discovery;
-mod envelope_handlers;
-mod tool_handlers;
-mod llm;
-mod mcp_tools;
-mod prompts;
-mod server;
-mod structure;
-
-use config::StoryGeneratorConfig;
-use llm::StoryLlmClient;
-use envelope_handlers::StoryGeneratorHandler;
-use discovery::{DiscoveryHandler, HealthHandler};
+// Import from library instead of redeclaring modules
+use story_generator::config::StoryGeneratorConfig;
+use story_generator::llm::StoryLlmClient;
+use story_generator::envelope_handlers::StoryGeneratorHandler;
+use story_generator::discovery::{DiscoveryHandler, HealthHandler};
 use shared_types::*;
 
 #[tokio::main]

@@ -36,19 +36,11 @@ use qollective::config::nats::{NatsConfig, NatsConnectionConfig};
 use qollective::config::tls::TlsConfig as QollectiveTlsConfig;
 use tracing::info;
 
-mod config;
-mod discovery;
-mod envelope_handlers;
-mod llm;
-mod mcp_tools;
-mod server;
-mod templates;
-mod tool_handlers;
-
-use config::PromptHelperConfig;
-use discovery::{DiscoveryHandler, HealthHandler};
-use envelope_handlers::PromptHelperHandler;
-use llm::SharedLlmService;
+// Import from library instead of redeclaring modules
+use prompt_helper::config::PromptHelperConfig;
+use prompt_helper::discovery::{DiscoveryHandler, HealthHandler};
+use prompt_helper::envelope_handlers::PromptHelperHandler;
+use prompt_helper::llm::SharedLlmService;
 use shared_types::*;
 
 #[tokio::main]

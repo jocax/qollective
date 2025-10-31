@@ -6,6 +6,7 @@ pub mod config;
 pub mod discovery;
 pub mod envelope_handlers;
 pub mod events;
+pub mod execution_logger;
 pub mod mcp_client;
 pub mod negotiation;
 pub mod negotiation_state;

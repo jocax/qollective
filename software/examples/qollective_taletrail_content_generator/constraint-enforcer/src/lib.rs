@@ -10,6 +10,7 @@ pub mod config;
 pub mod constraints;
 pub mod discovery;
 pub mod envelope_handlers;
+pub mod execution_logger;
 pub mod llm_semantic;
 pub mod requirements;
 pub mod server;

@@ -129,6 +129,14 @@ Flag any violations and provide specific corrections."""
 user_prompt = """Check the following content for constraint violations. Verify vocabulary level is {vocabulary_level}, \
 required elements are present: {required_elements}, and theme consistency is maintained."""
 
+[execution]
+# Root directory for execution logs (relative to MCP server working directory)
+root_directory = "../taletrail-data/execution"
+# Enable request-ID subdirectory organization
+use_request_subdirs = true
+# Log level for execution logging
+log_level = "info"
+
 # Constraint Enforcer Templates - German
 # Verwendet für die Durchsetzung von Vokabularstufen, erforderlichen Elementen und Themenkonsistenz
 # Variablen: {vocabulary_level}, {language}, {required_elements}, {theme}

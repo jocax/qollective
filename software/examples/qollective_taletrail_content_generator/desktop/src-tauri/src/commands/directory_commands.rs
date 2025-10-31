@@ -252,6 +252,39 @@ pub async fn load_execution_file(
         .map_err(|e| format!("Failed to read file {:?}: {}", file_path, e))
 }
 
+/// Initialize templates from source (manual trigger)
+///
+/// Copies template files from source directory to runtime directory with "_example.json" suffix.
+/// This can be called manually from the UI if automatic initialization fails.
+///
+/// # Arguments
+/// * `config` - Application configuration state
+///
+/// # Returns
+/// * `Ok(String)` - Success message with count of files copied
+/// * `Err(String)` - Error message if initialization fails
+#[tauri::command]
+pub async fn initialize_templates(
+    config: State<'_, AppConfig>,
+) -> Result<String, String> {
+    let root_path = config.root_directory();
+    let source_templates_path = config.source_templates_dir();
+
+    eprintln!("[TaleTrail] Manual template initialization requested");
+    eprintln!("[TaleTrail] Root: {:?}", root_path);
+    eprintln!("[TaleTrail] Source: {:?}", source_templates_path);
+
+    // Ensure directory structure exists
+    directory_manager::ensure_directory_structure(&root_path)?;
+
+    // Initialize templates
+    directory_manager::initialize_templates_from_source(&root_path, &source_templates_path)?;
+
+    let success_msg = format!("Templates initialized successfully from {:?}", source_templates_path);
+    eprintln!("[TaleTrail] {}", success_msg);
+    Ok(success_msg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

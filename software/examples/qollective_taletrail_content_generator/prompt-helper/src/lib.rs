@@ -7,6 +7,7 @@
 pub mod config;
 pub mod discovery;
 pub mod envelope_handlers;
+pub mod execution_logger;
 pub mod llm;
 pub mod mcp_tools;
 pub mod server;

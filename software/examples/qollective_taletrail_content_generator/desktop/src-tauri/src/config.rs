@@ -513,6 +513,13 @@ impl AppConfig {
         self.resolve_path(&self.paths.root_directory)
     }
 
+    /// Get source templates directory absolute path
+    /// This is the read-only directory containing original template files
+    /// shipped with the application (desktop/src-tauri/templates/)
+    pub fn source_templates_dir(&self) -> PathBuf {
+        self.resolve_path(&crate::constants::paths::SOURCE_TEMPLATES_DIR)
+    }
+
     /// Create test AppConfig with values from constants
     /// Used for consistent test configuration across all test modules
     #[cfg(test)]
@@ -550,8 +557,8 @@ impl AppConfig {
             },
             paths: PathsConfig {
                 root_directory: "taletrail-data".to_string(),
-                templates_dir: paths::TEMPLATES_DIR.to_string(),
-                trails_dir: paths::DEFAULT_TRAILS_DIR_NAME.to_string(),
+                templates_dir: "taletrail-data/templates".to_string(),
+                trails_dir: "taletrail-data/trails".to_string(),
                 mcp_templates: McpTemplatesConfig {
                     orchestrator: paths::ORCHESTRATOR_TEMPLATES.to_string(),
                     story_generator: paths::STORY_GENERATOR_TEMPLATES.to_string(),

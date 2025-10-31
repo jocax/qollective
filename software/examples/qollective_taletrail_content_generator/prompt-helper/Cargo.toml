@@ -32,6 +32,7 @@ figment = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }
 futures-util ={ workspace = true }
 
 [dev-dependencies]

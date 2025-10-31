@@ -2,15 +2,22 @@
 	"tool_name": "suggest_corrections",
 	"arguments": {
 		"content_node": {
-			"node_id": "node_002",
-			"content": "The astronaut utilized sophisticated astronomical instrumentation to analyze the extraterrestrial crystalline formations.",
-			"choices": [
-				"Implement comprehensive analysis protocols",
-				"Terminate investigation procedures"
-			],
-			"metadata": {
-				"word_count": 15,
-				"reading_level": "advanced"
+			"id": "node_002",
+			"content": {
+				"type": "interactive_story_node",
+				"node_id": "node_002",
+				"text": "The astronaut utilized sophisticated astronomical instrumentation to analyze the extraterrestrial crystalline formations.",
+				"choices": [
+					"Implement comprehensive analysis protocols",
+					"Terminate investigation procedures"
+				],
+				"convergence_point": false,
+				"next_nodes": [],
+				"educational_content": null,
+				"metadata": {
+					"word_count": 15,
+					"reading_level": "advanced"
+				}
 			}
 		},
 		"generation_request": {

@@ -180,3 +180,11 @@ Content:
 {content}
 
 Answer with ONLY 'yes' or 'no' (no explanation needed)."""
+
+[execution]
+# Root directory for execution logs (relative to MCP server working directory)
+root_directory = "../taletrail-data/execution"
+# Enable request-ID subdirectory organization
+use_request_subdirs = true
+# Log level for execution logging
+log_level = "info"

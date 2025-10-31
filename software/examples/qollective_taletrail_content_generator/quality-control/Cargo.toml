@@ -34,8 +34,8 @@ rustls-pemfile = { workspace = true }
 uuid = { workspace = true }
 schemars = { workspace = true }
 toml = "0.8"
+chrono = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 lazy_static = { workspace = true }
-chrono = { workspace = true }

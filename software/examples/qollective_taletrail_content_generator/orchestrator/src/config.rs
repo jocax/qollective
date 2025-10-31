@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use shared_types::*;
 use shared_types_llm::LlmConfig as SharedLlmConfig;
 use figment::{Figment, providers::{Env, Format, Toml}};
+use crate::execution_logger::ExecutionConfig;
 
 /// Orchestrator configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +17,7 @@ pub struct OrchestratorConfig {
     pub dag: DagConfig,
     pub negotiation: NegotiationConfig,
     pub retry: RetryConfig,
+    pub execution: ExecutionConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

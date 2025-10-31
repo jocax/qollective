@@ -3,6 +3,7 @@
 pub mod config;
 pub mod discovery;
 pub mod envelope_handlers;
+pub mod execution_logger;
 pub mod rubrics;
 pub mod server;
 pub mod validation;

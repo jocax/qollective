@@ -21,12 +21,6 @@
 					<UButton variant="outline" size="lg" icon="i-heroicons-arrow-path" :loading="loading" @click="reloadTrails">
 						Reload
 					</UButton>
-					<UButton variant="solid" color="blue" size="lg" to="/live-monitor" icon="i-heroicons-radio">
-						Live Monitor
-					</UButton>
-					<UButton variant="ghost" size="lg" to="/settings" icon="i-heroicons-cog-6-tooth">
-						Settings
-					</UButton>
 				</div>
 
 				<!-- Search and Filters Row -->
@@ -66,30 +60,6 @@
 						class="w-32"
 					/>
 
-					<!-- Bookmarks Filter Toggle -->
-					<UButton
-						:variant="showBookmarksOnly ? 'solid' : 'outline'"
-						:color="showBookmarksOnly ? 'yellow' : 'gray'"
-						@click="showBookmarksOnly = !showBookmarksOnly"
-					>
-						<template #leading>
-							<UIcon :name="showBookmarksOnly ? 'i-heroicons-star-solid' : 'i-heroicons-star'" />
-						</template>
-						Bookmarks Only
-					</UButton>
-
-					<!-- Statistics Toggle -->
-					<UButton
-						variant="outline"
-						color="gray"
-						@click="showStatistics = !showStatistics"
-					>
-						<template #leading>
-							<UIcon name="i-heroicons-chart-bar" />
-						</template>
-						Stats
-					</UButton>
-
 					<UButton
 						variant="ghost"
 						icon="i-heroicons-x-mark"
@@ -105,7 +75,6 @@
 						<div class="flex items-center gap-3">
 							<span>
 								Showing {{ displayedTrails.length }} of {{ trails.length }} trails
-								<span v-if="showBookmarksOnly" class="text-yellow-600 dark:text-yellow-500 font-medium">(bookmarked)</span>
 							</span>
 							<!-- Tenant Context Indicator -->
 							<UBadge
@@ -144,14 +113,6 @@
 
 			<!-- Content Section -->
 			<div class="flex-1 overflow-auto">
-				<!-- Tenant Statistics Panel -->
-				<div v-if="showStatistics && directory" class="mb-6">
-					<TenantStatistics
-						:statistics="tenantStatistics"
-						:is-collapsed="false"
-					/>
-				</div>
-
 				<!-- Error State -->
 				<UAlert
 					v-if="error"
@@ -261,7 +222,6 @@
 
 	// Bookmarks integration
 	const { bookmarks, bookmarkedTrailIds, loadBookmarks, removeBookmark } = useBookmarks();
-	const showBookmarksOnly = ref(false);
 
 	// Tenant context integration
 	const {
@@ -278,21 +238,13 @@
 		updateTrailsData(newTrails);
 	});
 
-	// Show statistics panel
-	const showStatistics = ref(false);
-
-	// Computed for displayed trails with bookmarks and tenant filter
+	// Computed for displayed trails with tenant filter
 	const displayedTrails = computed(() => {
 		let filteredList = filteredTrails.value;
 
 		// Apply tenant filter
 		if (!isAllTenants.value) {
 			filteredList = filteredList.filter((t) => t.tenantId === selectedTenant.value);
-		}
-
-		// Apply bookmarks filter
-		if (showBookmarksOnly.value) {
-			filteredList = filteredList.filter((t) => bookmarkedTrailIds.value.has(t.id));
 		}
 
 		return filteredList;

@@ -34,11 +34,48 @@ pub mod paths {
     /// Desktop NKey filename
     pub const DESKTOP_NKEY_FILE: &str = "desktop.nk";
 
-    /// Relative path to templates directory from project root
-    pub const TEMPLATES_DIR: &str = "nats-cli/templates";
+    // ========================================================================
+    // Source Templates (Read-Only, Shipped with Application)
+    // ========================================================================
 
-    /// Default trails directory name (user can override)
-    pub const DEFAULT_TRAILS_DIR_NAME: &str = "test-trails";
+    /// Source templates directory (read-only, shipped with app)
+    /// Located at: desktop/src-tauri/templates/
+    pub const SOURCE_TEMPLATES_DIR: &str = "desktop/src-tauri/templates";
+
+    /// DEPRECATED: Use SOURCE_TEMPLATES_DIR instead
+    /// Kept for backward compatibility
+    pub const TEMPLATES_DIR: &str = "templates";
+
+    // ========================================================================
+    // Runtime Directory Structure (User Persistent Workspace)
+    // ========================================================================
+
+    /// Runtime templates subdirectory name (relative to root_directory)
+    /// User workspace for editable templates
+    pub const RUNTIME_TEMPLATES_SUBDIR: &str = "templates";
+
+    /// Trails subdirectory name (relative to root_directory)
+    /// User workspace for generated story trails
+    pub const TRAILS_SUBDIR: &str = "trails";
+
+    /// Execution subdirectory name (relative to root_directory)
+    /// User workspace for request execution tracking
+    pub const EXECUTION_SUBDIR: &str = "execution";
+
+    // ========================================================================
+    // Template Management
+    // ========================================================================
+
+    /// Suffix added to example templates when copying from source
+    /// Original: "template.json" -> Runtime: "template_example.json"
+    pub const TEMPLATE_EXAMPLE_SUFFIX: &str = "_example";
+
+    /// Template file extension
+    pub const TEMPLATE_FILE_EXTENSION: &str = ".json";
+
+    /// DEPRECATED: Use TRAILS_SUBDIR instead
+    /// Kept for backward compatibility
+    pub const DEFAULT_TRAILS_DIR_NAME: &str = "trails";
 
     /// MCP server templates subdirectories
     pub const ORCHESTRATOR_TEMPLATES: &str = "orchestrator";

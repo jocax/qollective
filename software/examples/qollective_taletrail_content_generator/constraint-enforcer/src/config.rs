@@ -6,6 +6,8 @@ use shared_types_llm::LlmConfig as SharedLlmConfig;
 use figment::{Figment, providers::{Env, Format, Toml}};
 use std::collections::HashMap;
 
+use crate::execution_logger::ExecutionConfig;
+
 /// Constraint Enforcer configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintEnforcerConfig {
@@ -16,6 +18,8 @@ pub struct ConstraintEnforcerConfig {
     pub vocabulary: VocabularyConfig,
     pub themes: ThemesConfig,
     pub required_elements: RequiredElementsConfig,
+    /// Execution logging configuration
+    pub execution: ExecutionConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -28,6 +28,44 @@ impl Default for NatsState {
     }
 }
 
+/// Initialize NATS connection for MCP requests
+///
+/// Creates and connects a NATS client using configuration from AppConfig.
+/// Stores the client in NatsState for use by send_mcp_request command.
+///
+/// This should be called on app startup or when reconnection is needed.
+#[tauri::command]
+pub async fn connect_nats_for_mcp(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let state = app.state::<NatsState>();
+    let mut client_guard = state.client().write().await;
+
+    // If already connected, return early
+    if client_guard.is_some() {
+        return Ok(());
+    }
+
+    // Create NATS config from app config
+    let app_config = app.state::<crate::config::AppConfig>();
+    let nats_config = crate::nats::NatsConfig::from_app_config(&app_config);
+
+    // Create new client
+    let client = crate::nats::NatsClient::new(nats_config);
+
+    // Connect to NATS
+    client
+        .connect()
+        .await
+        .map_err(|e| format!("Failed to connect to NATS for MCP: {}", e))?;
+
+    // Store in state
+    *client_guard = Some(client);
+
+    eprintln!("[TaleTrail] NATS connected for MCP requests");
+    Ok(())
+}
+
 /// Subscribe to generation events from NATS
 ///
 /// This command establishes a NATS subscription to monitor real-time generation events

@@ -5,6 +5,8 @@ use figment::{Figment, providers::{Env, Format, Toml}};
 use serde::{Deserialize, Serialize};
 use shared_types_llm::LlmConfig as SharedLlmConfig;
 
+use crate::execution_logger::ExecutionConfig;
+
 /// Story Generator MCP Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoryGeneratorConfig {
@@ -19,6 +21,9 @@ pub struct StoryGeneratorConfig {
 
     /// LLM configuration
     pub llm: SharedLlmConfig,
+
+    /// Execution logging configuration
+    pub execution: ExecutionConfig,
 }
 
 /// Server-specific configuration

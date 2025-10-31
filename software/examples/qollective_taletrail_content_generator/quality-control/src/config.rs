@@ -6,6 +6,8 @@ use shared_types_llm::LlmConfig as SharedLlmConfig;
 use figment::{Figment, providers::{Env, Format, Toml}};
 use std::collections::HashMap;
 
+use crate::execution_logger::ExecutionConfig;
+
 /// Quality Control configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityControlConfig {
@@ -18,6 +20,8 @@ pub struct QualityControlConfig {
     #[serde(default)]
     pub safety: SafetyConfig,
     pub educational: EducationalConfig,
+    /// Execution logging configuration
+    pub execution: ExecutionConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

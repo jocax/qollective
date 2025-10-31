@@ -5,6 +5,6 @@
 		"age_group": "6-8",
 		"language": "en",
 		"educational_goals": ["science", "creativity"],
-		"vocabulary_level": "basic"
+		"required_elements": ["moral lesson", "educational facts"]
 	}
 }

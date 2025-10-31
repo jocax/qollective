@@ -80,8 +80,8 @@ pub struct Orchestrator {
     /// MCP envelope client for envelope-first communication
     mcp_client: McpEnvelopeClient,
 
-    /// Configuration
-    config: OrchestratorConfig,
+    /// Configuration (public for access by envelope handlers)
+    pub(crate) config: OrchestratorConfig,
 
     /// Pipeline state (shared, mutable)
     state: Arc<Mutex<PipelineState>>,

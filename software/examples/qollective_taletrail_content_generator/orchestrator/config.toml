@@ -94,3 +94,11 @@ max_attempts = 5
 initial_delay_ms = 2000
 max_delay_ms = 15000
 backoff_multiplier = 2.0
+
+[execution]
+# Root directory for execution logs (relative to MCP server working directory)
+root_directory = "../taletrail-data/execution"
+# Enable request-ID subdirectory organization
+use_request_subdirs = true
+# Log level for execution logging
+log_level = "info"

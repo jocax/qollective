@@ -119,6 +119,18 @@
 					<!-- Auto-scroll Toggle -->
 					<UCheckbox v-model="autoScroll" label="Auto-scroll" />
 
+					<!-- Reconnect Button -->
+					<UButton
+						variant="outline"
+						color="blue"
+						icon="i-heroicons-arrow-path"
+						:loading="reconnecting"
+						:disabled="connected"
+						@click="reconnectToNats"
+					>
+						Reconnect to NATS
+					</UButton>
+
 					<!-- Clear Button -->
 					<UButton
 						variant="outline"
@@ -179,6 +191,7 @@
 	const filterText = ref("");
 	const autoScroll = ref(true);
 	const connected = ref(false);
+	const reconnecting = ref(false);
 	const messageContainer = ref<HTMLElement | null>(null);
 
 	// Event unlisteners
@@ -236,6 +249,33 @@
 
 	function clearMessages() {
 		messages.value = [];
+	}
+
+	async function reconnectToNats() {
+		try {
+			reconnecting.value = true;
+
+			// First check actual connection status
+			const status = await invoke<boolean>("get_monitoring_status");
+			connected.value = status;
+
+			// If not connected, try to reconnect
+			if (!status) {
+				await invoke('start_nats_monitoring');
+				console.log('[Monitoring] Reconnected to NATS successfully');
+
+				// Update status after reconnect
+				const newStatus = await invoke<boolean>("get_monitoring_status");
+				connected.value = newStatus;
+			} else {
+				console.log('[Monitoring] Already connected to NATS');
+			}
+		} catch (e) {
+			console.error('[Monitoring] Failed to reconnect:', e);
+			connected.value = false;
+		} finally {
+			reconnecting.value = false;
+		}
 	}
 
 	function scrollToBottom() {
@@ -319,6 +359,16 @@
 		} catch (error) {
 			console.error("[Monitoring] Failed to initialize:", error);
 		}
+
+		// Poll connection status every 3 seconds to detect disconnects
+		setInterval(async () => {
+			try {
+				const currentStatus = await invoke<boolean>("get_monitoring_status");
+				connected.value = currentStatus;
+			} catch (e) {
+				connected.value = false;
+			}
+		}, 3000);
 	});
 
 	onUnmounted(() => {

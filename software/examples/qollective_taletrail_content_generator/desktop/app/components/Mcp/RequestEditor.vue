@@ -102,9 +102,11 @@
 	// Watch store changes and sync to local state
 	watch(() => mcpStore.templateContent, (newContent) => {
 		if (newContent) {
+			console.log("[RequestEditor] Template content updated:", newContent.tool_name);
 			localJson.value = JSON.stringify(newContent.arguments, null, 2);
 			validationError.value = null;
 		} else {
+			console.log("[RequestEditor] Template content cleared");
 			localJson.value = "";
 			validationError.value = null;
 		}

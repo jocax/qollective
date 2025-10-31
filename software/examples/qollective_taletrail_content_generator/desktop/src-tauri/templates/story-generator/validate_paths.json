@@ -1,5 +1,5 @@
 {
-	"tool_name": "generate_nodes",
+	"tool_name": "validate_paths",
 	"arguments": {
 		"dag": {
 			"nodes": {
@@ -10,7 +10,7 @@
 					"content": {
 						"type": "interactive_story_node",
 						"node_id": "start",
-						"text": "",
+						"text": "Beginning of story",
 						"choices": [],
 						"convergence_point": false,
 						"next_nodes": []
@@ -23,7 +23,7 @@
 					"content": {
 						"type": "interactive_story_node",
 						"node_id": "node1",
-						"text": "",
+						"text": "Middle of story",
 						"choices": [],
 						"convergence_point": false,
 						"next_nodes": []
@@ -31,12 +31,12 @@
 				},
 				"end": {
 					"id": "end",
-					"incoming_edges": 1,
+					"incoming_edges": 2,
 					"outgoing_edges": 0,
 					"content": {
 						"type": "interactive_story_node",
 						"node_id": "end",
-						"text": "",
+						"text": "End of story",
 						"choices": [],
 						"convergence_point": false,
 						"next_nodes": []
@@ -62,22 +62,6 @@
 			],
 			"start_node_id": "start",
 			"convergence_points": []
-		},
-		"node_ids": ["start", "node1"],
-		"generation_request": {
-			"theme": "Space Adventure",
-			"age_group": "6-8",
-			"language": "en",
-			"node_count": 3,
-			"tenant_id": 1,
-			"educational_goals": [
-				"Problem solving",
-				"Basic astronomy"
-			],
-			"vocabulary_level": "basic",
-			"required_elements": [
-				"Moral lesson"
-			]
 		}
 	}
 }

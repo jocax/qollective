@@ -2,7 +2,8 @@
 
 use tauri::{
 	menu::{Menu, MenuItem},
-	tray::TrayIconBuilder
+	tray::TrayIconBuilder,
+	Manager
 };
 
 pub mod error;
@@ -70,6 +71,14 @@ pub fn run() {
 				println!("[TaleTrail] Root directory initialized at: {:?}", root_path);
 			}
 
+			// Copy example templates from source on first run
+			let source_templates_path = app_config_for_setup.source_templates_dir();
+			if let Err(e) = utils::directory_manager::initialize_templates_from_source(&root_path, &source_templates_path) {
+				eprintln!("[TaleTrail] Warning: Failed to initialize templates from source: {}", e);
+			} else {
+				println!("[TaleTrail] Example templates initialized from: {:?}", source_templates_path);
+			}
+
 			// Auto-start NATS monitoring
 			let app_handle = app.handle().clone();
 			let config_for_monitoring = app_config_for_setup.clone();
@@ -81,6 +90,31 @@ pub fn run() {
 				match nats::monitoring::start_monitoring(nats_url, app_handle, ca_cert_path, nkey_path).await {
 					Ok(_) => eprintln!("[TaleTrail] NATS monitoring started successfully"),
 					Err(e) => eprintln!("[TaleTrail] Warning: Failed to start NATS monitoring: {}", e),
+				}
+			});
+
+			// Auto-start NATS connection for MCP requests
+			let app_handle_mcp = app.handle().clone();
+			let config_for_mcp = app_config_for_setup.clone();
+			tauri::async_runtime::spawn(async move {
+				// Use the NatsState to initialize connection
+				let state = app_handle_mcp.state::<commands::nats_commands::NatsState>();
+				let mut client_guard = state.client().write().await;
+
+				// If already connected, skip
+				if client_guard.is_some() {
+					return;
+				}
+
+				let nats_config = nats::NatsConfig::from_app_config(&config_for_mcp);
+				let client = nats::NatsClient::new(nats_config);
+
+				match client.connect().await {
+					Ok(_) => {
+						*client_guard = Some(client);
+						eprintln!("[TaleTrail] NATS connected for MCP requests");
+					}
+					Err(e) => eprintln!("[TaleTrail] Warning: Failed to connect NATS for MCP: {}", e),
 				}
 			});
 
@@ -108,6 +142,7 @@ pub fn run() {
 			commands::subscribe_to_generations,
 			commands::unsubscribe_from_generations,
 			commands::nats_connection_status,
+			commands::connect_nats_for_mcp,
 			commands::disconnect_nats,
 			commands::get_active_requests,
 			commands::submit_generation_request,
@@ -123,6 +158,7 @@ pub fn run() {
 			commands::clear_request_history,
 			commands::initialize_root_directory,
 			commands::get_templates_directory,
+			commands::initialize_templates,
 			commands::prepare_execution_directory,
 			commands::list_execution_directories,
 			commands::save_request_file,
