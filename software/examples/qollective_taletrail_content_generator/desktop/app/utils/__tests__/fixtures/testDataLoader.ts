@@ -1,13 +1,13 @@
 /**
  * Test Data Loader
  *
- * Loads real trail data from response_test_epic_2.json for integration testing.
+ * Loads real trail data from response_test_epic_de_1.json for integration testing.
  * This ensures all component tests use actual generated story data rather than mocks.
  */
 
-import testDataRaw from '../../../../test-trails/response_test_epic_2.json'
-import { reconstructDAG } from '~/utils/dagReconstruction'
-import type { Trail, TrailStep, TrailListItem } from '~/types/trails'
+import type { Trail, TrailListItem, TrailStep } from "../../../types/trails";
+import testDataRaw from "../../../../test-trails/response_test_epic_de_1.json";
+import { reconstructDAG } from "../../dagReconstruction";
 
 /**
  * Fix empty next_node_id fields in choices
@@ -26,30 +26,30 @@ import type { Trail, TrailStep, TrailListItem } from '~/types/trails'
  * @returns Fixed trail steps with populated next_node_id fields
  */
 function fixEmptyNextNodeIds(trail_steps: TrailStep[]): TrailStep[] {
-  const fixedSteps = [...trail_steps]
-  let nextNodeIndex = 1 // Start assigning from node index 1
+	const fixedSteps = [...trail_steps];
+	let nextNodeIndex = 1; // Start assigning from node index 1
 
-  for (let i = 0; i < fixedSteps.length; i++) {
-    const step = fixedSteps[i]
-    const choices = step.content_reference.content.choices || []
+	for (let i = 0; i < fixedSteps.length; i++) {
+		const step = fixedSteps[i];
+		const choices = step.content_reference.content.choices || [];
 
-    for (let j = 0; j < choices.length; j++) {
-      // If next_node_id is empty or missing, assign the next available node
-      if (!choices[j].next_node_id || choices[j].next_node_id === '') {
-        if (nextNodeIndex < fixedSteps.length) {
-          choices[j].next_node_id = fixedSteps[nextNodeIndex].content_reference.temp_node_id
-          nextNodeIndex++
-        }
-        // If we run out of nodes, point to last node (creates end nodes)
-      }
-    }
-  }
+		for (let j = 0; j < choices.length; j++) {
+			// If next_node_id is empty or missing, assign the next available node
+			if (!choices[j].next_node_id || choices[j].next_node_id === "") {
+				if (nextNodeIndex < fixedSteps.length) {
+					choices[j].next_node_id = fixedSteps[nextNodeIndex].content_reference.temp_node_id;
+					nextNodeIndex++;
+				}
+				// If we run out of nodes, point to last node (creates end nodes)
+			}
+		}
+	}
 
-  return fixedSteps
+	return fixedSteps;
 }
 
 /**
- * Load real test trail data from response_test_epic_2.json
+ * Load real test trail data from response_test_epic_de_1.json
  *
  * Parses the nested JSON structure from the envelope response.
  * Structure: envelope.payload.tool_response.content[0].text contains JSON string
@@ -61,19 +61,19 @@ function fixEmptyNextNodeIds(trail_steps: TrailStep[]): TrailStep[] {
  * @returns Trail data with trail, trail_steps, execution_trace, and metadata
  */
 export function loadTestTrail() {
-  // Parse the nested JSON structure
-  const content = JSON.parse(testDataRaw.payload.tool_response.content[0].text)
-  const generationResponse = content.generation_response
+	// Parse the nested JSON structure
+	const content = JSON.parse(testDataRaw.payload.tool_response.content[0].text);
+	const generationResponse = content.generation_response;
 
-  // Fix empty next_node_id fields for testing
-  const fixedSteps = fixEmptyNextNodeIds(generationResponse.trail_steps)
+	// Fix empty next_node_id fields for testing
+	const fixedSteps = fixEmptyNextNodeIds(generationResponse.trail_steps);
 
-  return {
-    trail: generationResponse.trail,
-    trail_steps: fixedSteps,
-    execution_trace: generationResponse.execution_trace,
-    generation_metadata: generationResponse.generation_metadata
-  }
+	return {
+		trail: generationResponse.trail,
+		trail_steps: fixedSteps,
+		execution_trace: generationResponse.execution_trace,
+		generation_metadata: generationResponse.generation_metadata
+	};
 }
 
 /**
@@ -86,16 +86,16 @@ export function loadTestTrail() {
  * @returns Trail data with reconstructed DAG attached
  */
 export function loadTestTrailWithDAG() {
-  const data = loadTestTrail()
-  const dag = reconstructDAG(data.trail_steps, data.trail.metadata.start_node_id)
+	const data = loadTestTrail();
+	const dag = reconstructDAG(data.trail_steps, data.trail.metadata.start_node_id);
 
-  return {
-    ...data,
-    trail: {
-      ...data.trail,
-      dag
-    } as Trail
-  }
+	return {
+		...data,
+		trail: {
+			...data.trail,
+			dag
+		} as Trail
+	};
 }
 
 /**
@@ -107,22 +107,22 @@ export function loadTestTrailWithDAG() {
  * @returns TrailListItem with metadata for card display
  */
 export function loadTestTrailListItem(): TrailListItem {
-  const data = loadTestTrail()
+	const data = loadTestTrail();
 
-  return {
-    id: 'test-trail-epic-2',
-    file_path: '/test-trails/response_test_epic_2.json',
-    title: data.trail.title,
-    description: data.trail.description || 'Interactive story for 15-17 age group',
-    theme: data.trail.metadata.generation_params.theme,
-    age_group: data.trail.metadata.generation_params.age_group,
-    language: data.trail.metadata.generation_params.language,
-    tags: ['nature', 'mediterranean', 'flora', 'fauna', 'education'],
-    status: 'completed',
-    generated_at: data.generation_metadata.generated_at,
-    node_count: data.trail_steps.length,
-    tenantId: 'tenant-1'
-  }
+	return {
+		id: "test-trail-epic-de-1",
+		file_path: "/test-trails/response_test_epic_de_1.json",
+		title: data.trail.title,
+		description: data.trail.description || "Interactive story for 15-17 age group",
+		theme: data.trail.metadata.generation_params.theme,
+		age_group: data.trail.metadata.generation_params.age_group,
+		language: data.trail.metadata.generation_params.language,
+		tags: ["nature", "mediterranean", "flora", "fauna", "education"],
+		status: "completed",
+		generated_at: data.generation_metadata.generated_at,
+		node_count: data.trail_steps.length,
+		tenantId: "tenant-1"
+	};
 }
 
 /**
@@ -133,16 +133,16 @@ export function loadTestTrailListItem(): TrailListItem {
  * @returns Object with trail statistics
  */
 export function getTestTrailStats() {
-  const data = loadTestTrailWithDAG()
+	const data = loadTestTrailWithDAG();
 
-  return {
-    nodeCount: data.trail_steps.length,
-    edgeCount: data.trail.dag?.edges.length || 0,
-    convergencePointCount: data.trail.dag?.convergence_points?.length || 0,
-    startNodeId: data.trail.metadata.start_node_id,
-    title: data.trail.title,
-    theme: data.trail.metadata.generation_params.theme,
-    ageGroup: data.trail.metadata.generation_params.age_group,
-    language: data.trail.metadata.generation_params.language
-  }
+	return {
+		nodeCount: data.trail_steps.length,
+		edgeCount: data.trail.dag?.edges.length || 0,
+		convergencePointCount: data.trail.dag?.convergence_points?.length || 0,
+		startNodeId: data.trail.metadata.start_node_id,
+		title: data.trail.title,
+		theme: data.trail.metadata.generation_params.theme,
+		ageGroup: data.trail.metadata.generation_params.age_group,
+		language: data.trail.metadata.generation_params.language
+	};
 }

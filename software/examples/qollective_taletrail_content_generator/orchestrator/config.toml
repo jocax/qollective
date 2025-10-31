@@ -54,9 +54,9 @@ retry_max_delay_secs = 30
 
 [batch]
 size_min = 4
-size_max = 6
-concurrent_batches = 3
-concurrent_batches_max = 5
+size_max = 1
+concurrent_batches = 1
+concurrent_batches_max = 1
 
 [dag]
 # Total number of nodes in the story DAG
@@ -90,7 +90,7 @@ branching_factor = 2
 max_rounds = 3
 
 [retry]
-max_attempts = 3
-initial_delay_ms = 100
-max_delay_ms = 5000
+max_attempts = 5
+initial_delay_ms = 2000
+max_delay_ms = 15000
 backoff_multiplier = 2.0

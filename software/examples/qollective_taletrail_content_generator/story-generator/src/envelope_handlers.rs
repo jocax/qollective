@@ -274,6 +274,7 @@ impl StoryGeneratorHandler {
                     params,
                     self.llm_client.as_ref(),
                     &prompt_package,
+                    self.config.generation.request_delay_ms,
                 ).await {
                     Ok(response) => {
                         // Serialize response to JSON

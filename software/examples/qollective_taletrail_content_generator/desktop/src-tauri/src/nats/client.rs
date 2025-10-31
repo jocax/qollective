@@ -1,6 +1,8 @@
 use async_nats::{Client, ConnectOptions, Subscriber};
+use async_trait::async_trait;
 use crate::error::{AppError, AppResult};
 use crate::models::{GenerationEvent, GenerationRequest};
+use crate::services::traits::NatsService;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -20,19 +22,20 @@ pub struct NatsConfig {
     /// Connection timeout in seconds
     pub timeout_secs: u64,
     /// Path to CA certificate for TLS
-    pub ca_cert_path: String,
+    pub ca_cert_path: std::path::PathBuf,
     /// Path to NKey seed file for authentication
-    pub nkey_file_path: String,
+    pub nkey_file_path: std::path::PathBuf,
 }
 
-impl Default for NatsConfig {
-    fn default() -> Self {
+impl NatsConfig {
+    /// Create NatsConfig from AppConfig
+    pub fn from_app_config(app_config: &crate::config::AppConfig) -> Self {
         Self {
-            url: "nats://localhost:5222".to_string(),
-            name: Some("taletrail-desktop".to_string()),
-            timeout_secs: crate::constants::timeouts::DEFAULT_REQUEST_TIMEOUT_SECS,
-            ca_cert_path: "/Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/certs/ca.pem".to_string(),
-            nkey_file_path: "/Users/ms/development/qollective/software/examples/qollective_taletrail_content_generator/nkeys/desktop.nk".to_string(),
+            url: app_config.nats.url.clone(),
+            name: Some(crate::constants::defaults::NATS_CLIENT_NAME.to_string()),
+            timeout_secs: app_config.nats.request_timeout_ms / 1000,
+            ca_cert_path: app_config.ca_cert_path(),
+            nkey_file_path: app_config.nkey_path(),
         }
     }
 }
@@ -71,13 +74,13 @@ impl NatsClient {
 
         // Load NKey seed from file for authentication
         let nkey_seed = std::fs::read_to_string(&self.config.nkey_file_path)
-            .map_err(|e| AppError::ConnectionError(format!("Failed to read NKey file from {}: {}", self.config.nkey_file_path, e)))?;
+            .map_err(|e| AppError::ConnectionError(format!("Failed to read NKey file from {:?}: {}", self.config.nkey_file_path, e)))?;
 
         opts = opts.nkey(nkey_seed.trim().to_string());
 
         // Configure TLS with CA certificate
         let ca_cert = std::fs::read(&self.config.ca_cert_path)
-            .map_err(|e| AppError::ConnectionError(format!("Failed to read CA cert from {}: {}", self.config.ca_cert_path, e)))?;
+            .map_err(|e| AppError::ConnectionError(format!("Failed to read CA cert from {:?}: {}", self.config.ca_cert_path, e)))?;
 
         let root_cert_store = {
             let mut store = rustls::RootCertStore::empty();
@@ -309,6 +312,114 @@ impl NatsClient {
 
         Ok(())
     }
+
+    /// Send MCP tool call request via NATS
+    ///
+    /// Wraps the CallToolRequest in a Qollective envelope and sends it to the specified
+    /// NATS subject using request-reply pattern. Returns the CallToolResult from the
+    /// response envelope.
+    ///
+    /// # Arguments
+    /// * `subject` - NATS subject to send the request to
+    /// * `tool_call` - rmcp CallToolRequest to send
+    /// * `tenant_id` - Tenant ID for multi-tenancy support
+    ///
+    /// # Returns
+    /// * `Ok(CallToolResult)` - The MCP tool result from the server
+    /// * `Err(AppError)` - Error if request fails
+    ///
+    /// # Errors
+    /// Returns `AppError` if:
+    /// - Not connected to NATS
+    /// - Envelope encoding fails
+    /// - NATS request operation fails
+    /// - Response decoding fails
+    /// - MCP server returns an error result
+    pub async fn send_mcp_tool_call(
+        &self,
+        subject: &str,
+        tool_call: rmcp::model::CallToolRequest,
+        tenant_id: i32,
+    ) -> AppResult<rmcp::model::CallToolResult> {
+        use qollective::envelope::{Envelope, Meta, TracingMeta};
+        use qollective::types::mcp::McpData;
+        use qollective::envelope::nats_codec::NatsEnvelopeCodec;
+        use uuid::Uuid;
+
+        let client_guard = self.client.read().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or_else(|| AppError::ConnectionError("Not connected to NATS".to_string()))?;
+
+        // Wrap in McpData
+        let mcp_data = McpData::with_tool_call(tool_call);
+
+        // Create envelope metadata with tenant and tracing info
+        let trace_id = Uuid::new_v4().to_string();
+        let tool_name = mcp_data
+            .tool_call
+            .as_ref()
+            .map(|tc| tc.params.name.as_ref().to_string())
+            .unwrap_or_else(|| "unknown_tool".to_string());
+
+        let mut metadata = Meta::default();
+        metadata.tenant = Some(tenant_id.to_string());
+        metadata.tracing = Some(TracingMeta {
+            trace_id: Some(trace_id.clone()),
+            parent_span_id: None,
+            span_id: None,
+            baggage: Default::default(),
+            sampling_rate: None,
+            sampled: None,
+            trace_state: None,
+            operation_name: Some(tool_name),
+            span_kind: None,
+            span_status: None,
+            tags: Default::default(),
+        });
+
+        // Create envelope
+        let envelope = Envelope::new(metadata, mcp_data);
+
+        // Encode envelope
+        let payload = NatsEnvelopeCodec::encode(&envelope)
+            .map_err(|e| AppError::NatsError(format!("Failed to encode envelope: {}", e)))?;
+
+        // Send request and wait for response
+        let response = client
+            .request(subject.to_string(), payload.into())
+            .await
+            .map_err(|e| AppError::NatsError(format!("Failed to send request to {}: {}", subject, e)))?;
+
+        // Decode response envelope
+        let response_envelope: Envelope<McpData> = NatsEnvelopeCodec::decode(&response.payload)
+            .map_err(|e| AppError::NatsError(format!("Failed to decode response: {}", e)))?;
+
+        // Extract CallToolResult from response
+        if let Some(tool_response) = response_envelope.payload.tool_response {
+            // Check if response indicates an error
+            if tool_response.is_error == Some(true) {
+                // Extract error message from content
+                let error_msg = tool_response.content
+                    .iter()
+                    .filter_map(|c| {
+                        // Extract text content from MCP Content
+                        if let Ok(json) = serde_json::to_value(c) {
+                            json.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(AppError::NatsError(format!("MCP tool error: {}", error_msg)));
+            }
+
+            Ok(tool_response)
+        } else {
+            Err(AppError::NatsError("No tool response in envelope".to_string()))
+        }
+    }
 }
 
 impl Clone for NatsClient {
@@ -321,16 +432,50 @@ impl Clone for NatsClient {
     }
 }
 
+// Implement NatsService trait for NatsClient
+#[async_trait]
+impl NatsService for NatsClient {
+    async fn connect(&self) -> AppResult<()> {
+        self.connect().await
+    }
+
+    async fn subscribe(&self, tenant_id: Option<String>) -> AppResult<()> {
+        let subscriber = self.subscribe(tenant_id).await?;
+        self.set_subscriber(subscriber).await;
+        Ok(())
+    }
+
+    async fn publish_request(&self, request: &GenerationRequest) -> AppResult<()> {
+        self.publish_request(request).await
+    }
+
+    async fn is_connected(&self) -> bool {
+        self.is_connected().await
+    }
+
+    async fn disconnect(&self) -> AppResult<()> {
+        self.disconnect().await
+    }
+
+    async fn unsubscribe(&self) -> AppResult<()> {
+        self.unsubscribe().await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_nats_config_default() {
-        let config = NatsConfig::default();
-        assert_eq!(config.url, "nats://localhost:5222");
-        assert_eq!(config.name, Some("taletrail-desktop".to_string()));
-        assert_eq!(config.timeout_secs, 180);
+    fn test_nats_config_from_app_config() {
+        use crate::config::AppConfig;
+
+        let app_config = AppConfig::create_test_app_config();
+
+        let config = NatsConfig::from_app_config(&app_config);
+        assert_eq!(config.url, crate::constants::network::DEFAULT_NATS_URL);
+        assert_eq!(config.name, Some(crate::constants::defaults::NATS_CLIENT_NAME.to_string()));
+        assert_eq!(config.timeout_secs, crate::constants::network::DEFAULT_REQUEST_TIMEOUT_MS / 1000);
     }
 
     #[test]
@@ -359,9 +504,64 @@ mod tests {
 
     #[tokio::test]
     async fn test_nats_client_initialization() {
-        let config = NatsConfig::default();
+        use crate::config::AppConfig;
+
+        let app_config = AppConfig::create_test_app_config();
+
+        let config = NatsConfig::from_app_config(&app_config);
         let client = NatsClient::new(config);
 
         assert!(!client.is_connected().await);
+    }
+
+    #[test]
+    fn test_mcp_tool_call_request_structure() {
+        use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam};
+        use serde_json::json;
+
+        let arguments = json!({
+            "generation_request": {
+                "theme": "Space Adventure",
+                "age_group": "9-11",
+                "language": "en"
+            }
+        });
+
+        let tool_call = CallToolRequest {
+            method: CallToolRequestMethod::default(),
+            params: CallToolRequestParam {
+                name: "orchestrate_generation".into(),
+                arguments: arguments.as_object().cloned(),
+            },
+            extensions: Default::default(),
+        };
+
+        assert_eq!(tool_call.params.name.as_ref(), "orchestrate_generation");
+        assert!(tool_call.params.arguments.is_some());
+    }
+
+    #[test]
+    fn test_mcp_envelope_structure() {
+        use qollective::envelope::{Envelope, Meta};
+        use qollective::types::mcp::McpData;
+        use rmcp::model::{CallToolRequest, CallToolRequestMethod, CallToolRequestParam};
+
+        let tool_call = CallToolRequest {
+            method: CallToolRequestMethod::default(),
+            params: CallToolRequestParam {
+                name: "test_tool".into(),
+                arguments: None,
+            },
+            extensions: Default::default(),
+        };
+
+        let mcp_data = McpData::with_tool_call(tool_call);
+        let mut meta = Meta::default();
+        meta.tenant = Some("42".to_string());
+
+        let envelope = Envelope::new(meta, mcp_data);
+
+        assert_eq!(envelope.meta.tenant, Some("42".to_string()));
+        assert!(envelope.payload.tool_call.is_some());
     }
 }

@@ -124,8 +124,8 @@ pub const BATCH_SIZE_MIN: usize = 4;
 /// Maximum batch size for node generation
 pub const BATCH_SIZE_MAX: usize = 6;
 
-/// Number of concurrent batches
-pub const CONCURRENT_BATCHES: usize = 3;
+/// Number of concurrent batches (reduced to 1 for Google Gemini rate limiting)
+pub const CONCURRENT_BATCHES: usize = 1;
 
 // ============================================================================
 // LM STUDIO DEFAULTS

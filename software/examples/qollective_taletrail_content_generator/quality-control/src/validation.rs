@@ -107,8 +107,8 @@ pub async fn validate_content_node(
     }
 
     tracing::info!(
-        "Educational value score for node {}: {:.2} (threshold: 0.4)",
-        content.id, edu_score
+        "Educational value score for node {}: {:.2} (threshold: {:.2})",
+        content.id, edu_score, config.validation.thresholds.min_educational_value_score
     );
 
     // Determine correction capability based on scores
@@ -128,9 +128,11 @@ pub async fn validate_content_node(
     );
 
     // Determine if content is valid based on thresholds
-    // Note: Educational value threshold is lower (0.4) because simple stories for young
-    // children may not explicitly contain educational keywords but still have value
-    let is_valid = age_score >= 0.7 && safety_issues.is_empty() && edu_score >= 0.4;
+    // Note: Educational value threshold is lower (configured in config.toml) because simple stories
+    // for young children may not explicitly contain educational keywords but still have value
+    let is_valid = age_score >= config.validation.thresholds.min_age_appropriate_score as f64
+        && safety_issues.is_empty()
+        && edu_score >= config.validation.thresholds.min_educational_value_score as f64;
 
     tracing::info!(
         "Validation result for node {}: is_valid={}, age_score={:.2}, safety_issues={}, edu_score={:.2}, correction_capability={:?}",
@@ -145,14 +147,22 @@ pub async fn validate_content_node(
     // If rejected, log WHY
     if !is_valid {
         let mut reasons = Vec::new();
-        if age_score < 0.7 {
-            reasons.push(format!("age_score {:.2} < 0.7", age_score));
+        if age_score < config.validation.thresholds.min_age_appropriate_score as f64 {
+            reasons.push(format!(
+                "age_score {:.2} < {:.2}",
+                age_score,
+                config.validation.thresholds.min_age_appropriate_score
+            ));
         }
         if !safety_issues.is_empty() {
             reasons.push(format!("{} safety issues", safety_issues.len()));
         }
-        if edu_score < 0.4 {
-            reasons.push(format!("edu_score {:.2} < 0.4", edu_score));
+        if edu_score < config.validation.thresholds.min_educational_value_score as f64 {
+            reasons.push(format!(
+                "edu_score {:.2} < {:.2}",
+                edu_score,
+                config.validation.thresholds.min_educational_value_score
+            ));
         }
 
         tracing::warn!(

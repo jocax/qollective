@@ -60,6 +60,8 @@ pub struct ValidationConfig {
     pub max_negotiation_rounds: u32,
     pub thresholds: ValidationThresholds,
     pub correction: CorrectionConfig,
+    /// Delay for discovery responses in milliseconds
+    pub discovery_delay_ms: u64,
 }
 
 /// Age-specific rubrics configuration
@@ -192,6 +194,7 @@ impl Default for ValidationConfig {
             max_negotiation_rounds: 3,
             thresholds: ValidationThresholds::default(),
             correction: CorrectionConfig::default(),
+            discovery_delay_ms: 100,
         }
     }
 }

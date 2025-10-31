@@ -89,6 +89,12 @@ pub struct GenerationConfig {
 
     /// Target words per node
     pub target_words_per_node: usize,
+
+    /// Delay between LLM requests in milliseconds (for rate limiting)
+    pub request_delay_ms: u64,
+
+    /// Delay for discovery responses in milliseconds
+    pub discovery_delay_ms: u64,
 }
 
 // LlmConfig removed - now using shared-types-llm::LlmConfig
@@ -141,6 +147,8 @@ impl Default for GenerationConfig {
             batch_size_min: 4,
             batch_size_max: 6,
             target_words_per_node: 400,
+            request_delay_ms: 2000,
+            discovery_delay_ms: 100,
         }
     }
 }

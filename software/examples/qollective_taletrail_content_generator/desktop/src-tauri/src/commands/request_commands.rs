@@ -1,6 +1,7 @@
 use crate::commands::nats_commands::NatsState;
 use crate::models::{GenerationRequest, RequestMetadata};
 use crate::nats::{NatsClient, NatsConfig};
+use crate::services::{RequestService, RequestServiceImpl};
 use tauri::{AppHandle, Manager};
 
 /// Submit a generation request to the TaleTrail content pipeline via NATS
@@ -39,50 +40,19 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 pub async fn submit_generation_request(
     app: AppHandle,
-    mut request: GenerationRequest,
+    request: GenerationRequest,
 ) -> Result<String, String> {
-    // Ensure metadata exists with current timestamp
-    if request.metadata.is_none() {
-        request.metadata = Some(RequestMetadata::new());
-    }
-
-    // Validate the request
-    request
-        .validate()
-        .map_err(|e| format!("Request validation failed: {}", e))?;
-
     // Get or create NATS client
-    let state = app.state::<NatsState>();
-    let mut client_guard = state.client().write().await;
+    let nats_client = get_or_create_nats_client(&app).await?;
 
-    let client = if let Some(existing_client) = client_guard.as_ref() {
-        existing_client.clone()
-    } else {
-        // Create new client with default config
-        let config = NatsConfig::default();
-        let new_client = NatsClient::new(config);
+    // Create service instance with NATS client
+    let service = RequestServiceImpl::new(nats_client);
 
-        // Connect to NATS
-        new_client
-            .connect()
-            .await
-            .map_err(|e| format!("Failed to connect to NATS: {}", e))?;
-
-        *client_guard = Some(new_client.clone());
-        new_client
-    };
-
-    // Drop the write lock before publishing
-    drop(client_guard);
-
-    // Publish the request to NATS
-    client
-        .publish_request(&request)
+    // Use the service to submit the request
+    service
+        .submit_request(request)
         .await
-        .map_err(|e| format!("Failed to publish request: {}", e))?;
-
-    // Return the request_id for tracking
-    Ok(request.request_id.clone())
+        .map_err(|e| e.to_string())
 }
 
 /// Replay a generation request with optional modifications
@@ -100,28 +70,46 @@ pub async fn submit_generation_request(
 #[tauri::command]
 pub async fn replay_generation_request(
     app: AppHandle,
-    mut original_request: GenerationRequest,
+    original_request: GenerationRequest,
     new_request_id: String,
 ) -> Result<String, String> {
-    // Store the original request ID
-    let original_id = original_request.request_id.clone();
+    // Get or create NATS client
+    let nats_client = get_or_create_nats_client(&app).await?;
 
-    // Update request with new ID
-    original_request.request_id = new_request_id.clone();
+    // Create service instance with NATS client
+    let service = RequestServiceImpl::new(nats_client);
 
-    // Create new metadata marking this as a replay
-    let metadata = if let Some(mut existing_metadata) = original_request.metadata {
-        existing_metadata.submitted_at = chrono::Utc::now().to_rfc3339();
-        existing_metadata.original_request_id = Some(original_id);
-        existing_metadata
+    // Use the service to replay the request
+    service
+        .replay_request(original_request, new_request_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Helper function to get or create NATS client from app state
+async fn get_or_create_nats_client(app: &AppHandle) -> Result<NatsClient, String> {
+    let state = app.state::<NatsState>();
+    let mut client_guard = state.client().write().await;
+
+    let client = if let Some(existing_client) = client_guard.as_ref() {
+        existing_client.clone()
     } else {
-        RequestMetadata::new().with_original(original_id)
+        // Create new client with config from app state
+        let app_config = app.state::<crate::config::AppConfig>();
+        let config = NatsConfig::from_app_config(&app_config);
+        let new_client = NatsClient::new(config);
+
+        // Connect to NATS
+        new_client
+            .connect()
+            .await
+            .map_err(|e| format!("Failed to connect to NATS: {}", e))?;
+
+        *client_guard = Some(new_client.clone());
+        new_client
     };
 
-    original_request.metadata = Some(metadata);
-
-    // Submit the modified request
-    submit_generation_request(app, original_request).await
+    Ok(client)
 }
 
 #[cfg(test)]

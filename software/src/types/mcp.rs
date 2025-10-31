@@ -37,7 +37,7 @@ pub struct McpDiscoveryData {
     pub query_type: String,
     /// Tools found in discovery
     pub tools: Option<Vec<Tool>>,
-    /// Server information  
+    /// Server information
     pub server_info: Option<McpServerInfo>,
 }
 
@@ -245,7 +245,7 @@ impl McpDiscoveryData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[cfg(any(feature = "mcp-client", feature = "mcp-server"))]
     use rmcp_macros::*;
 
@@ -254,10 +254,10 @@ mod tests {
     async fn test_rmcp_macros_compilation() {
         // Test that rmcp-macros compiles and can be used
         // This test ensures the dependency is working correctly
-        
+
         // Create basic rmcp types to verify compilation
         use rmcp::model::{CallToolRequest, CallToolRequestParam};
-        
+
         let tool_request = CallToolRequest {
             method: Default::default(),
             params: CallToolRequestParam {
@@ -266,7 +266,7 @@ mod tests {
             },
             extensions: Default::default(),
         };
-        
+
         // Test envelope integration
         let mcp_data = McpData::with_tool_call(tool_request);
         assert!(mcp_data.tool_call.is_some());
@@ -278,7 +278,7 @@ mod tests {
     fn test_envelope_serialization_with_rmcp_types() {
         // Test that envelope serialization works with rmcp types
         use rmcp::model::{CallToolResult, CallToolRequestParam, CallToolRequest};
-        
+
         let tool_request = CallToolRequest {
             method: Default::default(),
             params: CallToolRequestParam {
@@ -291,9 +291,9 @@ mod tests {
             },
             extensions: Default::default(),
         };
-        
+
         let mcp_data = McpData::with_tool_call(tool_request);
-        
+
         // Verify serialization works
         let serialized = serde_json::to_string(&mcp_data).expect("Should serialize");
         let _deserialized: McpData = serde_json::from_str(&serialized).expect("Should deserialize");

@@ -1,5 +1,5 @@
 use crate::models::{GenerationResponse, TrailListItem};
-use crate::utils::FileLoader;
+use crate::services::{TrailStorageService, TrailStorageServiceImpl};
 
 /// Load trail metadata from a directory
 ///
@@ -7,7 +7,11 @@ use crate::utils::FileLoader;
 /// a list of trail metadata items
 #[tauri::command]
 pub async fn load_trails_from_directory(directory: String) -> Result<Vec<TrailListItem>, String> {
-    FileLoader::load_trails_from_directory(&directory)
+    let service = TrailStorageServiceImpl::new();
+    service
+        .load_trails_from_directory(&directory)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Load full trail data from a file
@@ -15,7 +19,11 @@ pub async fn load_trails_from_directory(directory: String) -> Result<Vec<TrailLi
 /// Reads and parses the complete GenerationResponse from a trail file
 #[tauri::command]
 pub async fn load_trail_full(file_path: String) -> Result<GenerationResponse, String> {
-    FileLoader::load_trail_full(&file_path)
+    let service = TrailStorageServiceImpl::new();
+    service
+        .load_trail(&file_path)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Delete a trail file from the filesystem
@@ -23,24 +31,11 @@ pub async fn load_trail_full(file_path: String) -> Result<GenerationResponse, St
 /// Removes the specified trail JSON file
 #[tauri::command]
 pub async fn delete_trail(file_path: String) -> Result<(), String> {
-    use std::fs;
-    use std::path::Path;
-
-    // Validate file exists
-    let path = Path::new(&file_path);
-    if !path.exists() {
-        return Err(format!("File does not exist: {}", file_path));
-    }
-
-    // Validate it's a file (not a directory)
-    if !path.is_file() {
-        return Err(format!("Path is not a file: {}", file_path));
-    }
-
-    // Delete file
-    fs::remove_file(&file_path).map_err(|e| format!("Failed to delete file: {}", e))?;
-
-    Ok(())
+    let service = TrailStorageServiceImpl::new();
+    service
+        .delete_trail(&file_path)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

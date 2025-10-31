@@ -1,3 +1,7 @@
+// Environment variable driven port configuration
+const DEV_PORT = Number.parseInt(process.env.VITE_DEV_PORT || "3030");
+const HMR_PORT = Number.parseInt(process.env.VITE_HMR_PORT || "3031");
+
 export default defineNuxtConfig({
 	modules: [
 		"@nuxt/test-utils/module",
@@ -5,7 +9,8 @@ export default defineNuxtConfig({
 		"@nuxt/ui",
 		"nuxt-svgo",
 		"reka-ui/nuxt",
-		"@nuxt/eslint"
+		"@nuxt/eslint",
+		"@pinia/nuxt"
 	],
 	app: {
 		head: {
@@ -58,7 +63,7 @@ export default defineNuxtConfig({
 			hmr: {
 				protocol: "ws",
 				host: "0.0.0.0",
-				port: 3031
+				port: HMR_PORT
 			},
 			watch: {
 				ignored: ["**/src-tauri/**"]
@@ -67,7 +72,7 @@ export default defineNuxtConfig({
 	},
 	devServer: {
 		host: "0.0.0.0",
-		port: 3030
+		port: DEV_PORT
 	},
 	router: {
 		options: {

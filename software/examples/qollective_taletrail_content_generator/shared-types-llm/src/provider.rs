@@ -196,13 +196,7 @@ impl DefaultDynamicLlmClientProvider {
 
                 let client = openai::Client::builder("not-needed")
                     .base_url(resolved.base_url)
-                    .build()
-                    .map_err(|e| {
-                        LlmError::config_error(format!(
-                            "Failed to build OpenAI-compatible client: {}",
-                            e
-                        ))
-                    })?;
+                    .build();
 
                 Ok(RigClientWrapper::OpenAI(Arc::new(client)))
             }
@@ -224,10 +218,7 @@ impl DefaultDynamicLlmClientProvider {
 
                 let client = openai::Client::builder(api_key)
                     .base_url(resolved.base_url)
-                    .build()
-                    .map_err(|e| {
-                        LlmError::config_error(format!("Failed to build OpenAI client: {}", e))
-                    })?;
+                    .build();
 
                 Ok(RigClientWrapper::OpenAI(Arc::new(client)))
             }
@@ -270,18 +261,17 @@ impl DefaultDynamicLlmClientProvider {
                 info!(
                     provider = %resolved.provider_type,
                     base_url = %resolved.base_url,
-                    "Building native Google Gemini client - enable RUST_LOG=reqwest=trace for HTTP request/response logging"
+                    "Building native Google Gemini client with custom base URL"
                 );
 
-                // Use default client without customization
-                // To see raw HTTP requests and responses, set environment variable:
-                // RUST_LOG=reqwest=trace,rig_core=debug,shared_types_llm=debug
-                //
-                // This will log:
-                // - Full HTTP request method, URL, headers
-                // - Full HTTP response status, headers
-                // - Request and response bodies (as debug output)
-                let client = gemini::Client::new(api_key);
+                // Use builder pattern to configure base_url
+                // This ensures the configured LLM_URL is respected instead of using hardcoded v1beta
+                let client = gemini::Client::builder(api_key)
+                    .base_url(resolved.base_url)
+                    .build()
+                    .map_err(|e| {
+                        LlmError::config_error(format!("Failed to build Google client: {}", e))
+                    })?;
 
                 Ok(RigClientWrapper::Google(Arc::new(client)))
             }

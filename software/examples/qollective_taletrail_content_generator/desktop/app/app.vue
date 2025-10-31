@@ -11,9 +11,9 @@
 </template>
 
 <script setup lang="ts">
-const { loadTheme } = useTheme()
+	const { loadTheme } = useTheme();
 
-onMounted(() => {
-	loadTheme()
-})
+	onMounted(() => {
+		loadTheme();
+	});
 </script>

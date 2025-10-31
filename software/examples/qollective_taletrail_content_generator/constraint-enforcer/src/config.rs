@@ -59,6 +59,8 @@ pub struct ConstraintsConfig {
     pub vocabulary_levels: Vec<String>,
     #[serde(default)]
     pub validation: ValidationConfig,
+    /// Delay for discovery responses in milliseconds
+    pub discovery_delay_ms: u64,
 }
 
 /// Validation configuration for hybrid keyword + LLM semantic matching
@@ -189,6 +191,7 @@ impl Default for ConstraintsConfig {
             required_elements_check_enabled: true,
             vocabulary_levels: vec!["basic".to_string(), "intermediate".to_string(), "advanced".to_string()],
             validation: ValidationConfig::default(),
+            discovery_delay_ms: 100,
         }
     }
 }

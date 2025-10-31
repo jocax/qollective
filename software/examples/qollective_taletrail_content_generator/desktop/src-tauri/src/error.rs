@@ -1,58 +1,35 @@
-use std::fmt;
+use thiserror::Error;
 
 /// Application error types for TaleTrail Desktop Viewer
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AppError {
     /// I/O operation failed
-    IoError(std::io::Error),
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
+
     /// JSON serialization/deserialization failed
-    JsonError(serde_json::Error),
+    #[error("JSON Error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
     /// Validation failed
+    #[error("Validation Error: {0}")]
     ValidationError(String),
+
     /// Resource not found
+    #[error("Not Found: {0}")]
     NotFound(String),
+
     /// NATS client error
+    #[error("NATS Error: {0}")]
     NatsError(String),
+
     /// Connection error
+    #[error("Connection Error: {0}")]
     ConnectionError(String),
-}
 
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppError::IoError(err) => write!(f, "IO Error: {}", err),
-            AppError::JsonError(err) => write!(f, "JSON Error: {}", err),
-            AppError::ValidationError(msg) => write!(f, "Validation Error: {}", msg),
-            AppError::NotFound(msg) => write!(f, "Not Found: {}", msg),
-            AppError::NatsError(msg) => write!(f, "NATS Error: {}", msg),
-            AppError::ConnectionError(msg) => write!(f, "Connection Error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for AppError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            AppError::IoError(err) => Some(err),
-            AppError::JsonError(err) => Some(err),
-            AppError::ValidationError(_) => None,
-            AppError::NotFound(_) => None,
-            AppError::NatsError(_) => None,
-            AppError::ConnectionError(_) => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for AppError {
-    fn from(err: std::io::Error) -> Self {
-        AppError::IoError(err)
-    }
-}
-
-impl From<serde_json::Error> for AppError {
-    fn from(err: serde_json::Error) -> Self {
-        AppError::JsonError(err)
-    }
+    /// Service error
+    #[error("Service Error: {0}")]
+    ServiceError(String),
 }
 
 /// Type alias for Result with AppError

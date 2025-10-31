@@ -1,4 +1,4 @@
-use crate::nats::{NatsClient, NatsConfig};
+use crate::nats::{NatsClient, NatsConfig, RequestTracker};
 use tauri::{AppHandle, Emitter, Manager};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -52,8 +52,9 @@ pub async fn subscribe_to_generations(
     let client = if let Some(existing_client) = client_guard.as_ref() {
         existing_client.clone()
     } else {
-        // Create new client with default config
-        let config = NatsConfig::default();
+        // Create new client with config from app state
+        let app_config = app.state::<crate::config::AppConfig>();
+        let config = NatsConfig::from_app_config(&app_config);
         let new_client = NatsClient::new(config);
 
         // Connect to NATS
@@ -96,8 +97,12 @@ pub async fn subscribe_to_generations(
         eprintln!("[NATS DEBUG] Subscribed to subject pattern: {}", subject_pattern);
         eprintln!("[NATS DEBUG] Waiting for messages on subscription...");
 
-        // Spawn background task to process messages
+        // Get request tracker from app state
+        let tracker = app.state::<RequestTracker>();
+        let tracker_clone = tracker.inner().clone();
         let app_handle = app.clone();
+
+        // Spawn background task to process messages
         tauri::async_runtime::spawn(async move {
             let mut message_count = 0usize;
             eprintln!("[NATS DEBUG] Background task started, entering message loop");
@@ -120,8 +125,12 @@ pub async fn subscribe_to_generations(
                         eprintln!("  - file_path: {:?}", event.file_path);
                         eprintln!("  - timestamp: {}", event.timestamp);
 
+                        // Update request tracker from event
+                        tracker_clone.update_from_event(&event).await;
+                        eprintln!("[NATS DEBUG] Updated request tracker for request: {}", event.request_id);
+
                         // Emit event to frontend
-                        if let Err(e) = app_handle.emit("generation-event", event) {
+                        if let Err(e) = app_handle.emit("generation-event", &event) {
                             eprintln!("[NATS ERROR] Failed to emit generation event to frontend: {}", e);
                         } else {
                             eprintln!("[NATS DEBUG] Successfully emitted event to frontend");
@@ -164,22 +173,43 @@ pub async fn unsubscribe_from_generations(app: AppHandle) -> Result<(), String> 
     Ok(())
 }
 
+/// Connection status information
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionStatus {
+    /// Whether the client is connected
+    pub connected: bool,
+    /// NATS server URL
+    pub url: String,
+    /// Number of active tracked requests
+    pub active_requests: usize,
+}
+
 /// Get NATS connection status
 ///
-/// Returns whether the NATS client is currently connected to the server.
+/// Returns detailed connection status including server URL and active request count.
 ///
 /// # Arguments
 /// * `app` - Tauri application handle
 #[tauri::command]
-pub async fn nats_connection_status(app: AppHandle) -> Result<bool, String> {
+pub async fn nats_connection_status(app: AppHandle) -> Result<ConnectionStatus, String> {
     let state = app.state::<NatsState>();
     let client_guard = state.client().read().await;
 
-    if let Some(client) = client_guard.as_ref() {
-        Ok(client.is_connected().await)
+    let app_config = app.state::<crate::config::AppConfig>();
+    let tracker = app.state::<RequestTracker>();
+
+    let connected = if let Some(client) = client_guard.as_ref() {
+        client.is_connected().await
     } else {
-        Ok(false)
-    }
+        false
+    };
+
+    Ok(ConnectionStatus {
+        connected,
+        url: app_config.nats.url.clone(),
+        active_requests: tracker.count().await,
+    })
 }
 
 /// Disconnect from NATS server
@@ -201,6 +231,24 @@ pub async fn disconnect_nats(app: AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Get all active generation requests being tracked
+///
+/// Returns a list of currently tracked generation requests with their metadata,
+/// including request_id, tenant_id, start_time, current_phase, and progress.
+///
+/// # Arguments
+/// * `app` - Tauri application handle
+///
+/// # Returns
+/// A list of active request tracking information
+#[tauri::command]
+pub async fn get_active_requests(
+    app: AppHandle,
+) -> Result<Vec<crate::nats::TrackedRequest>, String> {
+    let tracker = app.state::<RequestTracker>();
+    Ok(tracker.get_active_requests().await)
 }
 
 #[cfg(test)]

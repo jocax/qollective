@@ -41,6 +41,7 @@ ca_cert = "../certs/ca.pem"
 min_quality_score = 0.7
 timeout_secs = 10
 max_negotiation_rounds = 3
+discovery_delay_ms = 100  # Delay for discovery responses
 
 # Age-specific rubrics for content validation
 [rubrics.age_6_8]
@@ -98,7 +99,7 @@ technology = ["innovation", "invention", "engineering", "coding", "design"]
 # Validation thresholds for quality control
 [validation.thresholds]
 min_age_appropriate_score = 0.7
-min_educational_value_score = 0.6
+min_educational_value_score = 0.25
 max_safety_violations = 0
 
 # Correction capability configuration

@@ -42,6 +42,7 @@ vocabulary_check_enabled = true
 theme_consistency_enabled = true
 required_elements_check_enabled = true
 vocabulary_levels = ["basic", "intermediate", "advanced"]
+discovery_delay_ms = 100  # Delay for discovery responses
 
 # English vocabulary lists organized by complexity level
 [vocabulary.english.basic]
@@ -119,11 +120,27 @@ moral_keywords = ["learn", "lesson", "moral", "teach", "value", "friendship", "h
 science_keywords = ["fact", "science", "discover", "research", "study", "experiment", "observe", "investigate", "analyze", "evidence", "hypothesis", "theory", "knowledge", "understanding", "explanation"]
 educational_keywords = ["education", "knowledge", "understand", "explain", "learn", "teaching", "concept", "idea", "skill", "practice", "information", "explore", "question", "answer", "reason"]
 
+# Keywords for political/societal concepts (German context)
+political_keywords = ["Politik", "Gesetz", "Verordnung", "Regel", "Regierung", "Behörde", "Verwaltung", "Bürgermeister", "Gemeinde", "Stadt", "EU", "Europa", "Verbot", "Erlaubnis", "Genehmigung", "Vorschrift"]
+
+# Keywords for historical context (German and English)
+historical_keywords = ["Geschichte", "historisch", "früher", "damals", "Vergangenheit", "Tradition", "Erbe", "Geschichte", "history", "historical", "past", "tradition", "heritage", "ancestor", "früher", "einst", "vor", "Jahr", "Jahrhundert"]
+
+# Keywords for societal issues and challenges (German context)
+societal_keywords = ["Gesellschaft", "Problem", "Herausforderung", "Konflikt", "Spannung", "Verwerfung", "Krise", "Schwierigkeit", "Veränderung", "Wandel", "sozial", "Gemeinschaft", "Menschen", "Bürger"]
+
+# Keywords for dilemmas and difficult choices (German and English)
+dilemma_keywords = ["Dilemma", "Entscheidung", "wählen", "entscheiden", "schwierig", "Wahl", "Alternative", "entweder", "oder", "Problem", "Konflikt", "choice", "decide", "difficult", "challenge", "between"]
+
+# Keywords for current/contemporary issues (German)
+current_issues_keywords = ["aktuell", "heute", "jetzt", "gegenwärtig", "momentan", "derzeit", "Problem", "Thema", "Frage", "Situation", "Lage", "Zustand", "modern", "zeitgenössisch"]
+
 # Hybrid validation configuration for required elements checking
 [constraints.validation]
 # Keyword-based matching threshold (0.0 to 1.0). If this percentage of keywords from the
 # required element are found in content, the element is considered matched without LLM check.
-keyword_match_threshold = 0.8
+# Lowered from 0.8 to 0.5 to reduce Google Gemini API rate limiting (503 errors)
+keyword_match_threshold = 0.5
 
 # Enable LLM semantic fallback when keyword matching fails to meet threshold
 enable_llm_fallback = true

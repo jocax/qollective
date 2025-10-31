@@ -402,6 +402,7 @@ pub async fn generate_nodes_batch(
     prompt_package: &PromptPackage,
     generation_request: &GenerationRequest,
     expected_choice_counts: Option<&Vec<usize>>,
+    request_delay_ms: u64,
 ) -> Result<Vec<ContentNode>, TaleTrailError> {
     info!(
         "Starting batch generation for {} nodes with concurrency {}",
@@ -462,6 +463,9 @@ pub async fn generate_nodes_batch(
                     }
                 }
             }
+
+            // Add delay between batches to prevent rate limiting (Google Gemini)
+            tokio::time::sleep(std::time::Duration::from_millis(request_delay_ms)).await;
         }
     }
 

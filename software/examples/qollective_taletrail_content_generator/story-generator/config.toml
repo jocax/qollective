@@ -30,6 +30,8 @@ timeout_secs = 180
 batch_size_min = 2
 batch_size_max = 2
 target_words_per_node = 400
+request_delay_ms = 2000          # Delay between LLM requests (Google rate limiting)
+discovery_delay_ms = 100         # Delay for discovery responses
 
 [llm]
 type = "lmstudio"

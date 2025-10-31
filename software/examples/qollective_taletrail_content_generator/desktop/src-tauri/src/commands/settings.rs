@@ -45,3 +45,15 @@ pub async fn load_preferences(
 
     Ok(preferences)
 }
+
+/// Load the application configuration file (config.toml)
+///
+/// Returns the raw TOML content from the config.toml file located in the src-tauri directory
+#[tauri::command]
+pub async fn load_config_toml() -> Result<String, String> {
+    // The config.toml file is in the same directory as Cargo.toml (src-tauri/)
+    let config_path = std::path::PathBuf::from("config.toml");
+
+    std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config.toml: {}", e))
+}

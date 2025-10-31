@@ -3,9 +3,9 @@ export const usePages = () => {
 	const { pageCategories } = useAppConfig();
 
 	const routes = router.getRoutes().filter((route) =>
-		route.name !== "index" &&
-		route.name !== "all" &&
-		route.meta.showInNav === true
+		route.name !== "index"
+		&& route.name !== "all"
+		&& route.meta.showInNav === true
 	);
 
 	const categorizedRoutes = routes.reduce((acc, route) => {

@@ -5,7 +5,9 @@ use nuxtor_lib::nats::{NatsClient, NatsConfig};
 #[tokio::test]
 #[ignore] // Requires NATS server running
 async fn test_nats_connection() {
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     // Connect should succeed if NATS server is running
@@ -24,7 +26,9 @@ async fn test_nats_connection() {
 #[tokio::test]
 #[ignore] // Requires NATS server running
 async fn test_subscribe_all_events() {
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     let connect_result = client.connect().await;
@@ -49,7 +53,9 @@ async fn test_subscribe_all_events() {
 #[tokio::test]
 #[ignore] // Requires NATS server running
 async fn test_subscribe_tenant_events() {
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     let connect_result = client.connect().await;
@@ -148,7 +154,9 @@ fn test_invalid_json_deserialization() {
 #[tokio::test]
 #[ignore] // Requires NATS server running
 async fn test_cleanup_on_unsubscribe() {
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     let connect_result = client.connect().await;
@@ -180,7 +188,9 @@ async fn test_publish_subscribe_roundtrip() {
     use futures::StreamExt;
     use tokio::time::{timeout, Duration};
 
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     let connect_result = client.connect().await;
@@ -232,8 +242,11 @@ async fn test_publish_subscribe_roundtrip() {
 
 /// Test connection status check
 #[tokio::test]
+#[ignore] // Requires rustls CryptoProvider setup and NATS server
 async fn test_connection_status() {
-    let config = NatsConfig::default();
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+    let config = NatsConfig::from_app_config(&app_config);
     let client = NatsClient::new(config);
 
     // Initially not connected
@@ -258,16 +271,23 @@ async fn test_connection_status() {
 #[tokio::test]
 #[ignore] // Requires NATS server running
 async fn test_multiple_connections() {
+    let app_config = nuxtor_lib::config::AppConfig::load()
+        .expect("Failed to load app config for test");
+
     let config1 = NatsConfig {
         url: "nats://localhost:5222".to_string(),
         name: Some("client-1".to_string()),
         timeout_secs: 5,
+        ca_cert_path: app_config.ca_cert_path(),
+        nkey_file_path: app_config.nkey_path(),
     };
 
     let config2 = NatsConfig {
         url: "nats://localhost:5222".to_string(),
         name: Some("client-2".to_string()),
         timeout_secs: 5,
+        ca_cert_path: app_config.ca_cert_path(),
+        nkey_file_path: app_config.nkey_path(),
     };
 
     let client1 = NatsClient::new(config1);

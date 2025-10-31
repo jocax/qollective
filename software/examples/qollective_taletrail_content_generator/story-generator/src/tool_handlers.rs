@@ -87,6 +87,7 @@ pub async fn handle_generate_nodes(
     params: GenerateNodesParams,
     llm_client: &StoryLlmClient,
     prompt_package: &shared_types::PromptPackage,
+    request_delay_ms: u64,
 ) -> Result<GenerateNodesResponse, TaleTrailError> {
     // Try LLM generation first
     match generate_nodes_batch(
@@ -96,6 +97,7 @@ pub async fn handle_generate_nodes(
         prompt_package,
         &params.generation_request,
         params.expected_choice_counts.as_ref(),
+        request_delay_ms,
     )
     .await
     {

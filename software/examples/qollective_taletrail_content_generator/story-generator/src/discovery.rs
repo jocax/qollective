@@ -213,6 +213,9 @@ mod tests {
     use qollective::envelope::Meta;
     use uuid::Uuid;
 
+    // Test configuration constant for discovery response delay
+    const TEST_DISCOVERY_DELAY_MS: u64 = 100;
+
     #[tokio::test]
     async fn test_discovery_handler_returns_tools() {
         let handler = DiscoveryHandler::new();
@@ -294,7 +297,7 @@ mod tests {
         let uptime1 = handler.get_uptime().await;
 
         // Wait a bit
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(TEST_DISCOVERY_DELAY_MS)).await;
 
         // Get uptime again
         let uptime2 = handler.get_uptime().await;
