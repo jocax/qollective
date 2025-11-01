@@ -46,7 +46,7 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 180;
 pub const MIN_TIMEOUT_SECS: u64 = 1;
 
 /// Maximum allowed timeout in seconds
-pub const MAX_TIMEOUT_SECS: u64 = 600;
+pub const MAX_TIMEOUT_SECS: u64 = 2000;
 
 // ============================================================================
 // CLI OUTPUT CONSTANTS

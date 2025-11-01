@@ -6,7 +6,7 @@
       "age_group": "15-17",
       "language": "de",
       "tenant_id": 1,
-      "node_count": 40,
+      "node_count": 15,
       "educational_goals": ["Geschichte", "Philosophie", "Kausalität"],
       "vocabulary_level": "advanced",
       "required_elements": ["Moral", "Dilemma", "Verantwortung","historischer Kontext"],

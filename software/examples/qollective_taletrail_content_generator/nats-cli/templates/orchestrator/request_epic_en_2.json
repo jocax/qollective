@@ -6,7 +6,7 @@
       "age_group": "12-14",
       "language": "en",
       "tenant_id": 1,
-      "node_count": 22,
+      "node_count": 15,
       "educational_goals": ["Environmental Science", "Marine Biology", "Sustainability", "Climate Change"],
       "vocabulary_level": "advanced",
       "required_elements": ["industry vs nature dilemma", "environmental regulations", "historical context", "current challenges", "societal impact"],

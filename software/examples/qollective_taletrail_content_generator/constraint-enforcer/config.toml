@@ -40,7 +40,7 @@ ca_cert = "../certs/ca.pem"
 [constraints]
 vocabulary_check_enabled = true
 theme_consistency_enabled = true
-required_elements_check_enabled = true
+required_elements_check_enabled = false
 vocabulary_levels = ["basic", "intermediate", "advanced"]
 discovery_delay_ms = 100  # Delay for discovery responses
 
@@ -143,7 +143,7 @@ current_issues_keywords = ["aktuell", "heute", "jetzt", "gegenwärtig", "momenta
 keyword_match_threshold = 0.5
 
 # Enable LLM semantic fallback when keyword matching fails to meet threshold
-enable_llm_fallback = true
+enable_llm_fallback = false
 
 # Minimum keyword length to consider (filters out common words like "a", "or", "und")
 min_keyword_length = 3

@@ -300,20 +300,6 @@ pub async fn start_monitoring(
         Utc::now().to_rfc3339()
     );
 
-    // DIAGNOSTIC: Test if subscription is working by publishing a test message to itself
-    eprintln!("[NATS Monitor] [DIAGNOSTIC] Testing subscription by publishing test message to mcp.test");
-    if let Err(e) = client.publish("mcp.test".to_string(), "test-payload".into()).await {
-        eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to publish test message: {}", e);
-    } else {
-        eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message published successfully");
-        // Flush to ensure it's sent immediately
-        if let Err(e) = client.flush().await {
-            eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to flush test message: {}", e);
-        } else {
-            eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message flushed successfully");
-        }
-    }
-
     // DIAGNOSTIC: Log subscription details
     eprintln!(
         "[NATS Monitor] [{}] [DIAGNOSTIC] Monitoring subscriptions established:",
@@ -511,6 +497,25 @@ pub async fn start_monitoring(
             "[NATS Monitor] [{}] [INFO] TaleTrail subscription ended",
             Utc::now().to_rfc3339()
         );
+    });
+
+    // DIAGNOSTIC: Spawn test task to verify subscription after loops are ready
+    let test_client = client.clone();
+    tauri::async_runtime::spawn(async move {
+        // Small delay to ensure subscription loops are fully active
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        eprintln!("[NATS Monitor] [DIAGNOSTIC] Testing subscription by publishing test message to mcp.test");
+        if let Err(e) = test_client.publish("mcp.test".to_string(), "test-payload".into()).await {
+            eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to publish test message: {}", e);
+        } else {
+            eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message published successfully");
+            if let Err(e) = test_client.flush().await {
+                eprintln!("[NATS Monitor] [DIAGNOSTIC] Failed to flush test message: {}", e);
+            } else {
+                eprintln!("[NATS Monitor] [DIAGNOSTIC] Test message flushed successfully");
+            }
+        }
     });
 
     // Spawn diagnostics reporting task
