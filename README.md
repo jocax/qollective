@@ -31,13 +31,16 @@ For detailed information about the framework, architecture, and usage:
 - [Software Documentation](software/README.md) - Main framework documentation
 - [Schema System](software/schemas/README.md) - JSON Schema definitions
 - [Generator](software/generator/README.md) - Code generation tool
-- [Examples](software/examples/) - Star Trek-themed example implementations
+- [Examples](software/examples/) - Different example implementations
 
 ## 🏗️ Project Structure
 
 ```
 qollective/
-├── software/           # Main framework implementation
+├── concept/           # Concept
+│   ├── capstone/      # Ignore
+│   ├── design/        # Diagrams and markdown files describing various aspects of the framework
+├── software/          # Main framework implementation
 │   ├── src/           # Rust source code
 │   ├── schemas/       # JSON Schema definitions
 │   ├── generator/     # Code generation tool
