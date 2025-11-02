@@ -249,20 +249,20 @@ export interface HistoryEntry {
 }
 
 export interface HistoryQuery {
+	page: number
+	page_size: number
 	server_filter?: string
-	tool_filter?: string
-	success_filter?: boolean
-	limit?: number
-	offset?: number
-	tenant_id?: number
+	status_filter?: 'success' | 'error' | 'timeout'
+	search_term?: string
 }
 
 export interface HistoryPage {
 	entries: HistoryEntry[]
-	total: number
+	total_count: number
 	page: number
 	page_size: number
-	has_more: boolean
+	total_pages: number
+	has_more?: boolean // Computed on frontend
 }
 
 // ============================================================================

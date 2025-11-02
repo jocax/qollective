@@ -81,7 +81,7 @@
 
 			<!-- Footer with count -->
 			<div v-if="hasEntries" class="p-3 border-t text-xs text-gray-500 text-center">
-				{{ filteredEntries.length }} of {{ historyPage?.total || 0 }} entries
+				{{ filteredEntries.length }} of {{ historyPage?.total_count || 0 }} entries
 			</div>
 		</div>
 	</UCard>
@@ -161,15 +161,18 @@
 
 		try {
 			const query: HistoryQuery = {
-				limit: 50,
-				offset: 0,
-				server_filter: props.server,
-				tenant_id: 1 // TODO: Get from settings
+				page: 0,
+				page_size: 50,
+				server_filter: props.server
 			};
 
-			historyPage.value = await invoke<HistoryPage>("load_request_history", {
+			const page = await invoke<HistoryPage>("load_request_history", {
 				query
 			});
+
+			// Compute has_more for UI
+			page.has_more = page.page < page.total_pages - 1;
+			historyPage.value = page;
 		} catch (e: any) {
 			error.value = e.toString();
 			console.error("Failed to load history:", e);
@@ -185,15 +188,17 @@
 
 		try {
 			const query: HistoryQuery = {
-				limit: 50,
-				offset: historyPage.value.entries.length,
-				server_filter: props.server,
-				tenant_id: 1
+				page: historyPage.value.page + 1,
+				page_size: 50,
+				server_filter: props.server
 			};
 
 			const nextPage = await invoke<HistoryPage>("load_request_history", {
 				query
 			});
+
+			// Compute has_more for UI
+			nextPage.has_more = nextPage.page < nextPage.total_pages - 1;
 
 			// Append entries
 			historyPage.value = {

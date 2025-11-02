@@ -3,19 +3,17 @@ use serde::{Deserialize, Serialize};
 /// User preferences for the TaleTrail viewer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPreferences {
-    pub default_view_mode: ViewMode,
-    pub theme: Theme,
     pub directory_path: String,
     pub auto_validate: bool,
+    pub root_directory: String,
 }
 
 impl Default for UserPreferences {
     fn default() -> Self {
         UserPreferences {
-            default_view_mode: ViewMode::Linear,
-            theme: Theme::System,
             directory_path: String::new(),
             auto_validate: true,
+            root_directory: "taletrail-data".to_string(),
         }
     }
 }

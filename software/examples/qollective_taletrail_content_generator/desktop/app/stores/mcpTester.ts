@@ -124,7 +124,7 @@ export const useMcpTesterStore = defineStore("mcpTester", () => {
 
 	function clearResponse() {
 		currentResponse.value = null;
-		error.value = null;
+		// Don't clear error - it should persist independently of response
 	}
 
 	// ============================================================================
