@@ -4,7 +4,7 @@
 
 use iocraft::prelude::*;
 use crate::state::search_state::SearchContext;
-use crate::layout::{LayoutConfig, LayoutMode};
+use crate::layout::LayoutConfig;
 
 mod execution_tree;
 mod viewer_panel;

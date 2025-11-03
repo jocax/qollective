@@ -3,7 +3,7 @@
 /// Displays trails in a scrollable list with pagination support
 
 use crate::components::{CardGrid, List};
-use crate::layout::{LayoutConfig, LayoutMode};
+use crate::layout::LayoutConfig;
 use crate::models::trail::TrailListItem;
 use crate::state::trail_state::TrailContext;
 use iocraft::prelude::*;

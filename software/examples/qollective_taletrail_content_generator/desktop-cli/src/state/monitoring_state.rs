@@ -6,7 +6,6 @@
 use crate::nats::monitoring::{MonitoringDiagnostics, NatsMessage};
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
-use chrono::{DateTime, Utc};
 
 /// NATS Monitoring context shared across all monitoring components
 #[derive(Clone)]

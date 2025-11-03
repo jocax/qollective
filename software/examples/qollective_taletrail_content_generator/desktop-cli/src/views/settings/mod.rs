@@ -1,7 +1,6 @@
 use iocraft::prelude::*;
-use crate::components::form::{TextInput, Select};
-use crate::state::{SettingsContext, SettingsSection, SettingsTab, SettingsField, AppContext};
-use crate::environment::Environment;
+use crate::components::form::TextInput;
+use crate::state::{SettingsContext, SettingsSection, SettingsTab, AppContext};
 use crate::layout::LayoutMode;
 
 /// Props for the Settings view
