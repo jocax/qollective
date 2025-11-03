@@ -11,7 +11,7 @@ members = [
     "gateway",
     "nats-cli",
     "desktop/src-tauri"
-]
+, "desktop-cli"]
 
 resolver = "2"
 

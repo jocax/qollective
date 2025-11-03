@@ -1,0 +1,53 @@
+# TaleTrail Desktop CLI Configuration
+# Copy this file to config.toml and customize as needed
+
+[nats]
+# NATS server URL
+# Can be overridden with NATS_URL environment variable
+url = "nats://localhost:4222"
+
+# Request timeout in seconds
+# Can be overridden with NATS_TIMEOUT_SECS environment variable
+timeout_secs = 30
+
+# Optional: Path to TLS certificate for secure NATS connection
+# Can be overridden with NATS_TLS_CERT_PATH environment variable
+# tls_cert_path = "/path/to/cert.pem"
+
+# Optional: Path to NKey file for NATS authentication
+# Can be overridden with NATS_NKEY_PATH environment variable
+# nkey_path = "/path/to/nkey.txt"
+
+[directories]
+# Directory containing trail JSON files
+# Can be overridden with TRAILS_DIR environment variable
+trails_dir = "./trails"
+
+# Directory containing MCP request templates
+# Can be overridden with TEMPLATES_DIR environment variable
+templates_dir = "./templates"
+
+# Directory for execution logs
+# Can be overridden with EXECUTION_LOGS_DIR environment variable
+execution_logs_dir = "./execution_logs"
+
+# File path for bookmarks storage
+# Can be overridden with BOOKMARKS_FILE environment variable
+bookmarks_file = "./bookmarks.json"
+
+# File path for request history storage
+# Can be overridden with HISTORY_FILE environment variable
+history_file = "./request_history.json"
+
+[ui]
+# Color theme: "dark" or "light"
+# Can be overridden with COLOR_THEME environment variable
+color_theme = "dark"
+
+# Enable auto-scroll in message feeds
+# Can be overridden with AUTO_SCROLL environment variable
+auto_scroll = true
+
+# Number of items to display per page in paginated lists
+# Can be overridden with PAGE_SIZE environment variable
+page_size = 20
