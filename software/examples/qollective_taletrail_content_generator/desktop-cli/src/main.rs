@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     // Run the Iocraft application with smol async executor
     smol::block_on(async {
         element!(App)
-            .render_loop()
+            .fullscreen()
             .await
             .map_err(|e| taletrail_cli::error::AppError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,

@@ -54,12 +54,12 @@ pub fn TrailListView(
             ) {
                 Text(
                     content: "No trails found",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                     weight: Weight::Bold
                 )
                 Text(
                     content: "Try adjusting your filters or search query",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -99,7 +99,7 @@ pub fn TrailListView(
                 View(margin_top: 1, padding: 1) {
                     Text(
                         content: "↑/↓/←/→: Navigate | Enter: View Details | b: Bookmark | Esc: Back",
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }
@@ -137,7 +137,7 @@ pub fn TrailListView(
                 View(margin_top: 1, padding: 1) {
                     Text(
                         content: "↑/↓: Navigate | Enter: View Details | b: Bookmark | f: Filters | /: Search | Esc: Back",
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }

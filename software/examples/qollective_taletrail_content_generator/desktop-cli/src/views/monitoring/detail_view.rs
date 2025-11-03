@@ -79,7 +79,7 @@ fn render_message_detail(msg: &NatsMessage) -> AnyElement<'static> {
             View(margin_top: 1) {
                 Text(
                     content: "ESC: Close detail view",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
@@ -249,12 +249,12 @@ fn render_no_selection() -> AnyElement<'static> {
     element! {
         View(
             border_style: BorderStyle::Single,
-            border_color: Color::DarkGrey,
+            border_color: Color::Grey,
             padding: 2,
         ) {
             Text(
                 content: "No message selected",
-                color: Color::DarkGrey,
+                color: Color::Grey,
             )
         }
     }

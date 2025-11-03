@@ -1,10 +1,23 @@
 use std::sync::{Arc, RwLock};
+use serde::{Deserialize, Serialize};
 
 use crate::environment::Environment;
-use crate::layout::{LayoutConfig, LayoutMode};
+
+/// Theme mode for the application
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl Default for ThemeMode {
+    fn default() -> Self {
+        ThemeMode::Dark  // Default to Dark since most developers use dark terminals
+    }
+}
 
 /// Represents the different views in the application
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum View {
     #[default]
     Menu,
@@ -74,16 +87,6 @@ impl AppContext {
         }
     }
 
-    /// Get the current view
-    pub fn current_view(&self) -> View {
-        self.inner.read().unwrap().current_view
-    }
-
-    /// Set the current view
-    pub fn set_current_view(&self, view: View) {
-        self.inner.write().unwrap().current_view = view;
-    }
-
     /// Get NATS connection status
     pub fn nats_connected(&self) -> bool {
         self.inner.read().unwrap().nats_connected
@@ -117,32 +120,6 @@ impl AppContext {
         }
     }
 
-    /// Check if help modal is visible
-    pub fn help_visible(&self) -> bool {
-        self.inner.read().unwrap().help_visible
-    }
-
-    /// Set help modal visibility
-    pub fn set_help_visible(&self, visible: bool) {
-        self.inner.write().unwrap().help_visible = visible;
-    }
-
-    /// Toggle help modal
-    pub fn toggle_help(&self) {
-        let mut state = self.inner.write().unwrap();
-        state.help_visible = !state.help_visible;
-    }
-
-    /// Check if application should quit
-    pub fn should_quit(&self) -> bool {
-        self.inner.read().unwrap().should_quit
-    }
-
-    /// Set quit flag
-    pub fn set_quit(&self, quit: bool) {
-        self.inner.write().unwrap().should_quit = quit;
-    }
-
     /// Get current terminal width
     pub fn terminal_width(&self) -> usize {
         self.inner.read().unwrap().terminal_width
@@ -153,22 +130,11 @@ impl AppContext {
         self.inner.read().unwrap().terminal_height
     }
 
-    /// Get current layout configuration
-    pub fn layout_config(&self) -> LayoutConfig {
-        self.inner.read().unwrap().layout_config
-    }
-
-    /// Update terminal size and recalculate layout configuration
-    /// Respects manual_display_mode if set (manual mode takes precedence)
+    /// Update terminal size
     pub fn update_terminal_size(&self, width: usize, height: usize) {
         let mut state = self.inner.write().unwrap();
         state.terminal_width = width;
         state.terminal_height = height;
-
-        // Only update layout if not in manual mode
-        if state.manual_display_mode.is_none() {
-            state.layout_config = LayoutConfig::from_terminal_size(width, height);
-        }
     }
 
     /// Toggle debug console expansion
@@ -230,57 +196,23 @@ impl AppContext {
         self.inner.read().unwrap().environment
     }
 
-    /// Get the manual display mode override (if set)
-    pub fn manual_display_mode(&self) -> Option<LayoutMode> {
-        self.inner.read().unwrap().manual_display_mode
+    /// Get current theme mode
+    pub fn theme_mode(&self) -> ThemeMode {
+        self.inner.read().unwrap().theme_mode
     }
 
-    /// Set the manual display mode override
-    pub fn set_manual_display_mode(&self, mode: Option<LayoutMode>) {
+    /// Toggle theme mode between Dark and Light
+    pub fn toggle_theme(&self) {
         let mut state = self.inner.write().unwrap();
-        state.manual_display_mode = mode;
-
-        // If manual mode is set, update layout config immediately
-        if let Some(layout_mode) = mode {
-            // Use specific dimensions for each mode
-            let (width, height) = match layout_mode {
-                LayoutMode::Classic => (80, 24),
-                LayoutMode::Modern => (120, 30),
-                LayoutMode::FullHD => (240, 60),
-                LayoutMode::FourK => (480, 120),
-            };
-            state.layout_config = LayoutConfig::from_terminal_size(width, height);
-        } else {
-            // Auto mode: use actual terminal size
-            state.layout_config = LayoutConfig::from_terminal_size(state.terminal_width, state.terminal_height);
-        }
-    }
-
-    /// Cycle to next display mode (for Ctrl+L hotkey)
-    pub fn cycle_display_mode(&self) {
-        let mut state = self.inner.write().unwrap();
-
-        state.manual_display_mode = match state.manual_display_mode {
-            None => Some(LayoutMode::Classic),
-            Some(LayoutMode::Classic) => Some(LayoutMode::Modern),
-            Some(LayoutMode::Modern) => Some(LayoutMode::FullHD),
-            Some(LayoutMode::FullHD) => Some(LayoutMode::FourK),
-            Some(LayoutMode::FourK) => None, // Back to Auto
+        state.theme_mode = match state.theme_mode {
+            ThemeMode::Dark => ThemeMode::Light,
+            ThemeMode::Light => ThemeMode::Dark,
         };
+    }
 
-        // Update layout config
-        if let Some(layout_mode) = state.manual_display_mode {
-            let (width, height) = match layout_mode {
-                LayoutMode::Classic => (80, 24),
-                LayoutMode::Modern => (120, 30),
-                LayoutMode::FullHD => (240, 60),
-                LayoutMode::FourK => (480, 120),
-            };
-            state.layout_config = LayoutConfig::from_terminal_size(width, height);
-        } else {
-            // Auto mode: use actual terminal size
-            state.layout_config = LayoutConfig::from_terminal_size(state.terminal_width, state.terminal_height);
-        }
+    /// Set theme mode
+    pub fn set_theme(&self, mode: ThemeMode) {
+        self.inner.write().unwrap().theme_mode = mode;
     }
 }
 
@@ -293,19 +225,15 @@ impl Default for AppContext {
 /// Internal application state
 #[derive(Debug, Clone)]
 pub struct AppState {
-    pub current_view: View,
     pub nats_connected: bool,
     pub active_requests: usize,
-    pub help_visible: bool,
-    pub should_quit: bool,
     pub terminal_width: usize,
     pub terminal_height: usize,
-    pub layout_config: LayoutConfig,
     pub debug_console_expanded: bool,
     pub debug_logs: Vec<String>,
     pub debug_mode: bool,
     pub environment: Environment,
-    pub manual_display_mode: Option<LayoutMode>,
+    pub theme_mode: ThemeMode,
 }
 
 impl Default for AppState {
@@ -318,22 +246,17 @@ impl Default for AppState {
         // This will be updated immediately on startup with actual terminal size
         let terminal_width = 120;
         let terminal_height = 30;
-        let layout_config = LayoutConfig::from_terminal_size(terminal_width, terminal_height);
 
         Self {
-            current_view: View::Menu,
             nats_connected: false,
             active_requests: 0,
-            help_visible: false,
-            should_quit: false,
             terminal_width,
             terminal_height,
-            layout_config,
             debug_console_expanded: false,
             debug_logs: vec![],
             debug_mode,
             environment,
-            manual_display_mode: None, // Start in Auto mode
+            theme_mode: ThemeMode::default(),
         }
     }
 }
@@ -381,18 +304,6 @@ mod tests {
     }
 
     #[test]
-    fn test_app_context_view_management() {
-        let ctx = AppContext::new();
-        assert_eq!(ctx.current_view(), View::Menu);
-
-        ctx.set_current_view(View::McpTester);
-        assert_eq!(ctx.current_view(), View::McpTester);
-
-        ctx.set_current_view(View::Settings);
-        assert_eq!(ctx.current_view(), View::Settings);
-    }
-
-    #[test]
     fn test_app_context_nats_status() {
         let ctx = AppContext::new();
         assert_eq!(ctx.nats_connected(), false);
@@ -422,32 +333,5 @@ mod tests {
         ctx.set_active_requests(0);
         ctx.decrement_requests();
         assert_eq!(ctx.active_requests(), 0);
-    }
-
-    #[test]
-    fn test_app_context_help_modal() {
-        let ctx = AppContext::new();
-        assert!(!ctx.help_visible());
-
-        ctx.set_help_visible(true);
-        assert!(ctx.help_visible());
-
-        ctx.toggle_help();
-        assert!(!ctx.help_visible());
-
-        ctx.toggle_help();
-        assert!(ctx.help_visible());
-    }
-
-    #[test]
-    fn test_app_context_quit_flag() {
-        let ctx = AppContext::new();
-        assert!(!ctx.should_quit());
-
-        ctx.set_quit(true);
-        assert!(ctx.should_quit());
-
-        ctx.set_quit(false);
-        assert!(!ctx.should_quit());
     }
 }

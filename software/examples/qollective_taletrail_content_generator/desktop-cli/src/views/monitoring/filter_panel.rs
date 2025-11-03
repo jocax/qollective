@@ -46,7 +46,7 @@ pub fn FilterPanel(_hooks: Hooks, props: &FilterPanelProps) -> impl Into<AnyElem
     let filter_color = if filters.is_active() {
         Color::Green
     } else {
-        Color::DarkGrey
+        Color::Grey
     };
 
     elements.push(
@@ -81,7 +81,7 @@ pub fn FilterPanel(_hooks: Hooks, props: &FilterPanelProps) -> impl Into<AnyElem
             View(margin_top: 1) {
                 Text(
                     content: "1-5: Filter by endpoint | R/E/V: Filter by type | S: Search | X: Clear filters",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
@@ -212,7 +212,7 @@ fn render_search_section(filters: &MessageFilters) -> AnyElement<'static> {
     let color = if filters.search_query.is_some() {
         Color::Green
     } else {
-        Color::DarkGrey
+        Color::Grey
     };
 
     element! {

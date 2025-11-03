@@ -112,7 +112,7 @@ pub fn McpTester(_hooks: Hooks, props: &McpTesterProps) -> impl Into<AnyElement<
             View(margin_top: 1) {
                 Text(
                     content: "Tab/Shift+Tab: Switch panels | 1-4: Direct panel | Left/Right: Switch servers | Esc: Menu",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
@@ -165,7 +165,7 @@ fn render_server_tabs(mcp_context: &McpContext) -> impl Into<AnyElement<'static>
         let border_color = if is_active {
             Color::Green
         } else {
-            Color::DarkGrey
+            Color::Grey
         };
 
         server_elements.push(
@@ -229,7 +229,7 @@ fn render_tab_bar(active_tab: McpTab) -> impl Into<AnyElement<'static>> {
         let border_color = if is_active {
             Color::Cyan
         } else {
-            Color::DarkGrey
+            Color::Grey
         };
 
         tab_elements.push(

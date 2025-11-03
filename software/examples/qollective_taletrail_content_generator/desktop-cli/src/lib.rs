@@ -4,6 +4,7 @@ pub mod config;
 pub mod constants;
 pub mod environment;
 pub mod error;
+pub mod keyboard;
 pub mod layout;
 pub mod models;
 pub mod nats;

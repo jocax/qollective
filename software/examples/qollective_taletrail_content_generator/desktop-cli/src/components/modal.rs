@@ -55,7 +55,7 @@ pub fn Modal(_hooks: Hooks, props: &ModalProps) -> impl Into<AnyElement<'static>
 
                     Text(
                         content: "Press ESC to close",
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -66,24 +66,31 @@ pub fn Modal(_hooks: Hooks, props: &ModalProps) -> impl Into<AnyElement<'static>
 /// Create help modal content
 pub fn create_help_content() -> Vec<String> {
     vec![
-        "Keyboard Shortcuts:".to_string(),
+        "Keyboard Shortcuts (macOS-optimized):".to_string(),
         "".to_string(),
         "Global Shortcuts:".to_string(),
-        "  Ctrl+H or F1    - Show this help".to_string(),
-        "  Ctrl+Q          - Quit application".to_string(),
-        "  ESC             - Close modal or go back".to_string(),
+        "  Ctrl+H or F1        - Show this help".to_string(),
+        "  Ctrl+Q              - Quit application".to_string(),
+        "  ⇧⌃T (Shift+Ctrl+T)  - Toggle theme (Dark/Light)".to_string(),
+        "  ⇧⌃D (Shift+Ctrl+D)  - Toggle debug console".to_string(),
+        "  ⇧⌃M (Shift+Ctrl+M)  - Toggle debug mode".to_string(),
+        "  Ctrl+L              - Cycle display mode".to_string(),
+        "  ESC                 - Close modal or go back".to_string(),
         "".to_string(),
         "Navigation Shortcuts:".to_string(),
-        "  Ctrl+1          - MCP Tester".to_string(),
-        "  Ctrl+2          - Trail Viewer".to_string(),
-        "  Ctrl+3          - NATS Monitor".to_string(),
-        "  Ctrl+4          - Story Generator".to_string(),
-        "  Ctrl+5          - Search & Comparison".to_string(),
-        "  Ctrl+6          - Settings".to_string(),
+        "  ⇧⌃1 or F2           - MCP Tester".to_string(),
+        "  ⇧⌃2 or F3           - Trail Viewer".to_string(),
+        "  ⇧⌃3 or F4           - NATS Monitor".to_string(),
+        "  ⇧⌃4 or F5           - Story Generator".to_string(),
+        "  ⇧⌃5 or F6           - Search & Comparison".to_string(),
+        "  ⇧⌃6 or F7           - Settings".to_string(),
+        "  ⇧⌃7 or F8           - Logs".to_string(),
         "".to_string(),
         "Menu Navigation:".to_string(),
-        "  ↑/↓ or j/k      - Navigate menu items".to_string(),
-        "  1-7             - Select menu item by number".to_string(),
-        "  Enter           - Confirm selection".to_string(),
+        "  ↑/↓ or j/k          - Navigate menu items".to_string(),
+        "  Enter               - Confirm selection".to_string(),
+        "".to_string(),
+        "Note: ⇧⌃ = Shift+Ctrl (primary on macOS)".to_string(),
+        "      F-keys work if you press Fn or disable system shortcuts".to_string(),
     ]
 }

@@ -59,7 +59,7 @@ pub fn ResponseViewer(
             element! {
                 View(
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1,
                     margin_bottom: 1,
                 ) {
@@ -110,12 +110,12 @@ pub fn ResponseViewer(
             element! {
                 View(
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 2,
                 ) {
                     Text(
                         content: "No response yet. Send a request to see results here.",
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -129,7 +129,7 @@ pub fn ResponseViewer(
             View(margin_top: 1) {
                 Text(
                     content: "↑/↓: Scroll | Ctrl+C: Copy | H: View History",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }

@@ -70,7 +70,7 @@ pub fn HistoryPanel(_hooks: Hooks, props: &HistoryPanelProps) -> impl Into<AnyEl
             View(margin_bottom: 1) {
                 Text(
                     content: page.range_display(),
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
@@ -83,12 +83,12 @@ pub fn HistoryPanel(_hooks: Hooks, props: &HistoryPanelProps) -> impl Into<AnyEl
             element! {
                 View(
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 2,
                 ) {
                     Text(
                         content: "No history entries found. Send a request to populate history.",
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -155,7 +155,7 @@ pub fn HistoryPanel(_hooks: Hooks, props: &HistoryPanelProps) -> impl Into<AnyEl
             View(margin_top: 1) {
                 Text(
                     content: "↑/↓: Navigate | Enter: Replay | D: Delete | C: Clear All | F: Filter",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }

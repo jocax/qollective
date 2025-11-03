@@ -43,7 +43,7 @@ pub fn LogsView(_hooks: Hooks, props: &LogsViewProps) -> impl Into<AnyElement<'s
         vec![element! {
             Text(
                 content: "No logs yet. Debug logs will appear here.",
-                color: Color::DarkGrey
+                color: Color::Grey
             )
         }.into()]
     } else {
@@ -84,7 +84,7 @@ pub fn LogsView(_hooks: Hooks, props: &LogsViewProps) -> impl Into<AnyElement<'s
             // Controls hint
             Text(
                 content: "[F12: Toggle Debug Mode] [C: Clear Logs] [ESC: Back]",
-                color: Color::DarkGrey
+                color: Color::Grey
             )
 
             // Logs display area

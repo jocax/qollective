@@ -1,13 +1,15 @@
 use iocraft::prelude::*;
 use crate::components::form::TextInput;
 use crate::state::{SettingsContext, SettingsSection, SettingsTab, AppContext};
-use crate::layout::LayoutMode;
+use crate::layout::{LayoutMode, LayoutConfig};
 
 /// Props for the Settings view
 #[derive(Props)]
 pub struct SettingsViewProps {
     pub settings_ctx: SettingsContext,
     pub app_context: Option<AppContext>,
+    pub manual_display_mode: Option<LayoutMode>,
+    pub layout_config: LayoutConfig,
 }
 
 impl Default for SettingsViewProps {
@@ -15,6 +17,8 @@ impl Default for SettingsViewProps {
         Self {
             settings_ctx: SettingsContext::new(),
             app_context: None,
+            manual_display_mode: None,
+            layout_config: LayoutConfig::default(),
         }
     }
 }
@@ -72,7 +76,7 @@ pub fn SettingsView(_hooks: Hooks, props: &SettingsViewProps) -> impl Into<AnyEl
                                     SettingsSection::UiPreferences => "UI",
                                 }
                             ),
-                            color: Color::DarkGrey
+                            color: Color::Grey
                         )
                     }
                 }
@@ -88,7 +92,7 @@ pub fn SettingsView(_hooks: Hooks, props: &SettingsViewProps) -> impl Into<AnyEl
                     elements.push(render_directories_section(&editing, &errors).into());
                 }
                 SettingsSection::UiPreferences => {
-                    elements.push(render_ui_section(&editing, props.app_context.as_ref()).into());
+                    elements.push(render_ui_section(&editing, props.app_context.as_ref(), props.manual_display_mode, props.layout_config).into());
                 }
             }
         }
@@ -105,11 +109,11 @@ pub fn SettingsView(_hooks: Hooks, props: &SettingsViewProps) -> impl Into<AnyEl
                 margin_top: 2,
                 padding: 1,
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey
+                border_color: Color::Grey
             ) {
                 Text(
                     content: "Press Ctrl+S to save | Tab to switch tabs/sections | ESC to exit",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -158,7 +162,7 @@ fn render_tab_bar(active_tab: SettingsTab) -> impl Into<AnyElement<'static>> {
         let border_color = if is_active {
             Color::Magenta
         } else {
-            Color::DarkGrey
+            Color::Grey
         };
 
         tab_elements.push(
@@ -208,7 +212,7 @@ fn render_config_tab(settings_ctx: &SettingsContext) -> impl Into<AnyElement<'st
                 )
                 Text(
                     content: "[Press 'C' to copy to clipboard]",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -220,7 +224,7 @@ fn render_config_tab(settings_ctx: &SettingsContext) -> impl Into<AnyElement<'st
         element! {
             View(
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey,
+                border_color: Color::Grey,
                 padding: 1,
             ) {
                 Text(content: config_toml)
@@ -394,6 +398,8 @@ fn render_directories_section(
 fn render_ui_section(
     editing: &crate::state::EditingConfig,
     app_context: Option<&AppContext>,
+    manual_display_mode: Option<LayoutMode>,
+    layout_config: LayoutConfig,
 ) -> impl Into<AnyElement<'static>> {
     let mut elements: Vec<AnyElement> = Vec::new();
 
@@ -414,8 +420,8 @@ fn render_ui_section(
     // Display Mode section
     if let Some(ctx) = app_context {
         let environment = ctx.environment();
-        let manual_mode = ctx.manual_display_mode();
-        let current_layout = ctx.layout_config();
+        let manual_mode = manual_display_mode;
+        let current_layout = layout_config;
         let terminal_width = ctx.terminal_width();
         let terminal_height = ctx.terminal_height();
 
@@ -424,7 +430,7 @@ fn render_ui_section(
                 View(
                     margin_bottom: 2,
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1
                 ) {
                     Text(
@@ -460,7 +466,7 @@ fn render_ui_section(
                 View(margin_bottom: 1) {
                     Text(
                         content: format!("Detected Terminal: {}×{}", terminal_width, terminal_height),
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }
@@ -472,7 +478,7 @@ fn render_ui_section(
                 View(margin_bottom: 1) {
                     Text(
                         content: format!("Environment: {}", environment.name()),
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }
@@ -562,7 +568,7 @@ fn render_ui_section(
                 )
                 Text(
                     content: "  (Press 'T' to toggle between dark/light)",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -582,7 +588,7 @@ fn render_ui_section(
                 )
                 Text(
                     content: "  (Press 'A' to toggle)",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -604,7 +610,12 @@ mod tests {
     #[test]
     fn test_settings_view_props_creation() {
         let ctx = SettingsContext::new();
-        let _props = SettingsViewProps { settings_ctx: ctx };
+        let _props = SettingsViewProps {
+            settings_ctx: ctx,
+            app_context: None,
+            manual_display_mode: None,
+            layout_config: LayoutConfig::default(),
+        };
         // If this compiles, the test passes
     }
 
@@ -614,7 +625,12 @@ mod tests {
         config.nats.url = "nats://custom:4222".to_string();
 
         let ctx = SettingsContext::from_config(config);
-        let props = SettingsViewProps { settings_ctx: ctx };
+        let props = SettingsViewProps {
+            settings_ctx: ctx,
+            app_context: None,
+            manual_display_mode: None,
+            layout_config: LayoutConfig::default(),
+        };
 
         let editing = props.settings_ctx.get_editing_config();
         assert_eq!(editing.nats_url, "nats://custom:4222");

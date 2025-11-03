@@ -64,7 +64,7 @@ pub fn TextInput(_hooks: Hooks, props: &TextInputProps) -> impl Into<AnyElement<
     } else if props.is_focused {
         Color::Cyan
     } else {
-        Color::DarkGrey
+        Color::Grey
     };
 
     let display_value = if props.value.is_empty() {
@@ -74,7 +74,7 @@ pub fn TextInput(_hooks: Hooks, props: &TextInputProps) -> impl Into<AnyElement<
     };
 
     let value_color = if props.value.is_empty() && props.placeholder.is_some() {
-        Color::DarkGrey
+        Color::Grey
     } else {
         Color::White
     };
@@ -152,7 +152,7 @@ pub fn Select(_hooks: Hooks, props: &SelectProps) -> impl Into<AnyElement<'stati
     let border_color = if props.is_focused {
         Color::Cyan
     } else {
-        Color::DarkGrey
+        Color::Grey
     };
 
     let mut elements: Vec<AnyElement> = Vec::new();

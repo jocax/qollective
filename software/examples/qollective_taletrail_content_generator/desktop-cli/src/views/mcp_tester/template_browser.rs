@@ -99,7 +99,7 @@ pub fn TemplateBrowser(
             View(margin_top: 1, margin_bottom: 1) {
                 Text(
                     content: format!("Showing {} of {} templates", template_count, total_count),
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
             List::<TemplateInfo>(
@@ -112,7 +112,7 @@ pub fn TemplateBrowser(
             View(margin_top: 1) {
                 Text(
                     content: "↑/↓: Navigate | Enter: Load Template | /: Search",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }

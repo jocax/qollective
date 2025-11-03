@@ -1,53 +1,184 @@
-# TaleTrail Desktop CLI Configuration
+# TaleTrail Desktop CLI Configuration Example
 # Copy this file to config.toml and customize as needed
 
+# ============================================================================
+# NATS Configuration
+# ============================================================================
 [nats]
-# NATS server URL
-# Can be overridden with NATS_URL environment variable
+# NATS server URL (can also be set via NATS_URL environment variable)
 url = "nats://localhost:4222"
 
-# Request timeout in seconds
-# Can be overridden with NATS_TIMEOUT_SECS environment variable
+# Connection timeout in seconds
 timeout_secs = 30
 
-# Optional: Path to TLS certificate for secure NATS connection
-# Can be overridden with NATS_TLS_CERT_PATH environment variable
+# Optional: Path to TLS certificate for secure connections
 # tls_cert_path = "/path/to/cert.pem"
 
-# Optional: Path to NKey file for NATS authentication
-# Can be overridden with NATS_NKEY_PATH environment variable
-# nkey_path = "/path/to/nkey.txt"
+# Optional: Path to NKey file for authentication
+# nkey_path = "/path/to/nkey.nk"
 
+# ============================================================================
+# Directory Configuration
+# ============================================================================
 [directories]
 # Directory containing trail JSON files
-# Can be overridden with TRAILS_DIR environment variable
-trails_dir = "./trails"
+trails_dir = "./data/trails"
 
 # Directory containing MCP request templates
-# Can be overridden with TEMPLATES_DIR environment variable
 templates_dir = "./templates"
 
 # Directory for execution logs
-# Can be overridden with EXECUTION_LOGS_DIR environment variable
-execution_logs_dir = "./execution_logs"
+execution_logs_dir = "./logs/executions"
 
-# File path for bookmarks storage
-# Can be overridden with BOOKMARKS_FILE environment variable
-bookmarks_file = "./bookmarks.json"
+# File path for saved bookmarks
+bookmarks_file = "./data/bookmarks.json"
 
-# File path for request history storage
-# Can be overridden with HISTORY_FILE environment variable
-history_file = "./request_history.json"
+# File path for command history
+history_file = "./data/history.json"
 
+# ============================================================================
+# UI Configuration
+# ============================================================================
 [ui]
 # Color theme: "dark" or "light"
-# Can be overridden with COLOR_THEME environment variable
 color_theme = "dark"
 
-# Enable auto-scroll in message feeds
-# Can be overridden with AUTO_SCROLL environment variable
+# Auto-scroll to bottom in log viewers
 auto_scroll = true
 
-# Number of items to display per page in paginated lists
-# Can be overridden with PAGE_SIZE environment variable
+# Number of items per page in lists
 page_size = 20
+
+# Optional: Force a specific display mode
+# Options: "classic", "modern", "fullhd", "fourk"
+# Leave unset for auto-detection based on terminal size
+# display_mode = "modern"
+
+# ============================================================================
+# Keyboard Bindings Configuration
+# ============================================================================
+[keyboard]
+# Platform detection: "auto", "macos", "linux", "windows"
+# "auto" will detect the current OS and apply appropriate defaults
+platform = "auto"
+
+# Sequence timeout in milliseconds (for vim-style multi-key sequences)
+sequence_timeout_ms = 500
+
+# ----------------------------------------------------------------------------
+# Global Shortcuts (work in any view)
+# ----------------------------------------------------------------------------
+[keyboard.global]
+# Show help modal
+help = ["f1", "alt-h"]
+
+# Quit application
+quit = ["alt-q"]
+
+# Toggle theme between dark and light
+theme_toggle = ["alt-t"]
+
+# Toggle debug mode (shows detailed logging)
+debug_mode = ["f12"]
+
+# Toggle debug console expansion
+debug_console = ["ctrl-d"]
+
+# Cycle through display modes (Classic → Modern → FullHD → 4K → Auto)
+display_mode_cycle = ["ctrl-l"]
+
+# ----------------------------------------------------------------------------
+# Navigation Shortcuts (jump to specific views)
+# ----------------------------------------------------------------------------
+[keyboard.navigation]
+# MCP Tester view
+mcp_tester = ["alt-1", "f2"]
+
+# Trail Viewer view
+trail_viewer = ["alt-2", "f3"]
+
+# NATS Monitor view
+nats_monitor = ["alt-3", "f4"]
+
+# Story Generator view
+story_generator = ["alt-4", "f5"]
+
+# Search & Comparison view
+search = ["alt-5", "f6"]
+
+# Settings view
+settings = ["alt-6", "f7"]
+
+# Application Logs view
+logs = ["alt-7", "f8"]
+
+# ----------------------------------------------------------------------------
+# Menu Navigation (context-specific, only in Menu view)
+# ----------------------------------------------------------------------------
+[keyboard.menu]
+# Navigate up in menu
+menu_navigate_up = ["up", "k"]
+
+# Navigate down in menu
+menu_navigate_down = ["down", "j"]
+
+# Select menu item
+menu_select = ["enter"]
+
+# Go back or close modal
+menu_back = ["esc"]
+
+# ============================================================================
+# Key Notation Reference
+# ============================================================================
+# Single keys:        a, b, 1, 2, enter, esc, tab, space, up, down, left, right
+# Function keys:      f1, f2, ..., f12
+# Modified keys:      ctrl-a, alt-1, shift-tab, ctrl-alt-t
+# Vim sequences:      g 1, d d, g g (space-separated)
+#
+# Modifier names:
+#   - ctrl, control      Control key
+#   - alt, option, meta  Alt/Option key (platform-dependent)
+#   - shift              Shift key
+#
+# Special keys:
+#   - enter, return
+#   - esc, escape
+#   - tab
+#   - backspace
+#   - delete, del
+#   - space
+#   - up, down, left, right
+#
+# Note: All key names are case-insensitive
+# Note: Character keys are automatically normalized to lowercase
+#
+# ============================================================================
+# Platform Considerations
+# ============================================================================
+# macOS:
+#   - Option key appears as Alt in terminal
+#   - Ctrl+number can be intercepted by system
+#   - Use Option+number (alt-1, alt-2, etc.) for reliability
+#   - Function keys may require Fn key or disabling system shortcuts
+#
+# Linux:
+#   - Ctrl+number combinations work reliably
+#   - Alt key behavior varies by terminal emulator
+#   - Function keys generally work without issues
+#
+# Windows:
+#   - Similar to Linux in most terminal emulators
+#   - Windows Terminal has good key support
+#   - PowerShell may have different key handling
+#
+# ============================================================================
+# Customization Tips
+# ============================================================================
+# 1. Keep critical actions (help, quit) with multiple bindings
+# 2. Use Function keys (F1-F12) as fallbacks for modifier combinations
+# 3. Test your custom bindings in your specific terminal emulator
+# 4. Use platform overrides for OS-specific optimizations
+# 5. Document any custom bindings for your team
+#
+# ============================================================================

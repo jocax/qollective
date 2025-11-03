@@ -50,7 +50,7 @@ pub fn ExecutionTree(_hooks: Hooks, props: &ExecutionTreeProps) -> impl Into<Any
                     vec![element! {
                         Text(
                             content: "No execution history found",
-                            color: Color::DarkGrey
+                            color: Color::Grey
                         )
                     }.into_any()]
                 } else {
@@ -85,7 +85,7 @@ pub fn ExecutionTree(_hooks: Hooks, props: &ExecutionTreeProps) -> impl Into<Any
                                         color: if i == selected_dir && j == selected_server {
                                             Color::Green
                                         } else {
-                                            Color::DarkGrey
+                                            Color::Grey
                                         }
                                     )
                                 }.into_any());
@@ -112,7 +112,7 @@ pub fn ExecutionTree(_hooks: Hooks, props: &ExecutionTreeProps) -> impl Into<Any
             View(margin_top: 1) {
                 Text(
                     content: "↑/↓: Navigate | Space: Expand/Collapse",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }

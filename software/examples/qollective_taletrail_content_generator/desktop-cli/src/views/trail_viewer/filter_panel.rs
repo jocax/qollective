@@ -153,11 +153,11 @@ pub fn FilterPanel(
                 margin_top: 2,
                 padding_top: 1,
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey
+                border_color: Color::Grey
             ) {
                 Text(
                     content: build_active_filters_summary(&filters, &search_query, show_bookmarks_only),
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
 
@@ -165,7 +165,7 @@ pub fn FilterPanel(
             View(margin_top: 2) {
                 Text(
                     content: "c: Clear Filters | Esc: Close Panel",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }

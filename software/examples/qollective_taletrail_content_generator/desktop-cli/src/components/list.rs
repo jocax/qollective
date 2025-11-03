@@ -127,10 +127,10 @@ pub fn List<T: Clone + Send + Sync + 'static>(
         return element! {
             View(
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey,
+                border_color: Color::Grey,
                 padding: 1,
             ) {
-                Text(content: "No items to display", color: Color::DarkGrey)
+                Text(content: "No items to display", color: Color::Grey)
             }
         }
         .into_any();
@@ -185,7 +185,7 @@ pub fn List<T: Clone + Send + Sync + 'static>(
         items_vec.push(
             element! {
                 View(margin_top: 1) {
-                    Text(content: pagination_text, color: Color::DarkGrey)
+                    Text(content: pagination_text, color: Color::Grey)
                 }
             }
             .into_any(),

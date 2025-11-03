@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::error::{AppError, Result};
 use crate::constants::*;
@@ -8,6 +9,8 @@ pub struct Config {
     pub nats: NatsConfig,
     pub directories: DirectoriesConfig,
     pub ui: UiConfig,
+    #[serde(default = "KeyBindings::default_for_platform")]
+    pub keyboard: KeyBindings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,12 +121,252 @@ fn default_page_size() -> usize {
         .unwrap_or(DEFAULT_PAGE_SIZE)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyBindings {
+    #[serde(default = "default_platform")]
+    pub platform: String, // "auto", "macos", "linux", "windows"
+
+    #[serde(default = "default_sequence_timeout")]
+    pub sequence_timeout_ms: Option<u64>,
+
+    #[serde(default)]
+    pub global: HashMap<String, Vec<String>>,
+
+    #[serde(default)]
+    pub menu: HashMap<String, Vec<String>>,
+
+    #[serde(default)]
+    pub navigation: HashMap<String, Vec<String>>,
+
+    #[serde(default)]
+    pub platforms: HashMap<String, PlatformOverrides>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlatformOverrides {
+    #[serde(default)]
+    pub global: Option<HashMap<String, Vec<String>>>,
+
+    #[serde(default)]
+    pub navigation: Option<HashMap<String, Vec<String>>>,
+
+    #[serde(default)]
+    pub menu: Option<HashMap<String, Vec<String>>>,
+}
+
+fn default_platform() -> String {
+    "auto".to_string()
+}
+
+fn default_sequence_timeout() -> Option<u64> {
+    Some(500)
+}
+
+impl KeyBindings {
+    /// Get platform-specific defaults
+    pub fn default_for_platform() -> Self {
+        #[cfg(target_os = "macos")]
+        return Self::macos_defaults();
+
+        #[cfg(target_os = "linux")]
+        return Self::linux_defaults();
+
+        #[cfg(target_os = "windows")]
+        return Self::windows_defaults();
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        return Self::base_defaults();
+    }
+
+    fn base_defaults() -> Self {
+        let mut bindings = KeyBindings {
+            platform: "auto".to_string(),
+            sequence_timeout_ms: Some(500),
+            global: HashMap::new(),
+            menu: HashMap::new(),
+            navigation: HashMap::new(),
+            platforms: HashMap::new(),
+        };
+
+        // Global bindings (platform-neutral)
+        bindings
+            .global
+            .insert("help".to_string(), vec!["f1".to_string()]);
+        bindings
+            .global
+            .insert("debug_mode".to_string(), vec!["f12".to_string()]);
+        bindings
+            .global
+            .insert("debug_console".to_string(), vec!["ctrl-d".to_string()]);
+        bindings.global.insert(
+            "display_mode_cycle".to_string(),
+            vec!["ctrl-l".to_string()],
+        );
+
+        // Menu navigation
+        bindings.menu.insert(
+            "menu_navigate_up".to_string(),
+            vec!["up".to_string(), "k".to_string()],
+        );
+        bindings.menu.insert(
+            "menu_navigate_down".to_string(),
+            vec!["down".to_string(), "j".to_string()],
+        );
+        bindings
+            .menu
+            .insert("menu_select".to_string(), vec!["enter".to_string()]);
+        bindings
+            .menu
+            .insert("menu_back".to_string(), vec!["esc".to_string()]);
+
+        bindings
+    }
+
+    fn macos_defaults() -> Self {
+        let mut bindings = Self::base_defaults();
+
+        // macOS: Option key (appears as Alt in terminal)
+        bindings.global.insert(
+            "help".to_string(),
+            vec!["alt-h".to_string(), "f1".to_string()],
+        );
+        bindings
+            .global
+            .insert("quit".to_string(), vec!["alt-q".to_string()]);
+        bindings
+            .global
+            .insert("theme_toggle".to_string(), vec!["alt-t".to_string()]);
+
+        // View navigation with Option+1-7
+        bindings.navigation.insert(
+            "mcp_tester".to_string(),
+            vec!["alt-1".to_string(), "f2".to_string()],
+        );
+        bindings.navigation.insert(
+            "trail_viewer".to_string(),
+            vec!["alt-2".to_string(), "f3".to_string()],
+        );
+        bindings.navigation.insert(
+            "nats_monitor".to_string(),
+            vec!["alt-3".to_string(), "f4".to_string()],
+        );
+        bindings.navigation.insert(
+            "story_generator".to_string(),
+            vec!["alt-4".to_string(), "f5".to_string()],
+        );
+        bindings.navigation.insert(
+            "search".to_string(),
+            vec!["alt-5".to_string(), "f6".to_string()],
+        );
+        bindings.navigation.insert(
+            "settings".to_string(),
+            vec!["alt-6".to_string(), "f7".to_string()],
+        );
+        bindings.navigation.insert(
+            "logs".to_string(),
+            vec!["alt-7".to_string(), "f8".to_string()],
+        );
+
+        bindings
+    }
+
+    fn linux_defaults() -> Self {
+        let mut bindings = Self::base_defaults();
+
+        // Linux: Ctrl-based
+        bindings.global.insert(
+            "help".to_string(),
+            vec!["ctrl-h".to_string(), "f1".to_string()],
+        );
+        bindings
+            .global
+            .insert("quit".to_string(), vec!["ctrl-q".to_string()]);
+        bindings
+            .global
+            .insert("theme_toggle".to_string(), vec!["ctrl-t".to_string()]);
+
+        // View navigation with Ctrl+1-7
+        bindings.navigation.insert(
+            "mcp_tester".to_string(),
+            vec!["ctrl-1".to_string(), "f2".to_string()],
+        );
+        bindings.navigation.insert(
+            "trail_viewer".to_string(),
+            vec!["ctrl-2".to_string(), "f3".to_string()],
+        );
+        bindings.navigation.insert(
+            "nats_monitor".to_string(),
+            vec!["ctrl-3".to_string(), "f4".to_string()],
+        );
+        bindings.navigation.insert(
+            "story_generator".to_string(),
+            vec!["ctrl-4".to_string(), "f5".to_string()],
+        );
+        bindings.navigation.insert(
+            "search".to_string(),
+            vec!["ctrl-5".to_string(), "f6".to_string()],
+        );
+        bindings.navigation.insert(
+            "settings".to_string(),
+            vec!["ctrl-6".to_string(), "f7".to_string()],
+        );
+        bindings
+            .navigation
+            .insert("logs".to_string(), vec!["ctrl-7".to_string(), "f8".to_string()]);
+
+        bindings
+    }
+
+    fn windows_defaults() -> Self {
+        // Similar to Linux for now
+        Self::linux_defaults()
+    }
+
+    /// Apply platform-specific overrides
+    pub fn with_platform_overrides(mut self) -> Self {
+        let platform = std::env::consts::OS;
+
+        if let Some(overrides) = self.platforms.get(platform).cloned() {
+            self.merge_overrides(&overrides);
+        }
+
+        self
+    }
+
+    fn merge_overrides(&mut self, overrides: &PlatformOverrides) {
+        if let Some(global) = &overrides.global {
+            for (k, v) in global {
+                self.global.insert(k.clone(), v.clone());
+            }
+        }
+
+        if let Some(navigation) = &overrides.navigation {
+            for (k, v) in navigation {
+                self.navigation.insert(k.clone(), v.clone());
+            }
+        }
+
+        if let Some(menu) = &overrides.menu {
+            for (k, v) in menu {
+                self.menu.insert(k.clone(), v.clone());
+            }
+        }
+    }
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self::default_for_platform()
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             nats: NatsConfig::default(),
             directories: DirectoriesConfig::default(),
             ui: UiConfig::default(),
+            keyboard: KeyBindings::default(),
         }
     }
 }
@@ -247,6 +490,10 @@ impl Config {
                 "Page size must be between 1 and 1000".to_string(),
             ));
         }
+
+        // Validate keyboard bindings by attempting to create KeyMapper
+        crate::keyboard::KeyMapper::from_config(self.keyboard.clone())
+            .map_err(|e| AppError::Config(format!("Invalid keyboard bindings: {}", e)))?;
 
         Ok(())
     }

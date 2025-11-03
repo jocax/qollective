@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Layout mode based on realistic terminal dimensions
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LayoutMode {
     /// 4K mode: 480×120+ - Maximum desktop experience
     FourK,

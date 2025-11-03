@@ -60,7 +60,7 @@ pub fn DiagnosticsPanel(
             View(margin_top: 1) {
                 Text(
                     content: "N: Reconnect | D: Refresh diagnostics",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
@@ -135,7 +135,7 @@ fn render_metrics_grid(diagnostics: &MonitoringDiagnostics) -> AnyElement<'stati
                 View(
                     flex_grow: 1.0,
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1,
                     margin_right: 1,
                 ) {
@@ -155,7 +155,7 @@ fn render_metrics_grid(diagnostics: &MonitoringDiagnostics) -> AnyElement<'stati
                 View(
                     flex_grow: 1.0,
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1,
                 ) {
                     Text(
@@ -180,7 +180,7 @@ fn render_metrics_grid(diagnostics: &MonitoringDiagnostics) -> AnyElement<'stati
                 View(
                     flex_grow: 1.0,
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1,
                     margin_right: 1,
                 ) {
@@ -200,7 +200,7 @@ fn render_metrics_grid(diagnostics: &MonitoringDiagnostics) -> AnyElement<'stati
                 View(
                     flex_grow: 1.0,
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 1,
                 ) {
                     Text(

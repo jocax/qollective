@@ -5,7 +5,7 @@ pub mod search_state;
 pub mod settings_state;
 pub mod trail_state;
 
-pub use app_state::{AppContext, AppState, View};
+pub use app_state::{AppContext, AppState, View, ThemeMode};
 pub use mcp_state::{McpContext, McpTab, ResponseMetadata};
 pub use monitoring_state::{MonitorContext, MessageFilters};
 pub use search_state::{SearchContext, ExecutionDirectory, ServerEntry};

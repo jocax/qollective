@@ -83,7 +83,7 @@ pub fn Table(_hooks: Hooks, props: &TableProps) -> impl Into<AnyElement<'static>
 
     elements.push(
         element! {
-            Text(content: separator_line, color: Color::DarkGrey)
+            Text(content: separator_line, color: Color::Grey)
         }
         .into_any(),
     );
@@ -130,7 +130,7 @@ pub fn Table(_hooks: Hooks, props: &TableProps) -> impl Into<AnyElement<'static>
         elements.push(
             element! {
                 View(margin_top: 1) {
-                    Text(content: "No data to display", color: Color::DarkGrey)
+                    Text(content: "No data to display", color: Color::Grey)
                 }
             }
             .into_any(),

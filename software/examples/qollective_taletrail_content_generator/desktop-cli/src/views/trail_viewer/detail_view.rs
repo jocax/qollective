@@ -90,7 +90,7 @@ pub fn TrailDetailView(
                     content: format!("Tenant: {}", trail.tenant_id.as_ref().unwrap_or(&"N/A".to_string())),
                     color: Color::White
                 )
-                Text(content: format!("File: {}", trail.file_path), color: Color::DarkGrey)
+                Text(content: format!("File: {}", trail.file_path), color: Color::Grey)
             }
         }
         .into_any(),
@@ -128,7 +128,7 @@ pub fn TrailDetailView(
             View(margin_top: 1, padding: 1) {
                 Text(
                     content: "Esc: Back to List",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }
@@ -178,7 +178,7 @@ fn render_story_structure_section(full_data: &Option<GenerationResponse>) -> Any
                     Text(content: "Story Structure (DAG)", color: Color::Magenta, weight: Weight::Bold)
                     Text(
                         content: "Loading full trail data...",
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }.into_any()
@@ -221,7 +221,7 @@ fn render_execution_trace_section(full_data: &Option<GenerationResponse>) -> Any
                     Text(content: "Execution Trace", color: Color::Blue, weight: Weight::Bold)
                     Text(
                         content: "Loading execution trace...",
-                        color: Color::DarkGrey
+                        color: Color::Grey
                     )
                 }
             }.into_any()
@@ -237,7 +237,7 @@ fn render_dag_tree(generation_response: &GenerationResponse) -> AnyElement<'stat
         Some(steps) => steps,
         None => {
             return element! {
-                Text(content: "No trail steps available", color: Color::DarkGrey)
+                Text(content: "No trail steps available", color: Color::Grey)
             }
             .into_any();
         }
@@ -275,7 +275,7 @@ fn render_dag_tree(generation_response: &GenerationResponse) -> AnyElement<'stat
             element! {
                 Text(
                     content: format!("  ... and {} more steps", trail_steps.len() - 5),
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
             .into_any(),
@@ -296,7 +296,7 @@ fn render_execution_trace(generation_response: &GenerationResponse) -> AnyElemen
         Some(t) => t,
         None => {
             return element! {
-                Text(content: "No execution trace available", color: Color::DarkGrey)
+                Text(content: "No execution trace available", color: Color::Grey)
             }
             .into_any();
         }
@@ -374,7 +374,7 @@ fn render_execution_trace(generation_response: &GenerationResponse) -> AnyElemen
             element! {
                 Text(
                     content: format!("... and {} more steps", trace.service_invocations.len() - max_display),
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
             .into_any(),

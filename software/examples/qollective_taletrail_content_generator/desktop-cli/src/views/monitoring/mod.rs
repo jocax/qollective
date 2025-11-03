@@ -176,7 +176,7 @@ pub fn Monitoring(_hooks: Hooks, props: &MonitoringProps) -> impl Into<AnyElemen
                 View(margin_top: 1) {
                     Text(
                         content: "Tab/Shift+Tab: Switch views | 1-3: Direct view | Esc: Back to menu | Ctrl+H: Help",
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -225,7 +225,7 @@ fn render_view_bar(active_view: MonitorView) -> impl Into<AnyElement<'static>> {
         let border_color = if is_active {
             Color::Magenta
         } else {
-            Color::DarkGrey
+            Color::Grey
         };
 
         view_elements.push(

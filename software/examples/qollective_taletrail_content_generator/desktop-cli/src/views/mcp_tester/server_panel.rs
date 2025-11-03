@@ -67,7 +67,7 @@ pub fn ServerPanel(_hooks: Hooks, props: &ServerPanelProps) -> impl Into<AnyElem
             View(margin_top: 1) {
                 Text(
                     content: "↑/↓: Navigate | Enter: Select | 1-5: Quick select",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }

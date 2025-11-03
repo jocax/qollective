@@ -1,7 +1,7 @@
 use iocraft::prelude::*;
 
 use crate::layout::{LayoutConfig, LayoutMode};
-use crate::state::AppContext;
+use crate::state::{AppContext, ThemeMode};
 use crate::environment::Environment;
 
 /// Status bar component properties
@@ -13,6 +13,7 @@ pub struct StatusBarProps {
     pub view_name: String,
     pub layout_config: LayoutConfig,
     pub app_context: Option<AppContext>,
+    pub manual_display_mode: Option<LayoutMode>,
 }
 
 impl Default for StatusBarProps {
@@ -24,6 +25,7 @@ impl Default for StatusBarProps {
             view_name: String::from("Unknown"),
             layout_config: LayoutConfig::default(),
             app_context: None,
+            manual_display_mode: None,
         }
     }
 }
@@ -64,7 +66,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
             Environment::Unknown => "[Unknown]",
         };
 
-        let mode_badge = if let Some(manual_mode) = ctx.manual_display_mode() {
+        let mode_badge = if let Some(manual_mode) = props.manual_display_mode {
             format!(" [Manual: {}]", match manual_mode {
                 LayoutMode::Classic => "Classic",
                 LayoutMode::Modern => "Modern",
@@ -75,9 +77,41 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
             String::new()
         };
 
-        format!("{}{}", env_text, mode_badge)
+        let debug_badge = if ctx.is_debug_mode() {
+            " [DEBUG MODE: ON]"
+        } else {
+            ""
+        };
+
+        let theme_badge = match ctx.theme_mode() {
+            ThemeMode::Dark => " [DARK]",
+            ThemeMode::Light => " [LIGHT]",
+        };
+
+        format!("{}{}{}{}", env_text, mode_badge, debug_badge, theme_badge)
     } else {
         String::new()
+    };
+
+    // Determine status bar border color based on debug mode
+    let status_border_color = if let Some(ctx) = &props.app_context {
+        if ctx.is_debug_mode() {
+            Color::Yellow
+        } else {
+            Color::Green
+        }
+    } else {
+        Color::Green
+    };
+
+    let status_border_color_compact = if let Some(ctx) = &props.app_context {
+        if ctx.is_debug_mode() {
+            Color::Yellow
+        } else {
+            Color::Grey
+        }
+    } else {
+        Color::Grey
     };
 
     // Desktop mode: Rich multi-row status (7 rows)
@@ -85,7 +119,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
         element! {
             View(
                 border_style: BorderStyle::Round,
-                border_color: Color::Green,
+                border_color: status_border_color,
             ) {
                 // Row 1: View and NATS status
                 View(
@@ -132,8 +166,8 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                 // Row 3: Help hints
                 View(padding: 0) {
                     Text(
-                        content: format!(" [F1:Help] [Ctrl+D:Debug] [1-6:Jump] [Ctrl+Q:Quit] {} ", help_text),
-                        color: Color::DarkGrey,
+                        content: format!(" [F1:Help] [⇧⌃D:Debug] [⇧⌃1-7:Jump] [⇧⌃T:Theme] [Ctrl+Q:Quit] {} ", help_text),
+                        color: Color::Grey,
                     )
                 }
 
@@ -155,7 +189,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                             // Show last 3 log entries
                             for log in ctx.get_debug_logs().iter().rev().take(3) {
                                 elements.push(element! {
-                                    Text(content: format!(" {} ", log), color: Color::DarkGrey)
+                                    Text(content: format!(" {} ", log), color: Color::Grey)
                                 }.into_any());
                             }
 
@@ -178,7 +212,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                                             " [Debug Console: Collapsed] Last: {} ",
                                             ctx.get_debug_logs().last().unwrap_or(&"No logs".to_string())
                                         ),
-                                        color: Color::DarkGrey
+                                        color: Color::Grey
                                     )
                                 }
                             }.into_any()]
@@ -187,7 +221,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                         // No app context - show placeholder
                         vec![element! {
                             View(padding: 0, margin_top: 1) {
-                                Text(content: " Press Ctrl+D to toggle debug console ", color: Color::DarkGrey)
+                                Text(content: " Press Ctrl+D to toggle debug console ", color: Color::Grey)
                             }
                         }.into_any()]
                     };
@@ -201,7 +235,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
         element! {
             View(
                 border_style: BorderStyle::Round,
-                border_color: Color::Green,
+                border_color: status_border_color,
             ) {
                 // Line 1: View and NATS status
                 View(
@@ -245,8 +279,8 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                 // Line 3: Help hints
                 View(padding: 0) {
                     Text(
-                        content: format!(" [F1:Help] [Tab:Next] [1-6:Views] {} ", help_text),
-                        color: Color::DarkGrey,
+                        content: format!(" [F1:Help] [⇧⌃1-7:Views] [⇧⌃T:Theme] {} ", help_text),
+                        color: Color::Grey,
                     )
                 }
             }
@@ -257,7 +291,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
         element! {
             View(
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey,
+                border_color: status_border_color_compact,
             ) {
                 // Line 1: Main status info
                 View(
@@ -295,7 +329,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
                 View(padding: 0) {
                     Text(
                         content: format!(" {} {} ", help_text, if !environment_badge.is_empty() { format!("│ {}", environment_badge) } else { String::new() }),
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -306,7 +340,7 @@ pub fn StatusBar(_hooks: Hooks, props: &StatusBarProps) -> impl Into<AnyElement<
         element! {
             View(
                 border_style: BorderStyle::Single,
-                border_color: Color::DarkGrey,
+                border_color: status_border_color_compact,
             ) {
                 View(
                     flex_direction: FlexDirection::Row,

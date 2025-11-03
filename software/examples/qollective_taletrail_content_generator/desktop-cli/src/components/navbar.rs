@@ -34,16 +34,34 @@ pub fn Navbar(_hooks: Hooks, props: &NavbarProps) -> impl Into<AnyElement<'stati
             env!("CARGO_PKG_VERSION")
         );
 
-        let nav_line = format!(
-            " {}  {}  {}  {}  {}  {}  {} ",
-            nav_item(1, "MCP Tester", current == AppView::McpTester),
-            nav_item(2, "Trail Viewer", current == AppView::TrailViewer),
-            nav_item(3, "NATS Monitor", current == AppView::NatsMonitor),
-            nav_item(4, "Story Gen", current == AppView::StoryGenerator),
-            nav_item(5, "Search", current == AppView::Search),
-            nav_item(6, "Settings", current == AppView::Settings),
-            nav_item(7, "Logs", current == AppView::Logs)
-        );
+        // Individual nav items with colors
+        let nav1_content = if current == AppView::McpTester { "[1:MCP Tester]" } else { " 1:MCP Tester " };
+        let nav1_color = if current == AppView::McpTester { Color::Cyan } else { Color::White };
+        let nav1_weight = if current == AppView::McpTester { Weight::Bold } else { Weight::Normal };
+
+        let nav2_content = if current == AppView::TrailViewer { "[2:Trail Viewer]" } else { " 2:Trail Viewer " };
+        let nav2_color = if current == AppView::TrailViewer { Color::Cyan } else { Color::White };
+        let nav2_weight = if current == AppView::TrailViewer { Weight::Bold } else { Weight::Normal };
+
+        let nav3_content = if current == AppView::NatsMonitor { "[3:NATS Monitor]" } else { " 3:NATS Monitor " };
+        let nav3_color = if current == AppView::NatsMonitor { Color::Cyan } else { Color::White };
+        let nav3_weight = if current == AppView::NatsMonitor { Weight::Bold } else { Weight::Normal };
+
+        let nav4_content = if current == AppView::StoryGenerator { "[4:Story Gen]" } else { " 4:Story Gen " };
+        let nav4_color = if current == AppView::StoryGenerator { Color::Cyan } else { Color::White };
+        let nav4_weight = if current == AppView::StoryGenerator { Weight::Bold } else { Weight::Normal };
+
+        let nav5_content = if current == AppView::Search { "[5:Search]" } else { " 5:Search " };
+        let nav5_color = if current == AppView::Search { Color::Cyan } else { Color::White };
+        let nav5_weight = if current == AppView::Search { Weight::Bold } else { Weight::Normal };
+
+        let nav6_content = if current == AppView::Settings { "[6:Settings]" } else { " 6:Settings " };
+        let nav6_color = if current == AppView::Settings { Color::Cyan } else { Color::White };
+        let nav6_weight = if current == AppView::Settings { Weight::Bold } else { Weight::Normal };
+
+        let nav7_content = if current == AppView::Logs { "[7:Logs]" } else { " 7:Logs " };
+        let nav7_color = if current == AppView::Logs { Color::Cyan } else { Color::White };
+        let nav7_weight = if current == AppView::Logs { Weight::Bold } else { Weight::Normal };
 
         element! {
             View(
@@ -60,8 +78,25 @@ pub fn Navbar(_hooks: Hooks, props: &NavbarProps) -> impl Into<AnyElement<'stati
                 }
 
                 // Line 2: Navigation tabs
-                View(padding: 0) {
-                    Text(content: nav_line)
+                View(
+                    flex_direction: FlexDirection::Row,
+                    padding: 0,
+                ) {
+                    Text(content: " ")
+                    Text(content: nav1_content, color: nav1_color, weight: nav1_weight)
+                    Text(content: "  ")
+                    Text(content: nav2_content, color: nav2_color, weight: nav2_weight)
+                    Text(content: "  ")
+                    Text(content: nav3_content, color: nav3_color, weight: nav3_weight)
+                    Text(content: "  ")
+                    Text(content: nav4_content, color: nav4_color, weight: nav4_weight)
+                    Text(content: "  ")
+                    Text(content: nav5_content, color: nav5_color, weight: nav5_weight)
+                    Text(content: "  ")
+                    Text(content: nav6_content, color: nav6_color, weight: nav6_weight)
+                    Text(content: "  ")
+                    Text(content: nav7_content, color: nav7_color, weight: nav7_weight)
+                    Text(content: " ")
                 }
             }
         }
@@ -75,16 +110,34 @@ pub fn Navbar(_hooks: Hooks, props: &NavbarProps) -> impl Into<AnyElement<'stati
             env!("CARGO_PKG_VERSION")
         );
 
-        let nav_line = format!(
-            " {}  {}  {}  {}  {}  {}  {} ",
-            nav_item(1, "MCP Tester", current == AppView::McpTester),
-            nav_item(2, "Trail Viewer", current == AppView::TrailViewer),
-            nav_item(3, "NATS Monitor", current == AppView::NatsMonitor),
-            nav_item(4, "Story Gen", current == AppView::StoryGenerator),
-            nav_item(5, "Search", current == AppView::Search),
-            nav_item(6, "Settings", current == AppView::Settings),
-            nav_item(7, "Logs", current == AppView::Logs)
-        );
+        // Individual nav items with colors
+        let nav1_content = if current == AppView::McpTester { "[1:MCP Tester]" } else { " 1:MCP Tester " };
+        let nav1_color = if current == AppView::McpTester { Color::Cyan } else { Color::White };
+        let nav1_weight = if current == AppView::McpTester { Weight::Bold } else { Weight::Normal };
+
+        let nav2_content = if current == AppView::TrailViewer { "[2:Trail Viewer]" } else { " 2:Trail Viewer " };
+        let nav2_color = if current == AppView::TrailViewer { Color::Cyan } else { Color::White };
+        let nav2_weight = if current == AppView::TrailViewer { Weight::Bold } else { Weight::Normal };
+
+        let nav3_content = if current == AppView::NatsMonitor { "[3:NATS Monitor]" } else { " 3:NATS Monitor " };
+        let nav3_color = if current == AppView::NatsMonitor { Color::Cyan } else { Color::White };
+        let nav3_weight = if current == AppView::NatsMonitor { Weight::Bold } else { Weight::Normal };
+
+        let nav4_content = if current == AppView::StoryGenerator { "[4:Story Gen]" } else { " 4:Story Gen " };
+        let nav4_color = if current == AppView::StoryGenerator { Color::Cyan } else { Color::White };
+        let nav4_weight = if current == AppView::StoryGenerator { Weight::Bold } else { Weight::Normal };
+
+        let nav5_content = if current == AppView::Search { "[5:Search]" } else { " 5:Search " };
+        let nav5_color = if current == AppView::Search { Color::Cyan } else { Color::White };
+        let nav5_weight = if current == AppView::Search { Weight::Bold } else { Weight::Normal };
+
+        let nav6_content = if current == AppView::Settings { "[6:Settings]" } else { " 6:Settings " };
+        let nav6_color = if current == AppView::Settings { Color::Cyan } else { Color::White };
+        let nav6_weight = if current == AppView::Settings { Weight::Bold } else { Weight::Normal };
+
+        let nav7_content = if current == AppView::Logs { "[7:Logs]" } else { " 7:Logs " };
+        let nav7_color = if current == AppView::Logs { Color::Cyan } else { Color::White };
+        let nav7_weight = if current == AppView::Logs { Weight::Bold } else { Weight::Normal };
 
         element! {
             View(
@@ -101,24 +154,85 @@ pub fn Navbar(_hooks: Hooks, props: &NavbarProps) -> impl Into<AnyElement<'stati
                 }
 
                 // Line 2: Navigation tabs
-                View(padding: 0) {
-                    Text(content: nav_line)
+                View(
+                    flex_direction: FlexDirection::Row,
+                    padding: 0,
+                ) {
+                    Text(content: " ")
+                    Text(content: nav1_content, color: nav1_color, weight: nav1_weight)
+                    Text(content: "  ")
+                    Text(content: nav2_content, color: nav2_color, weight: nav2_weight)
+                    Text(content: "  ")
+                    Text(content: nav3_content, color: nav3_color, weight: nav3_weight)
+                    Text(content: "  ")
+                    Text(content: nav4_content, color: nav4_color, weight: nav4_weight)
+                    Text(content: "  ")
+                    Text(content: nav5_content, color: nav5_color, weight: nav5_weight)
+                    Text(content: "  ")
+                    Text(content: nav6_content, color: nav6_color, weight: nav6_weight)
+                    Text(content: "  ")
+                    Text(content: nav7_content, color: nav7_color, weight: nav7_weight)
+                    Text(content: " ")
                 }
             }
         }
     }
     // Medium mode: Compact single-line navbar (2 rows)
     else if layout.layout_mode == LayoutMode::Modern {
-        let nav_line = format!(
-            " [1:MCP] [2:Trails] [3:Monitor] [4:Gen] [5:Search] [6:Settings] [7:Logs] ",
-        );
+        // Individual nav items with colors (compact version)
+        let nav1_content = if current == AppView::McpTester { "[1:MCP]" } else { " 1:MCP " };
+        let nav1_color = if current == AppView::McpTester { Color::Cyan } else { Color::White };
+        let nav1_weight = if current == AppView::McpTester { Weight::Bold } else { Weight::Normal };
+
+        let nav2_content = if current == AppView::TrailViewer { "[2:Trails]" } else { " 2:Trails " };
+        let nav2_color = if current == AppView::TrailViewer { Color::Cyan } else { Color::White };
+        let nav2_weight = if current == AppView::TrailViewer { Weight::Bold } else { Weight::Normal };
+
+        let nav3_content = if current == AppView::NatsMonitor { "[3:Monitor]" } else { " 3:Monitor " };
+        let nav3_color = if current == AppView::NatsMonitor { Color::Cyan } else { Color::White };
+        let nav3_weight = if current == AppView::NatsMonitor { Weight::Bold } else { Weight::Normal };
+
+        let nav4_content = if current == AppView::StoryGenerator { "[4:Gen]" } else { " 4:Gen " };
+        let nav4_color = if current == AppView::StoryGenerator { Color::Cyan } else { Color::White };
+        let nav4_weight = if current == AppView::StoryGenerator { Weight::Bold } else { Weight::Normal };
+
+        let nav5_content = if current == AppView::Search { "[5:Search]" } else { " 5:Search " };
+        let nav5_color = if current == AppView::Search { Color::Cyan } else { Color::White };
+        let nav5_weight = if current == AppView::Search { Weight::Bold } else { Weight::Normal };
+
+        let nav6_content = if current == AppView::Settings { "[6:Settings]" } else { " 6:Settings " };
+        let nav6_color = if current == AppView::Settings { Color::Cyan } else { Color::White };
+        let nav6_weight = if current == AppView::Settings { Weight::Bold } else { Weight::Normal };
+
+        let nav7_content = if current == AppView::Logs { "[7:Logs]" } else { " 7:Logs " };
+        let nav7_color = if current == AppView::Logs { Color::Cyan } else { Color::White };
+        let nav7_weight = if current == AppView::Logs { Weight::Bold } else { Weight::Normal };
 
         element! {
             View(
                 border_style: BorderStyle::Single,
                 border_color: Color::Blue,
             ) {
-                Text(content: nav_line)
+                View(
+                    flex_direction: FlexDirection::Row,
+                    padding: 0,
+                ) {
+                    Text(content: " ")
+                    Text(content: nav1_content, color: nav1_color, weight: nav1_weight)
+                    Text(content: " ")
+                    Text(content: nav2_content, color: nav2_color, weight: nav2_weight)
+                    Text(content: " ")
+                    Text(content: nav3_content, color: nav3_color, weight: nav3_weight)
+                    Text(content: " ")
+                    Text(content: nav4_content, color: nav4_color, weight: nav4_weight)
+                    Text(content: " ")
+                    Text(content: nav5_content, color: nav5_color, weight: nav5_weight)
+                    Text(content: " ")
+                    Text(content: nav6_content, color: nav6_color, weight: nav6_weight)
+                    Text(content: " ")
+                    Text(content: nav7_content, color: nav7_color, weight: nav7_weight)
+                    Text(content: " ")
+                }
             }
         }
     }
@@ -147,7 +261,7 @@ mod tests {
     fn test_navbar_props_creation() {
         let props = NavbarProps {
             current_view: AppView::McpTester,
-            layout_config: LayoutConfig::from_terminal_size(200, 60),
+            layout_config: LayoutConfig::from_terminal_size(240, 60),
         };
         assert_eq!(props.current_view, AppView::McpTester);
         assert_eq!(props.layout_config.layout_mode, LayoutMode::FullHD);

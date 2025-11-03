@@ -63,7 +63,7 @@ pub fn CardGrid<T: Clone + Send + Sync + 'static>(
             let border_color = if idx == selected_idx {
                 Color::Yellow
             } else {
-                Color::DarkGrey
+                Color::Grey
             };
 
             let mut text_elements = Vec::new();
@@ -72,7 +72,7 @@ pub fn CardGrid<T: Clone + Send + Sync + 'static>(
                     let text_color = if idx == selected_idx {
                         Color::White
                     } else {
-                        Color::DarkGrey
+                        Color::Grey
                     };
                     text_elements.push(element! {
                         Text(content: line, color: text_color)

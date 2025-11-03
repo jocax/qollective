@@ -272,7 +272,7 @@ impl MultiStepProgress {
 
     pub fn status_color(status: &ProgressStatus) -> Color {
         match status {
-            ProgressStatus::Pending => Color::DarkGrey,
+            ProgressStatus::Pending => Color::Grey,
             ProgressStatus::InProgress => Color::Cyan,
             ProgressStatus::Completed => Color::Green,
             ProgressStatus::Failed => Color::Red,

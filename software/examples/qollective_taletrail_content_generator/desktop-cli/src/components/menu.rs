@@ -39,12 +39,12 @@ pub fn Menu(_hooks: Hooks, props: &MenuProps) -> impl Into<AnyElement<'static>> 
     let selected = props.selected_index;
 
     let menu_items = [
-        MenuItem::new(1, "MCP Tester", "Ctrl+1", Some(AppView::McpTester)),
-        MenuItem::new(2, "Trail Viewer", "Ctrl+2", Some(AppView::TrailViewer)),
-        MenuItem::new(3, "NATS Monitor", "Ctrl+3", Some(AppView::NatsMonitor)),
-        MenuItem::new(4, "Story Generator", "Ctrl+4", Some(AppView::StoryGenerator)),
-        MenuItem::new(5, "Search & Comparison", "Ctrl+5", Some(AppView::Search)),
-        MenuItem::new(6, "Settings", "Ctrl+6", Some(AppView::Settings)),
+        MenuItem::new(1, "MCP Tester", "⇧⌃1/F2", Some(AppView::McpTester)),
+        MenuItem::new(2, "Trail Viewer", "⇧⌃2/F3", Some(AppView::TrailViewer)),
+        MenuItem::new(3, "NATS Monitor", "⇧⌃3/F4", Some(AppView::NatsMonitor)),
+        MenuItem::new(4, "Story Generator", "⇧⌃4/F5", Some(AppView::StoryGenerator)),
+        MenuItem::new(5, "Search & Comparison", "⇧⌃5/F6", Some(AppView::Search)),
+        MenuItem::new(6, "Settings", "⇧⌃6/F7", Some(AppView::Settings)),
         MenuItem::new(7, "Quit", "Ctrl+Q", None),
     ];
 
@@ -79,7 +79,7 @@ pub fn Menu(_hooks: Hooks, props: &MenuProps) -> impl Into<AnyElement<'static>> 
                             }
                             Text(
                                 content: format!("[{}]", item.hotkey),
-                                color: Color::DarkGrey,
+                                color: Color::Grey,
                             )
                         }
                     }
@@ -90,8 +90,8 @@ pub fn Menu(_hooks: Hooks, props: &MenuProps) -> impl Into<AnyElement<'static>> 
                 }
 
                 Text(
-                    content: "Use ↑/↓ arrows or numbers 1-7 to select, Enter to confirm",
-                    color: Color::DarkGrey,
+                    content: "Use ↑/↓ arrows or ⇧⌃1-7 to select, Enter to confirm",
+                    color: Color::Grey,
                 )
             }
         }
@@ -101,12 +101,12 @@ pub fn Menu(_hooks: Hooks, props: &MenuProps) -> impl Into<AnyElement<'static>> 
 /// Get the menu item at a specific index
 pub fn get_menu_item(index: usize) -> Option<MenuItem> {
     let items = [
-        MenuItem::new(1, "MCP Tester", "Ctrl+1", Some(AppView::McpTester)),
-        MenuItem::new(2, "Trail Viewer", "Ctrl+2", Some(AppView::TrailViewer)),
-        MenuItem::new(3, "NATS Monitor", "Ctrl+3", Some(AppView::NatsMonitor)),
-        MenuItem::new(4, "Story Generator", "Ctrl+4", Some(AppView::StoryGenerator)),
-        MenuItem::new(5, "Search & Comparison", "Ctrl+5", Some(AppView::Search)),
-        MenuItem::new(6, "Settings", "Ctrl+6", Some(AppView::Settings)),
+        MenuItem::new(1, "MCP Tester", "⇧⌃1/F2", Some(AppView::McpTester)),
+        MenuItem::new(2, "Trail Viewer", "⇧⌃2/F3", Some(AppView::TrailViewer)),
+        MenuItem::new(3, "NATS Monitor", "⇧⌃3/F4", Some(AppView::NatsMonitor)),
+        MenuItem::new(4, "Story Generator", "⇧⌃4/F5", Some(AppView::StoryGenerator)),
+        MenuItem::new(5, "Search & Comparison", "⇧⌃5/F6", Some(AppView::Search)),
+        MenuItem::new(6, "Settings", "⇧⌃6/F7", Some(AppView::Settings)),
         MenuItem::new(7, "Quit", "Ctrl+Q", None),
     ];
 

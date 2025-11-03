@@ -4,7 +4,7 @@
 
 use iocraft::prelude::*;
 use crate::state::search_state::SearchContext;
-use crate::layout::LayoutConfig;
+use crate::layout::{LayoutConfig, LayoutMode};
 
 mod execution_tree;
 mod viewer_panel;
@@ -54,7 +54,7 @@ pub fn SearchView(_hooks: Hooks, props: &SearchViewProps) -> impl Into<AnyElemen
                 )
                 Text(
                     content: "Browse and inspect MCP request/response execution history",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
 
@@ -130,6 +130,6 @@ mod tests {
     fn test_search_view_props_default() {
         let props = SearchViewProps::default();
         assert_eq!(props.search_context.get_execution_dirs().len(), 0);
-        assert_eq!(props.layout_config.layout_mode, LayoutMode::FourK);
+        assert_eq!(props.layout_config.layout_mode, LayoutMode::Modern);
     }
 }

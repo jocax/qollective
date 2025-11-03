@@ -252,7 +252,7 @@ pub fn TextEditor(_hooks: Hooks, props: &TextEditorProps) -> impl Into<AnyElemen
         let text_color = if is_cursor_line {
             Color::White
         } else {
-            Color::DarkGrey
+            Color::Grey
         };
 
         elements.push(

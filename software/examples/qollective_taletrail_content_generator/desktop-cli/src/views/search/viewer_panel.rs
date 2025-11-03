@@ -94,7 +94,7 @@ pub fn ViewerPanel(_hooks: Hooks, props: &ViewerPanelProps) -> impl Into<AnyElem
             View(margin_top: 1, padding: 1) {
                 Text(
                     content: "Enter: Select | ESC: Back",
-                    color: Color::DarkGrey
+                    color: Color::Grey
                 )
             }
         }

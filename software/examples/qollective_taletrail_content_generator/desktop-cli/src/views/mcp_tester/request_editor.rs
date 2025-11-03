@@ -46,7 +46,7 @@ pub fn RequestEditor(
 
     let is_valid = json_error.is_none() && !json_content.trim().is_empty();
     let validation_color = if json_content.trim().is_empty() {
-        Color::DarkGrey
+        Color::Grey
     } else if is_valid {
         Color::Green
     } else {
@@ -86,7 +86,7 @@ pub fn RequestEditor(
             View(margin_top: 1) {
                 Text(
                     content: "Ctrl+Enter: Send | Ctrl+S: Save | Ctrl+K: Clear | Ctrl+P: Pretty Print",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }

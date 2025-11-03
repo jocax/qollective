@@ -70,13 +70,13 @@ pub fn MessageFeed(_hooks: Hooks, props: &MessageFeedProps) -> impl Into<AnyElem
             element! {
                 View(
                     border_style: BorderStyle::Single,
-                    border_color: Color::DarkGrey,
+                    border_color: Color::Grey,
                     padding: 2,
                     height: 25u16,
                 ) {
                     Text(
                         content: "No messages to display",
-                        color: Color::DarkGrey,
+                        color: Color::Grey,
                     )
                 }
             }
@@ -104,7 +104,7 @@ pub fn MessageFeed(_hooks: Hooks, props: &MessageFeedProps) -> impl Into<AnyElem
             View(margin_top: 1) {
                 Text(
                     content: "Up/Down: Navigate | Enter: View details | A: Toggle auto-scroll | F: Filters | C: Clear",
-                    color: Color::DarkGrey,
+                    color: Color::Grey,
                 )
             }
         }
