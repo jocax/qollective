@@ -37,10 +37,10 @@ For detailed information about the framework, architecture, and usage:
 
 ```
 qollective/
-├── software/           # Main framework implementation
+├── software/          # Main framework implementation
 │   ├── src/           # Rust source code
 │   ├── schemas/       # JSON Schema definitions
-│   ├── generator/     # Code generation tool
+│   ├── tools/         # Code generation tool
 │   ├── examples/      # Example implementations
 │   └── README.md      # Detailed documentation
 └── README.md          # This file

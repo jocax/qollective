@@ -1,0 +1,402 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Comprehensive Schema Example",
+  "description": "Integration test schema demonstrating all JSON Schema features in a realistic workflow execution system",
+  "$defs": {
+    "Status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "completed", "failed"],
+      "description": "Execution status of a workflow or step"
+    },
+    "Priority": {
+      "type": "integer",
+      "enum": [1, 2, 3, 4],
+      "description": "Priority level: 1=low, 2=medium, 3=high, 4=critical"
+    },
+    "Configuration": {
+      "type": "object",
+      "description": "Configuration settings for workflow execution with optimized integer types",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum retry attempts (should optimize to u8)"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600,
+          "description": "Timeout in seconds (should optimize to u16)"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Number of items to process per batch (should optimize to u16)"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this configuration is enabled"
+        }
+      },
+      "required": ["max_retries", "timeout_seconds", "batch_size", "enabled"],
+      "additionalProperties": false
+    },
+    "Entity": {
+      "type": "object",
+      "description": "Base entity with UUID identifier and timestamps",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Entity name"
+        }
+      },
+      "required": ["id", "created_at", "name"],
+      "additionalProperties": false
+    },
+    "WorkflowStep": {
+      "type": "object",
+      "description": "Individual step within a workflow execution",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Step unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Step name"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Execution order (0-based)"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this step is required"
+        },
+        "retry_config": {
+          "$ref": "#/$defs/Configuration",
+          "description": "Optional retry configuration for this step"
+        }
+      },
+      "required": ["id", "name", "order", "required"],
+      "additionalProperties": false
+    },
+    "Workflow": {
+      "type": "object",
+      "description": "Complete workflow with nested steps and configuration",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Workflow unique identifier"
+        },
+        "status": {
+          "$ref": "#/$defs/Status",
+          "description": "Current workflow status"
+        },
+        "priority": {
+          "$ref": "#/$defs/Priority",
+          "description": "Workflow priority level"
+        },
+        "config": {
+          "$ref": "#/$defs/Configuration",
+          "description": "Workflow configuration settings"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowStep"
+          },
+          "description": "Ordered list of workflow steps"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Additional metadata as key-value pairs"
+        }
+      },
+      "required": ["id", "status", "priority", "config", "steps", "metadata"],
+      "additionalProperties": false
+    },
+    "GraphNode": {
+      "type": "object",
+      "description": "Node in a directed graph structure",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Node identifier"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label"
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Arbitrary node data"
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of connected nodes"
+        }
+      },
+      "required": ["id", "label", "data", "connections"],
+      "additionalProperties": false
+    },
+    "GraphStructure": {
+      "type": "object",
+      "description": "Graph structure using HashMap-like additionalProperties",
+      "properties": {
+        "nodes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "description": "Map of node ID to GraphNode"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Graph-level metadata"
+        }
+      },
+      "required": ["nodes", "metadata"],
+      "additionalProperties": false
+    },
+    "ValidationRule": {
+      "type": "object",
+      "description": "Rule for validating data with pattern matching support",
+      "properties": {
+        "field_name": {
+          "type": "string",
+          "description": "Name of field to validate"
+        },
+        "rule_type": {
+          "type": "string",
+          "enum": ["required", "pattern", "range", "custom"],
+          "description": "Type of validation rule"
+        },
+        "pattern": {
+          "type": "string",
+          "format": "regex",
+          "description": "Regex pattern for pattern validation"
+        },
+        "min_value": {
+          "type": "number",
+          "description": "Minimum value for range validation"
+        },
+        "max_value": {
+          "type": "number",
+          "description": "Maximum value for range validation"
+        }
+      },
+      "required": ["field_name", "rule_type"],
+      "additionalProperties": false
+    },
+    "ValidationResult": {
+      "type": "object",
+      "description": "Result of validation with errors and warnings",
+      "properties": {
+        "is_valid": {
+          "type": "boolean",
+          "description": "Whether validation passed"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Validation errors"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Validation warnings"
+        },
+        "applied_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValidationRule"
+          },
+          "description": "Rules that were applied"
+        }
+      },
+      "required": ["is_valid", "errors", "applied_rules"],
+      "additionalProperties": false
+    },
+    "ServiceInvocation": {
+      "type": "object",
+      "description": "Record of a service call for distributed tracing",
+      "properties": {
+        "service_name": {
+          "type": "string",
+          "description": "Name of invoked service"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Invocation timestamp"
+        },
+        "duration_ms": {
+          "type": "number",
+          "description": "Duration in milliseconds"
+        },
+        "status_code": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599,
+          "description": "HTTP status code"
+        }
+      },
+      "required": ["service_name", "timestamp", "duration_ms", "status_code"],
+      "additionalProperties": false
+    },
+    "ExecutionTrace": {
+      "type": "object",
+      "description": "Distributed trace of workflow execution",
+      "properties": {
+        "trace_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Trace unique identifier"
+        },
+        "workflow_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Associated workflow ID"
+        },
+        "invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServiceInvocation"
+          },
+          "description": "Chronological list of service invocations"
+        },
+        "total_duration_ms": {
+          "type": "number",
+          "description": "Total trace duration in milliseconds"
+        }
+      },
+      "required": ["trace_id", "workflow_id", "invocations", "total_duration_ms"],
+      "additionalProperties": false
+    },
+    "ResultValue": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "String result value"
+        },
+        {
+          "type": "number",
+          "description": "Numeric result value"
+        },
+        {
+          "type": "boolean",
+          "description": "Boolean result value"
+        },
+        {
+          "type": "null",
+          "description": "Null result value"
+        }
+      ],
+      "description": "Union type for different result value types"
+    },
+    "DataContainer": {
+      "type": "object",
+      "description": "Container with anyOf value type",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "description": "Value that can be string, number, or boolean"
+        }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "NullableEntity": {
+      "type": "object",
+      "description": "Entity demonstrating nullable fields",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Entity unique identifier"
+        },
+        "name": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Nullable name field"
+        },
+        "description": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Nullable description field"
+        },
+        "tags": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Nullable array of tags"
+        }
+      },
+      "required": ["id", "name", "description", "tags"],
+      "additionalProperties": false
+    }
+  }
+}

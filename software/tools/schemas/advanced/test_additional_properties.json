@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/additional-properties/v1.0.0",
+  "title": "Additional Properties Test Schema",
+  "description": "Tests additionalProperties for HashMap generation",
+
+  "$defs": {
+    "StringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "A map with string values"
+    },
+
+    "WordList": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "A map where each key has an array of strings"
+    },
+
+    "Node": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+
+    "NodeMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Node"
+      },
+      "description": "A map of nodes where keys are node IDs"
+    },
+
+    "Configuration": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "metadata": {
+          "$ref": "#/$defs/StringMap"
+        }
+      }
+    }
+  }
+}

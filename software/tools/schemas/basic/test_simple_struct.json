@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/simple-struct/v1.0.0",
+  "title": "Simple Struct Test Schema",
+  "description": "Tests basic struct generation with primitive types",
+
+  "$defs": {
+    "Person": {
+      "type": "object",
+      "required": ["name", "age"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Person's name"
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 150,
+          "description": "Person's age"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether person is active"
+        },
+        "score": {
+          "type": "number",
+          "description": "Person's score"
+        }
+      }
+    }
+  }
+}

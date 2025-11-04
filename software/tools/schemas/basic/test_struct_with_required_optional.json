@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/required-optional/v1.0.0",
+  "title": "Required/Optional Fields Test Schema",
+  "description": "Tests distinction between required and optional fields",
+
+  "$defs": {
+    "Configuration": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Configuration identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Configuration name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional description"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether configuration is enabled"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Optional priority level"
+        }
+      }
+    }
+  }
+}

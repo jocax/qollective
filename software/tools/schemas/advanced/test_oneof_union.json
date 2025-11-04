@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/oneof-union/v1.0.0",
+  "title": "OneOf Union Test Schema",
+  "description": "Tests oneOf for union type generation in Rust enums",
+
+  "$defs": {
+    "StringValue": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+
+    "NumberValue": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "number"
+        },
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+
+    "BooleanValue": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boolean"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      }
+    },
+
+    "ConfigValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/StringValue" },
+        { "$ref": "#/$defs/NumberValue" },
+        { "$ref": "#/$defs/BooleanValue" }
+      ],
+      "description": "A configuration value that can be string, number, or boolean"
+    }
+  }
+}

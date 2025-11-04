@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/nested-types/v1.0.0",
+  "title": "Nested Types Test Schema",
+  "description": "Tests $ref resolution and nested type dependencies",
+
+  "$defs": {
+    "Status": {
+      "type": "string",
+      "enum": ["draft", "published", "archived"],
+      "description": "Publication status"
+    },
+
+    "Metadata": {
+      "type": "object",
+      "required": ["created"],
+      "properties": {
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      }
+    },
+
+    "Item": {
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        }
+      }
+    }
+  }
+}

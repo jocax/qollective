@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/simple-enum/v1.0.0",
+  "title": "Simple Enum Test Schema",
+  "description": "Tests basic string enum generation",
+
+  "$defs": {
+    "Status": {
+      "type": "string",
+      "enum": ["active", "inactive", "pending"],
+      "description": "Entity status"
+    }
+  }
+}

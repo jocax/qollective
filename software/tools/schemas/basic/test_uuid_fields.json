@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/uuid-fields/v1.0.0",
+  "title": "UUID Fields Test Schema",
+  "description": "Tests UUID format field generation",
+
+  "$defs": {
+    "Entity": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique entity identifier"
+        },
+        "parent_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Optional parent entity identifier"
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Array of related entity IDs"
+        }
+      }
+    }
+  }
+}

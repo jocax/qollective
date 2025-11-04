@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/anyof-union/v1.0.0",
+  "title": "AnyOf Union Test Schema",
+  "description": "Tests anyOf for flexible union type generation",
+
+  "$defs": {
+    "FlexibleValue": {
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "String value"
+        },
+        {
+          "type": "number",
+          "description": "Numeric value"
+        },
+        {
+          "type": "boolean",
+          "description": "Boolean value"
+        }
+      ],
+      "description": "A flexible value that can be multiple types"
+    },
+
+    "Container": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "value": {
+          "$ref": "#/$defs/FlexibleValue"
+        }
+      }
+    }
+  }
+}

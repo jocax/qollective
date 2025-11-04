@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/numeric-validation/v1.0.0",
+  "title": "Numeric Validation Test Schema",
+  "description": "Tests integer type selection based on min/max constraints",
+
+  "$defs": {
+    "Percentage": {
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage value (0-100), should generate u8"
+        }
+      }
+    },
+
+    "Port": {
+      "type": "object",
+      "required": ["number"],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Network port number (0-65535), should generate u16"
+        }
+      }
+    },
+
+    "SmallCount": {
+      "type": "object",
+      "required": ["count"],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255,
+          "description": "Small count (1-255), should generate u8"
+        }
+      }
+    },
+
+    "Temperature": {
+      "type": "object",
+      "required": ["celsius"],
+      "properties": {
+        "celsius": {
+          "type": "integer",
+          "minimum": -273,
+          "maximum": 5778,
+          "description": "Temperature in Celsius (-273 to 5778), should generate i16"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.qollective.io/test/array-fields/v1.0.0",
+  "title": "Array Fields Test Schema",
+  "description": "Tests array properties with minItems and maxItems constraints",
+
+  "$defs": {
+    "TaggedItem": {
+      "type": "object",
+      "required": ["tags"],
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "minItems": 1,
+          "maxItems": 10,
+          "description": "Item tags (1-10 tags)"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 100.0
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "Score values (1-5 scores)"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "description": "Optional categories (max 20)"
+        }
+      }
+    }
+  }
+}
