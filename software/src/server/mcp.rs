@@ -313,6 +313,9 @@ impl rmcp::ServerHandler for McpServerRegistry {
             server_info: rmcp::model::Implementation {
                 name: self.config.registry_name.clone(),
                 version: "0.1.0".to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
             instructions: Some(
                 "Qollective MCP Server Registry - Tracks MCP servers and tool capabilities"
@@ -402,6 +405,9 @@ impl Default for McpServerConfig {
             server_info: Implementation {
                 name: "Qollective MCP Server".to_string(),
                 version: "1.0.0".to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
             tools: vec![],
             resources: vec![],
@@ -573,6 +579,7 @@ impl McpServer {
                     content: vec![error_content],
                     is_error: Some(true),
                     structured_content: None,
+                    meta: None,
                 })
             }
         }
@@ -603,6 +610,7 @@ impl McpServer {
                     content: vec![echo_content],
                     is_error: None, // Default is false
                     structured_content: None,
+                    meta: None,
                 })
             }
             "calculator" => {
@@ -617,6 +625,7 @@ impl McpServer {
                             content: vec![calc_content],
                             is_error: None, // Default is false
                             structured_content: None,
+                            meta: None,
                         })
                     }
                     Err(error_msg) => {
@@ -628,6 +637,7 @@ impl McpServer {
                             content: vec![error_content],
                             is_error: Some(true),
                             structured_content: None,
+                            meta: None,
                         })
                     }
                 }
@@ -643,6 +653,7 @@ impl McpServer {
                     content: vec![error_content],
                     is_error: Some(true),
                     structured_content: None,
+                    meta: None,
                 })
             }
         }
@@ -1556,6 +1567,9 @@ mod tests {
                 client_info: Implementation {
                     name: "test_client".to_string(),
                     version: "1.0.0".to_string(),
+                    title: None,
+                    icons: None,
+                    website_url: None,
                 },
             },
             extensions: rmcp::model::Extensions::default(),
@@ -1587,6 +1601,9 @@ mod tests {
                 client_info: Implementation {
                     name: "test_client".to_string(),
                     version: "1.0.0".to_string(),
+                    title: None,
+                    icons: None,
+                    website_url: None,
                 },
             },
             extensions: rmcp::model::Extensions::default(),

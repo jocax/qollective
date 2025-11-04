@@ -1094,6 +1094,9 @@ impl rmcp::ClientHandler for McpClient {
             client_info: rmcp::model::Implementation {
                 name: "qollective-mcp-client".to_string(),
                 version: "0.1.0".to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
         }
     }
