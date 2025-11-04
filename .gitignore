@@ -22,3 +22,6 @@ Cargo.lock
 
 # Enc
 .env
+
+# Tools
+/software/tools/generated/
