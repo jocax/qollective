@@ -121,6 +121,28 @@ pub fn handle_generate(args: &GenerateArgs, verbose: bool, quiet: bool) -> Resul
     Ok(())
 }
 
+/// Parse custom derives from CLI arguments
+fn parse_custom_derives(args: &GenerateArgs) -> Vec<String> {
+    let mut derives = Vec::new();
+
+    // Add JsonSchema if --schemars flag is set
+    if args.schemars {
+        derives.push("JsonSchema".to_string());
+    }
+
+    // Parse --additional-derives
+    if let Some(additional) = &args.additional_derives {
+        for derive in additional.split(',') {
+            let trimmed = derive.trim().to_string();
+            if !trimmed.is_empty() && !derives.contains(&trimmed) {
+                derives.push(trimmed);
+            }
+        }
+    }
+
+    derives
+}
+
 /// Generate Rust code from schema
 fn generate_rust_code(
     _schema: &crate::schema::Schema,
@@ -132,7 +154,15 @@ fn generate_rust_code(
         println!("🦀 Generating Rust code...");
     }
 
-    let mut code_generator = RustCodeGenerator::new();
+    // Parse custom derives from CLI arguments
+    let custom_derives = parse_custom_derives(args);
+
+    // Create code generator with custom configuration
+    let config = crate::codegen::types::RustCodegenConfig {
+        custom_derives: custom_derives.clone(),
+        ..Default::default()
+    };
+    let mut code_generator = RustCodeGenerator::with_config(config);
 
     // Use RustCodeGenerator which properly handles $defs section
     let rust_code = code_generator
@@ -155,8 +185,8 @@ fn generate_rust_code(
             let crate_dir = args.output.join(&package_name);
             fs::create_dir_all(crate_dir.join("src"))?;
 
-            // Create Cargo.toml
-            let cargo_toml = create_cargo_toml(&package_name);
+            // Create Cargo.toml with custom derives information
+            let cargo_toml = create_cargo_toml(&package_name, &custom_derives);
             fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
 
             crate_dir.join("src").join("lib.rs")
@@ -459,7 +489,19 @@ fn create_examples_template(dir: &Path, project_name: &str, verbose: bool) -> Re
 }
 
 /// Create a Cargo.toml for Rust crate output format
-fn create_cargo_toml(package_name: &str) -> String {
+fn create_cargo_toml(package_name: &str, custom_derives: &[String]) -> String {
+    let mut deps = vec![
+        r#"serde = { version = "1.0", features = ["derive"] }"#.to_string(),
+        r#"serde_json = "1.0""#.to_string(),
+    ];
+
+    // Add schemars if JsonSchema is in custom derives
+    if custom_derives.contains(&"JsonSchema".to_string()) {
+        deps.push(r#"schemars = "0.8""#.to_string());
+    }
+
+    let deps_string = deps.join("\n");
+
     format!(
         r#"[package]
 name = "{}"
@@ -467,9 +509,185 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = {{ version = "1.0", features = ["derive"] }}
-serde_json = "1.0"
+{}
 "#,
-        package_name
+        package_name, deps_string
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_parse_custom_derives_with_schemars_flag() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: true,
+            additional_derives: None,
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 1);
+        assert!(derives.contains(&"JsonSchema".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_derives_with_additional_derives() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: false,
+            additional_derives: Some("PartialEq,Hash,Eq".to_string()),
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 3);
+        assert!(derives.contains(&"PartialEq".to_string()));
+        assert!(derives.contains(&"Hash".to_string()));
+        assert!(derives.contains(&"Eq".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_derives_with_both_flags() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: true,
+            additional_derives: Some("Default,PartialOrd".to_string()),
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 3);
+        assert!(derives.contains(&"JsonSchema".to_string()));
+        assert!(derives.contains(&"Default".to_string()));
+        assert!(derives.contains(&"PartialOrd".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_derives_deduplication() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: true,
+            additional_derives: Some("JsonSchema,PartialEq".to_string()),
+        };
+
+        let derives = parse_custom_derives(&args);
+        // Should only have one JsonSchema despite being in both places
+        assert_eq!(derives.iter().filter(|d| *d == "JsonSchema").count(), 1);
+        assert!(derives.contains(&"PartialEq".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_derives_with_spaces() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: false,
+            additional_derives: Some("PartialEq, Hash, Eq".to_string()),
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 3);
+        assert!(derives.contains(&"PartialEq".to_string()));
+        assert!(derives.contains(&"Hash".to_string()));
+        assert!(derives.contains(&"Eq".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_derives_empty_string() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: false,
+            additional_derives: Some("".to_string()),
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_custom_derives_no_flags() {
+        let args = GenerateArgs {
+            schema_file: PathBuf::from("schema.json"),
+            output: PathBuf::from("./generated"),
+            language: "rust".to_string(),
+            format: "module".to_string(),
+            package_name: None,
+            skip_validation: false,
+            force: false,
+            schemars: false,
+            additional_derives: None,
+        };
+
+        let derives = parse_custom_derives(&args);
+        assert_eq!(derives.len(), 0);
+    }
+
+    #[test]
+    fn test_create_cargo_toml_with_schemars() {
+        let derives = vec!["JsonSchema".to_string()];
+        let toml = create_cargo_toml("test-pkg", &derives);
+
+        assert!(toml.contains("name = \"test-pkg\""));
+        assert!(toml.contains("schemars"));
+        assert!(toml.contains("serde"));
+        assert!(toml.contains("serde_json"));
+    }
+
+    #[test]
+    fn test_create_cargo_toml_without_schemars() {
+        let derives = vec!["PartialEq".to_string(), "Hash".to_string()];
+        let toml = create_cargo_toml("test-pkg", &derives);
+
+        assert!(toml.contains("name = \"test-pkg\""));
+        assert!(!toml.contains("schemars"));
+        assert!(toml.contains("serde"));
+        assert!(toml.contains("serde_json"));
+    }
+
+    #[test]
+    fn test_create_cargo_toml_no_custom_derives() {
+        let derives = Vec::new();
+        let toml = create_cargo_toml("test-pkg", &derives);
+
+        assert!(toml.contains("name = \"test-pkg\""));
+        assert!(!toml.contains("schemars"));
+        assert!(toml.contains("serde"));
+        assert!(toml.contains("serde_json"));
+    }
 }

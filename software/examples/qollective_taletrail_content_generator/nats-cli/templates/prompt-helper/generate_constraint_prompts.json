@@ -1,8 +1,0 @@
-{
-  "tool_name": "generate_constraint_prompts",
-  "arguments": {
-    "vocabulary_level": "basic",
-    "language": "en",
-    "required_elements": ["educational_value", "age_appropriate"]
-  }
-}

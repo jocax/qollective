@@ -124,6 +124,8 @@ fn test_handle_generate_rust_single_file() {
         package_name: Some("test_package".to_string()),
         skip_validation: false,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true); // quiet mode
@@ -154,6 +156,8 @@ fn test_handle_generate_rust_module() {
         package_name: Some("test_module".to_string()),
         skip_validation: false,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true); // quiet mode
@@ -180,6 +184,8 @@ fn test_handle_generate_rust_crate() {
         package_name: Some("test_crate".to_string()),
         skip_validation: false,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true); // quiet mode
@@ -213,6 +219,8 @@ fn test_handle_generate_unsupported_language() {
         package_name: None,
         skip_validation: false,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true);
@@ -234,6 +242,8 @@ fn test_handle_generate_unsupported_format() {
         package_name: None,
         skip_validation: false,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true);
@@ -255,6 +265,8 @@ fn test_handle_generate_with_skip_validation() {
         package_name: None,
         skip_validation: true,
         force: false,
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true);
@@ -280,6 +292,8 @@ fn test_handle_generate_file_exists_without_force() {
         package_name: None,
         skip_validation: false,
         force: false, // Don't force overwrite
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true);
@@ -307,6 +321,8 @@ fn test_handle_generate_file_exists_with_force() {
         package_name: None,
         skip_validation: false,
         force: true, // Force overwrite
+        schemars: false,
+        additional_derives: None,
     };
 
     let result = handle_generate(&args, false, true);

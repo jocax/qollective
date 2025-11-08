@@ -1,8 +1,0 @@
-# ABOUTME: Cargo configuration for WASM builds
-# ABOUTME: Handles apple-m3 processor warnings and sets generic target CPU for WebAssembly
-
-[build]
-target = "wasm32-unknown-unknown"
-
-[target.wasm32-unknown-unknown]
-rustflags = ["-C", "target-cpu=generic"]

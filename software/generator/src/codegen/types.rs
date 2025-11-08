@@ -2,7 +2,6 @@
 // ABOUTME: Defines structures for representing Rust types, structs, enums, and validation rules
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Rust code generation output
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -244,7 +243,7 @@ impl Default for RustCodegenConfig {
             clone: true,
             partial_eq: true,
             default: false,  // Disabled by default - enums may not have Default
-            custom_derives: vec!["JsonSchema".to_string()],  // Add JsonSchema for MCP support
+            custom_derives: Vec::new(),  // No custom derives by default - opt-in via CLI flags
             custom_attributes: Vec::new(),
             module_name: None,
             snake_case_fields: true,

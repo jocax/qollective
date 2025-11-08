@@ -52,6 +52,18 @@ qollective info ../schemas/user-service.json --stats --dependencies
 qollective init user-service --template full --directory ./services/user
 ```
 
+### Generate code with custom derive traits
+```bash
+# Enable JsonSchema derive for MCP tool definitions
+qollective generate schema.json --schemars
+
+# Add additional custom derives
+qollective generate schema.json --additional-derives "PartialEq,Hash,Eq"
+
+# Combine both flags
+qollective generate schema.json --schemars --additional-derives "Default,PartialOrd"
+```
+
 ## Command Options
 
 ### `generate` Command
@@ -61,6 +73,8 @@ qollective init user-service --template full --directory ./services/user
 - `--package-name, -p`: Override package/module name
 - `--skip-validation`: Skip schema validation
 - `--force`: Overwrite existing files without confirmation
+- `--schemars`: Enable `schemars::JsonSchema` derive and automatically add schemars dependency
+- `--additional-derives`: Additional derive traits (comma-separated, e.g., "PartialEq,Hash,Eq")
 
 ### `validate` Command
 - `--detailed, -d`: Show detailed validation information
@@ -322,6 +336,63 @@ let response = Envelope::success(user);
 4. **Implement**: Write business logic using generated types
 5. **Deploy**: Run services with any supported protocol
 
+## Custom Derive Traits
+
+The generator supports flexible customization of derive traits through CLI flags. This is particularly useful for MCP tool definitions and advanced Rust features.
+
+### --schemars Flag
+
+Enable `schemars::JsonSchema` derive for MCP tool definitions:
+
+```bash
+qollective generate schema.json --schemars
+```
+
+This automatically:
+- Adds `#[derive(JsonSchema)]` to all generated types
+- Adds `schemars = "0.8"` to Cargo.toml dependencies
+- Imports `use schemars::JsonSchema;`
+
+**Use Case**: MCP (Model Context Protocol) tools require JsonSchema for dynamic type introspection.
+
+### --additional-derives Flag
+
+Add custom derive traits to all generated types:
+
+```bash
+qollective generate schema.json --additional-derives "PartialEq,Hash,Eq"
+```
+
+**Common Use Cases**:
+- `PartialEq,Eq,Hash`: Enable types as HashMap keys
+- `Default`: Provide default values for optional fields
+- `PartialOrd,Ord`: Enable sorting and comparisons
+- `Copy`: Enable cheap copying for small types
+
+### Combining Flags
+
+Use both flags together for maximum flexibility:
+
+```bash
+qollective generate schema.json --schemars --additional-derives "Default,PartialOrd"
+```
+
+Generated code will include:
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Default, PartialOrd)]
+pub struct User {
+    // fields...
+}
+```
+
+### Important Notes
+
+1. **Breaking Change (v0.1.0)**: `JsonSchema` is no longer derived by default. Use `--schemars` to enable it.
+2. **Deduplication**: The generator automatically removes duplicate derives if you specify the same trait in both flags.
+3. **Whitespace Handling**: The parser handles spaces correctly: `"PartialEq, Hash, Eq"` works as expected.
+4. **Empty Values**: Empty strings and whitespace-only values are safely ignored.
+5. **Crate Format Only**: The `schemars` dependency is only injected when using `--format crate`. For `module` or `single-file` formats, you must manually add the dependency to your project.
+
 ## Best Practices
 
 1. **Version Your Schemas**: Use semantic versioning in schema $id
@@ -329,6 +400,7 @@ let response = Envelope::success(user);
 3. **Document Types**: Include descriptions for generated documentation
 4. **Validate First**: Always validate before generating
 5. **Feature Gates**: Only generate for protocols you need
+6. **Minimal Derives**: Only add derives you actually need to avoid unnecessary trait bounds
 
 ## Troubleshooting
 

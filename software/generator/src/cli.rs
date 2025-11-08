@@ -72,6 +72,14 @@ pub struct GenerateArgs {
     /// Overwrite existing files without confirmation
     #[arg(long)]
     pub force: bool,
+
+    /// Enable schemars::JsonSchema derive and dependency
+    #[arg(long, default_value_t = false)]
+    pub schemars: bool,
+
+    /// Additional derive traits (comma-separated, e.g., "PartialEq,Hash,Eq")
+    #[arg(long)]
+    pub additional_derives: Option<String>,
 }
 
 #[derive(Args)]
@@ -206,6 +214,8 @@ mod tests {
             package_name: None,
             skip_validation: false,
             force: false,
+            schemars: false,
+            additional_derives: None,
         };
 
         assert_eq!(args.get_package_name(), "my_api_schema");
@@ -221,6 +231,8 @@ mod tests {
             package_name: Some("custom_package".to_string()),
             skip_validation: false,
             force: false,
+            schemars: false,
+            additional_derives: None,
         };
 
         assert_eq!(args.get_package_name(), "custom_package");
@@ -236,6 +248,8 @@ mod tests {
             package_name: None,
             skip_validation: false,
             force: false,
+            schemars: false,
+            additional_derives: None,
         };
 
         assert!(args.is_language_supported());

@@ -1,8 +1,0 @@
-{
-  "tool_name": "generate_validation_prompts",
-  "arguments": {
-    "age_group": "6-8",
-    "language": "en",
-    "content_type": "story"
-  }
-}
