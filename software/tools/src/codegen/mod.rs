@@ -2,6 +2,7 @@
 // ABOUTME: Provides both direct typify integration and custom Rust code generation
 
 pub mod direct_typify;
+pub mod integer_type_selection;
 pub mod rust;
 pub mod types;
 
