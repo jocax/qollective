@@ -211,6 +211,31 @@ impl InternalNatsClient {
             debug!("No NATS client name configured");
         }
 
+        // Configure NKey authentication if provided
+        if let Some(ref nkey_file) = config.connection.nkey_file {
+            debug!("Loading NKey from file: {:?}", nkey_file);
+            let nkey_seed = std::fs::read_to_string(nkey_file).map_err(|e| {
+                QollectiveError::nats_connection(format!(
+                    "Failed to read NKey file {:?}: {}",
+                    nkey_file, e
+                ))
+            })?;
+            connect_options = connect_options.nkey(nkey_seed.trim().to_string());
+        } else if let Some(ref nkey_seed) = config.connection.nkey_seed {
+            debug!("Configuring NKey from seed string");
+            connect_options = connect_options.nkey(nkey_seed.trim().to_string());
+        }
+        // Configure username/password authentication if NKey not set
+        else if let (Some(ref username), Some(ref password)) = (&config.connection.username, &config.connection.password) {
+            debug!("Configuring username/password authentication for user: {}", username);
+            connect_options = connect_options.user_and_password(username.clone(), password.clone());
+        }
+        // Configure token authentication as fallback
+        else if let Some(ref token) = config.connection.token {
+            debug!("Configuring token authentication");
+            connect_options = connect_options.token(token.clone());
+        }
+
         // Configure TLS if enabled using unified TLS config
         if config.connection.tls.enabled {
             // Initialize crypto provider using strategy from config

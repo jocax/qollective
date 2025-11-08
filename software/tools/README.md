@@ -1,4 +1,4 @@
-# Qollective Tools
+# Qollective Schema Generator
 
 > **Type-safe code generation from JSON Schema for multi-protocol distributed systems**
 
@@ -8,10 +8,10 @@ The Qollective Schema Generator transforms JSON Schema definitions into type-saf
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `generate` | Generate code from JSON Schema | `qollective_tools generate schema.json --output ./src/generated --language rust` |
-| `validate` | Validate schema correctness | `qollective_tools validate schema.json --detailed` |
-| `info` | Display schema information | `qollective_tools info schema.json --stats` |
-| `init` | Initialize new project | `qollective_tools init my-service --template full` |
+| `generate` | Generate code from JSON Schema | `qollective generate schema.json --output ./src/generated --language rust` |
+| `validate` | Validate schema correctness | `qollective validate schema.json --detailed` |
+| `info` | Display schema information | `qollective info schema.json --stats` |
+| `init` | Initialize new project | `qollective init my-service --template full` |
 
 ## Installation
 
@@ -31,33 +31,38 @@ cargo run -- <command> <args>
 
 ### Generate Rust code from schema
 ```bash
-qollective_tools generate schemas/basic/test_simple_struct.json \
-  --output ./generated \
+qollective generate ../schemas/user-service.json \
+  --output ../src/generated \
   --language rust \
   --format module
 ```
 
 ### Validate a schema with detailed output
 ```bash
-qollective_tools validate schemas/examples/schema_example.json --detailed --lint
+qollective validate ../schemas/user-service.json --detailed --lint
 ```
 
 ### Get schema information and statistics
 ```bash
-qollective_tools info schemas/examples/schema_example.json --stats --dependencies
+qollective info ../schemas/user-service.json --stats --dependencies
 ```
 
 ### Initialize a new service project
 ```bash
-qollective_tools init user-service --template full --directory ./services/user
+qollective init user-service --template full --directory ./services/user
 ```
 
-## Test Schemas
+### Generate code with custom derive traits
+```bash
+# Enable JsonSchema derive for MCP tool definitions
+qollective generate schema.json --schemars
 
-The `schemas/` directory contains test schemas organized by complexity:
-- `basic/` - 10 schemas for fundamental types (structs, enums, arrays, UUIDs, dates, etc.)
-- `advanced/` - 4 schemas for complex patterns (oneOf, anyOf, nullable, HashMap)
-- `examples/` - Comprehensive integration example with 15 interconnected types
+# Add additional custom derives
+qollective generate schema.json --additional-derives "PartialEq,Hash,Eq"
+
+# Combine both flags
+qollective generate schema.json --schemars --additional-derives "Default,PartialOrd"
+```
 
 ## Command Options
 
@@ -68,6 +73,8 @@ The `schemas/` directory contains test schemas organized by complexity:
 - `--package-name, -p`: Override package/module name
 - `--skip-validation`: Skip schema validation
 - `--force`: Overwrite existing files without confirmation
+- `--schemars`: Enable `schemars::JsonSchema` derive and automatically add schemars dependency
+- `--additional-derives`: Additional derive traits (comma-separated, e.g., "PartialEq,Hash,Eq")
 
 ### `validate` Command
 - `--detailed, -d`: Show detailed validation information
@@ -108,12 +115,6 @@ The Qollective Schema Generator solves these problems by:
 3. **Envelope Pattern Enforcement**: Ensures consistent metadata handling
 4. **Multi-Protocol Support**: Generate for any combination of protocols
 5. **Type Safety**: Compile-time guarantees across all transports
-
-## Key Features
-
-- **DirectTypifyGenerator**: Simplified Rust code generation using typify directly
-- **Intelligent Integer Selection**: Auto-selects optimal types (u8-u128, i8-i128) based on min/max constraints
-- **Comprehensive Testing**: 68 tests with compilation verification
 
 ## What Is The Generator Good For?
 
@@ -186,7 +187,7 @@ Generated code automatically includes:
 
 Every schema MUST follow the Qollective envelope pattern:
 
-```json5
+```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://your-domain.com/schemas/service.json",
@@ -278,23 +279,53 @@ Generated code works with Qollective's `HybridTransportClient`:
 - Runtime validation against schema constraints
 - Protocol-specific serialization safety
 
-## Example: Simple Struct
+## Example: User Service
 
-Using the test schema `schemas/basic/test_simple_struct.json`:
+### 1. Define Schema (`user-service.json`)
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    { "$ref": "https://schemas.qollective.io/core/envelope.json" }
+  ],
+  "$defs": {
+    "User": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" }
+      }
+    }
+  },
+  "qollective": {
+    "version": "1.0.0",
+    "generation": {
+      "targets": ["rust-rest", "rust-grpc"],
+      "outputDir": "./src/generated"
+    }
+  }
+}
+```
 
+### 2. Generate Code
 ```bash
-# Generate code
-qollective_tools generate schemas/basic/test_simple_struct.json --output ./generated
+qollective generate user-service.json
+```
 
-# Use generated types in Rust
-use generated::Person;
+### 3. Use Generated Types
+```rust
+use generated::user_service::{User, Envelope};
 
-let person = Person {
+// Type-safe across all protocols
+let user = User {
+    id: uuid::Uuid::new_v4().to_string(),
+    email: "user@example.com".to_string(),
     name: "John Doe".to_string(),
-    age: 30,
-    active: Some(true),
-    score: Some(95.5),
 };
+
+// Automatic envelope wrapping
+let response = Envelope::success(user);
 ```
 
 ## Development Workflow
@@ -305,6 +336,63 @@ let person = Person {
 4. **Implement**: Write business logic using generated types
 5. **Deploy**: Run services with any supported protocol
 
+## Custom Derive Traits
+
+The generator supports flexible customization of derive traits through CLI flags. This is particularly useful for MCP tool definitions and advanced Rust features.
+
+### --schemars Flag
+
+Enable `schemars::JsonSchema` derive for MCP tool definitions:
+
+```bash
+qollective generate schema.json --schemars
+```
+
+This automatically:
+- Adds `#[derive(JsonSchema)]` to all generated types
+- Adds `schemars = "0.8"` to Cargo.toml dependencies
+- Imports `use schemars::JsonSchema;`
+
+**Use Case**: MCP (Model Context Protocol) tools require JsonSchema for dynamic type introspection.
+
+### --additional-derives Flag
+
+Add custom derive traits to all generated types:
+
+```bash
+qollective generate schema.json --additional-derives "PartialEq,Hash,Eq"
+```
+
+**Common Use Cases**:
+- `PartialEq,Eq,Hash`: Enable types as HashMap keys
+- `Default`: Provide default values for optional fields
+- `PartialOrd,Ord`: Enable sorting and comparisons
+- `Copy`: Enable cheap copying for small types
+
+### Combining Flags
+
+Use both flags together for maximum flexibility:
+
+```bash
+qollective generate schema.json --schemars --additional-derives "Default,PartialOrd"
+```
+
+Generated code will include:
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Default, PartialOrd)]
+pub struct User {
+    // fields...
+}
+```
+
+### Important Notes
+
+1. **Breaking Change (v0.1.0)**: `JsonSchema` is no longer derived by default. Use `--schemars` to enable it.
+2. **Deduplication**: The generator automatically removes duplicate derives if you specify the same trait in both flags.
+3. **Whitespace Handling**: The parser handles spaces correctly: `"PartialEq, Hash, Eq"` works as expected.
+4. **Empty Values**: Empty strings and whitespace-only values are safely ignored.
+5. **Crate Format Only**: The `schemars` dependency is only injected when using `--format crate`. For `module` or `single-file` formats, you must manually add the dependency to your project.
+
 ## Best Practices
 
 1. **Version Your Schemas**: Use semantic versioning in schema $id
@@ -312,16 +400,7 @@ let person = Person {
 3. **Document Types**: Include descriptions for generated documentation
 4. **Validate First**: Always validate before generating
 5. **Feature Gates**: Only generate for protocols you need
-
-## Running Tests
-
-```bash
-# Run all tests
-cargo test
-
-# Run schema snippet tests
-cargo test schema_snippets
-```
+6. **Minimal Derives**: Only add derives you actually need to avoid unnecessary trait bounds
 
 ## Troubleshooting
 

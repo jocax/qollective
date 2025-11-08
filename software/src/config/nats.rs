@@ -82,6 +82,12 @@ pub struct NatsConnectionConfig {
     pub password: Option<String>,
     /// Authentication token (alternative to username/password)
     pub token: Option<String>,
+    /// NKey authentication - path to NKey seed file (.nk file)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_file: Option<std::path::PathBuf>,
+    /// NKey authentication - seed string directly (for programmatic use)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nkey_seed: Option<String>,
     /// TLS configuration for secure connections
     pub tls: crate::config::tls::TlsConfig,
     /// Strategy for crypto provider initialization (None = AutoInstall)
@@ -308,6 +314,18 @@ impl NatsClientConfigBuilder {
         self
     }
 
+    /// Set NKey authentication using seed file
+    pub fn with_nkey_file(mut self, nkey_file: std::path::PathBuf) -> Self {
+        self.config.connection.nkey_file = Some(nkey_file);
+        self
+    }
+
+    /// Set NKey authentication using seed string directly
+    pub fn with_nkey_seed(mut self, nkey_seed: String) -> Self {
+        self.config.connection.nkey_seed = Some(nkey_seed);
+        self
+    }
+
     /// Set TLS insecure mode (skip certificate verification)
     pub fn with_tls_insecure(mut self, insecure: bool) -> Self {
         self.config.connection.tls.verification_mode = if insecure {
@@ -366,6 +384,8 @@ impl Default for NatsConnectionConfig {
             username: None,
             password: None,
             token: None,
+            nkey_file: None,
+            nkey_seed: None,
             tls: crate::config::tls::TlsConfig::default(),
             crypto_provider_strategy: None, // Default to AutoInstall
             custom_headers: HashMap::new(),
@@ -442,6 +462,11 @@ impl NatsConnectionConfig {
             {
                 return Err(format!("Invalid NATS URL scheme: {}", url));
             }
+        }
+
+        // Validate NKey configuration
+        if self.nkey_file.is_some() && self.nkey_seed.is_some() {
+            return Err("Cannot specify both nkey_file and nkey_seed - choose one".to_string());
         }
 
         // TLS configuration validation is handled by the unified TLS config
@@ -596,6 +621,18 @@ impl NatsConfigBuilder {
         self
     }
 
+    /// Sets NKey authentication using seed file
+    pub fn with_nkey_file(mut self, nkey_file: std::path::PathBuf) -> Self {
+        self.config.connection.nkey_file = Some(nkey_file);
+        self
+    }
+
+    /// Sets NKey authentication using seed string directly
+    pub fn with_nkey_seed(mut self, nkey_seed: String) -> Self {
+        self.config.connection.nkey_seed = Some(nkey_seed);
+        self
+    }
+
     /// Sets TLS certificate and key files
     pub fn with_tls_files(mut self, cert_file: String, key_file: String) -> Self {
         self.config.connection.tls.cert_path = Some(std::path::PathBuf::from(cert_file));
@@ -682,6 +719,8 @@ mod tests {
                 username: Some("test_user".to_string()),
                 password: Some("test_pass".to_string()),
                 token: None,
+                nkey_file: None,
+                nkey_seed: None,
                 tls: crate::config::tls::TlsConfig {
                     enabled: true,
                     verification_mode: crate::config::tls::VerificationMode::CustomCa,

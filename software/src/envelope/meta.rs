@@ -228,9 +228,11 @@ pub struct DebugMeta {
     pub stack_trace: Option<String>,
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
     pub environment_vars: HashMap<String, String>,
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
     pub request_headers: HashMap<String, String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -469,6 +471,7 @@ pub struct TracingMeta {
     pub parent_span_id: Option<String>,
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
     pub baggage: HashMap<String, String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -490,6 +493,7 @@ pub struct TracingMeta {
     pub span_status: Option<SpanStatus>,
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
     pub tags: HashMap<String, TraceValue>,
 }
 
@@ -606,7 +610,7 @@ impl Meta {
                 debug: None,
                 performance: None,
                 monitoring: None,
-                tracing: None,
+                tracing: orig.tracing.clone(),  // Preserve tracing metadata for distributed tracing
                 extensions: None,
             }
         } else {

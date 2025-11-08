@@ -1539,6 +1539,8 @@ mod tests {
             }),
             output_schema: None,
             annotations: None,
+            icons: None,
+            title: None,
         };
 
         config.tools.push(tool);
@@ -1566,8 +1568,8 @@ mod tests {
                 capabilities: ClientCapabilities::default(),
                 client_info: Implementation {
                     name: "test_client".to_string(),
-                    version: "1.0.0".to_string(),
                     title: None,
+                    version: "1.0.0".to_string(),
                     icons: None,
                     website_url: None,
                 },
@@ -1600,10 +1602,8 @@ mod tests {
                 capabilities: ClientCapabilities::default(),
                 client_info: Implementation {
                     name: "test_client".to_string(),
-                    version: "1.0.0".to_string(),
                     title: None,
-                    icons: None,
-                    website_url: None,
+                    version: "1.0.0".to_string(),
                 },
             },
             extensions: rmcp::model::Extensions::default(),

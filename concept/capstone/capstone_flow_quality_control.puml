@@ -1,0 +1,443 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **Quality Control MCP Server Flow**
+
+participant "Orchestrator" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Quality Control\n(MCP Server)" as QC #FCBAD3
+participant "LLM Service\n(Rig Wrapper)" as LLM #8FD9A8
+
+note over QC
+**QualityControlHandler**
+Implements EnvelopeHandler<McpData, McpData>
+
+**Available Tools:**
+- validate_content (single node)
+- batch_validate (multiple nodes)
+
+**Capabilities:**
+- Batching
+- Retry
+
+**Rubric Categories:**
+- Age Appropriateness
+- Safety & Content
+- Educational Value
+- Language Quality
+end note
+
+== Discovery Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.list_tools.quality-control")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "list_tools" }
+activate NATS
+
+NATS -> QC: forward discovery request
+activate QC
+
+QC -> QC: DiscoveryHandler::handle()\nExtract metadata from envelope
+
+QC -> QC: QualityControlHandler::get_tool_registrations()
+
+note right of QC
+**Tool Registrations:**
+
+1. validate_content
+   - Schema: { type: "object" }
+   - Service: quality-control
+   - Version: 0.0.1
+   - Capabilities: [Batching, Retry]
+   - Description: "Validates single content node"
+
+2. batch_validate
+   - Schema: { type: "object" }
+   - Service: quality-control
+   - Version: 0.0.1
+   - Capabilities: [Batching, Retry]
+   - Description: "Validates multiple nodes in batch"
+end note
+
+QC -> QC: Get uptime from start_time
+
+QC -> QC: Create DiscoveryInfo::healthy(\n  tools,\n  uptime\n)
+
+QC -> QC: **Create discovery response:**\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: {\n    server_id: "quality-control",\n    server_name: "Quality Control Service",\n    description: "Validates content against rubrics",\n    health_status: { is_healthy: true }\n  }\n}
+
+QC -> QC: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+QC -> NATS: publish response\n**Envelope<McpData>**
+deactivate QC
+
+NATS -> Orchestrator: deliver discovery response
+deactivate NATS
+
+note over Orchestrator
+**Discovery Complete**
+✓ 2 tools discovered
+✓ Capabilities: Batching, Retry
+✓ Service healthy
+end note
+
+== Health Check Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.health.quality-control")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "health" }
+activate NATS
+
+NATS -> QC: forward health request
+activate QC
+
+QC -> QC: HealthHandler::handle()
+
+QC -> QC: Get tool registrations, uptime
+
+QC -> QC: **Create health response:**\nHealthStatus {\n  is_healthy: true,\n  last_check: SystemTime::now(),\n  error_count: 0,\n  uptime\n}
+
+QC -> QC: **Wrap in envelope**\n(preserving metadata)
+
+QC -> NATS: publish response
+deactivate QC
+
+NATS -> Orchestrator: deliver health response
+deactivate NATS
+
+note over Orchestrator
+**Health Check Complete**
+✓ Service healthy
+✓ 2 tools available
+end note
+
+== Default Flow: Validate Content ==
+
+Orchestrator -> NATS: publish("mcp.quality.validate")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "validate_content",\n  arguments: {\n    content: ContentNode,\n    prompt: PromptPackage,\n    generation_request: GenerationRequest\n  }\n}
+activate NATS
+
+NATS -> QC: forward tool request
+activate QC
+
+QC -> QC: QualityControlHandler::handle()\nExtract envelope
+
+note right of QC
+**Envelope Extraction:**
+let (meta, data) = envelope.extract();
+
+**Metadata:**
+- tenant_id
+- request_id
+- trace_id
+end note
+
+QC -> QC: Extract tool_call from data
+
+QC -> QC: **Validate tool_call present**
+
+QC -> QC: **Log tool execution:**\n"Processing tool: validate_content"
+
+QC -> QC: execute_tool(tool_call)
+
+QC -> QC: **Route by tool name:**\nmatch "validate_content" {\n  "validate_content" => ...\n}
+
+QC -> QC: handle_validate_content(\n  request,\n  llm_service,\n  config\n)
+
+QC -> QC: Parse arguments:\n- content: ContentNode\n- prompt: PromptPackage\n- generation_request: GenerationRequest
+
+QC -> QC: Extract validation criteria:\n- age_group: AgeGroup\n- language: Language
+
+note right of QC
+**Validation Rubrics:**
+
+1. Age Appropriateness
+   - Vocabulary level check
+   - Concept complexity
+   - Emotional maturity
+
+2. Safety & Content
+   - Violence detection
+   - Inappropriate themes
+   - Scary content levels
+
+3. Educational Value
+   - Learning opportunities
+   - Moral lessons
+   - Critical thinking
+
+4. Language Quality
+   - Grammar correctness
+   - Sentence structure
+   - Age-appropriate vocabulary
+
+5. Required Elements Check
+   - Validate presence of required story elements
+   - Check element integration quality
+   - Verify elements from generation_request
+end note
+
+QC -> LLM: Validate content\nusing rig-core
+activate LLM
+
+LLM -> LLM: Build validation prompt\nwith rubric criteria
+
+LLM -> LLM: Call LLM provider\nfor content analysis
+
+LLM -> QC: Return ValidationResult {\n  passed: bool,\n  rubric_scores: HashMap,\n  issues: Vec<Issue>,\n  recommendations: Vec<String>\n}
+deactivate LLM
+
+QC -> QC: Analyze validation result:\n- Check all rubrics passed\n- Collect failing criteria\n- Generate issue details
+
+QC -> QC: Create final ValidationResult {\n  passed: true/false,\n  rubric_scores: {\n    "age_appropriateness": 0.95,\n    "safety": 1.0,\n    "educational_value": 0.88,\n    "language_quality": 0.92\n  },\n  issues: [...],\n  overall_score: 0.94\n}
+
+QC -> QC: **Serialize to JSON string**\nserde_json::to_string(&result)
+
+QC -> QC: **Create CallToolResult:**\nCallToolResult {\n  content: [Content::text(json_str)],\n  is_error: Some(false)\n}
+
+QC -> QC: **Wrap in McpData:**\nMcpData {\n  tool_response: Some(result)\n}
+
+QC -> QC: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+QC -> NATS: publish response\n**Envelope<McpData>**
+deactivate QC
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Validation Complete**
+✓ Content validated
+✓ All rubrics scored
+✓ Issues identified (if any)
+✓ Metadata propagated
+end note
+
+== Default Flow: Batch Validate ==
+
+Orchestrator -> NATS: publish("mcp.quality.batch_validate")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "batch_validate",\n  arguments: {\n    trail: Trail,\n    prompt: PromptPackage,\n    generation_request: GenerationRequest\n  }\n}
+activate NATS
+
+NATS -> QC: forward tool request
+activate QC
+
+QC -> QC: handle_batch_validate()
+
+QC -> QC: Parse arguments:\n- trail: Trail (all nodes)\n- prompt: PromptPackage\n- generation_request: GenerationRequest
+
+loop For each node in trail
+    QC -> LLM: Validate node content
+    activate LLM
+
+    LLM -> LLM: Analyze content\nagainst rubrics
+
+    LLM -> QC: Return ValidationResult
+    deactivate LLM
+
+    QC -> QC: Collect validation results
+end
+
+QC -> QC: Aggregate results:\n- Total nodes validated\n- Nodes passed\n- Nodes failed\n- Common issues
+
+QC -> QC: Create BatchValidationResult {\n  total_nodes: count,\n  passed_nodes: count,\n  failed_nodes: count,\n  node_results: HashMap<NodeId, ValidationResult>,\n  summary: ValidationSummary\n}
+
+QC -> QC: **Serialize to JSON**
+
+QC -> QC: **Create CallToolResult**\nwith is_error = false
+
+QC -> QC: **Wrap in envelope**
+
+QC -> NATS: publish response
+deactivate QC
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Batch Validation Complete**
+✓ All nodes validated
+✓ Results aggregated
+✓ Summary provided
+end note
+
+== Error Flow: Validation Failure (Content Issues) ==
+
+Orchestrator -> NATS: publish("mcp.quality.validate")
+activate NATS
+
+NATS -> QC: forward request
+activate QC
+
+QC -> QC: handle_validate_content()
+
+QC -> LLM: Validate content
+activate LLM
+
+LLM -> QC: Return ValidationResult
+deactivate LLM
+
+note right of QC
+**Validation Issues Detected:**
+✗ Violence level too high for age group
+✗ Vocabulary inappropriate
+✗ Scary content detected
+end note
+
+QC -> QC: Create ValidationResult {\n  passed: false,\n  rubric_scores: {\n    "age_appropriateness": 0.45,\n    "safety": 0.30,\n    "educational_value": 0.85,\n    "language_quality": 0.70\n  },\n  issues: [\n    Issue {\n      category: "safety",\n      severity: "high",\n      description: "Violence level inappropriate"\n    },\n    Issue {\n      category: "age_appropriateness",\n      severity: "medium",\n      description: "Scary content detected"\n    }\n  ],\n  overall_score: 0.58\n}
+
+QC -> QC: **Create CallToolResult**\nwith is_error = false\n(validation completed, content failed)
+
+QC -> QC: **Wrap in envelope**
+
+QC -> NATS: publish response
+deactivate QC
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Validation Failed**
+✓ is_error = false (validation completed)
+✗ passed = false (content issues)
+Orchestrator can request content regeneration
+end note
+
+== Error Flow: LLM Service Failure ==
+
+Orchestrator -> NATS: publish("mcp.quality.validate")
+activate NATS
+
+NATS -> QC: forward request
+activate QC
+
+QC -> QC: handle_validate_content()
+
+QC -> LLM: Validate content
+activate LLM
+
+LLM ->x LLM: **LLM provider error:**\n- Timeout\n- Network failure\n- Rate limit
+
+LLM -> QC: Return Err(LlmError)
+deactivate LLM
+
+note right of QC
+**Error Handling:**
+LLM service unavailable
+Convert to CallToolResult error
+Include error details
+end note
+
+QC -> QC: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Validation failed: LLM error ...")\n  ],\n  is_error: Some(true)\n}
+
+QC -> QC: **Wrap in envelope**
+
+QC -> NATS: publish error response
+deactivate QC
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: LLM Failure**
+✗ is_error = true
+✗ Validation could not complete
+✗ Orchestrator may retry
+end note
+
+== Error Flow: Invalid Arguments ==
+
+Orchestrator -> NATS: publish("mcp.quality.validate")\n**Envelope<McpData>**\nCallToolRequest {\n  arguments: { **missing required fields** }\n}
+activate NATS
+
+NATS -> QC: forward request
+activate QC
+
+QC -> QC: handle_validate_content()
+
+QC -> QC: **Parse arguments**
+
+note right of QC
+**Argument Validation Failed:**
+Missing required field: content
+Cannot proceed with validation
+end note
+
+QC -> QC: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Missing required argument: content")\n  ],\n  is_error: Some(true)\n}
+
+QC -> QC: **Wrap in envelope**
+
+QC -> NATS: publish error response
+deactivate QC
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Invalid Arguments**
+✗ is_error = true
+✗ Argument validation failed
+end note
+
+== Error Flow: Batch Validation Partial Failure ==
+
+Orchestrator -> NATS: publish("mcp.quality.batch_validate")
+activate NATS
+
+NATS -> QC: forward request
+activate QC
+
+QC -> QC: handle_batch_validate()
+
+loop Validate nodes
+    QC -> LLM: Validate node 1
+    activate LLM
+    LLM -> QC: Success
+    deactivate LLM
+
+    QC -> LLM: Validate node 2
+    activate LLM
+    LLM ->x LLM: **LLM timeout on node 2**
+    LLM -> QC: Error
+    deactivate LLM
+
+    note right of QC
+    **Partial Failure:**
+    Node 1: ✓ Validated
+    Node 2: ✗ LLM timeout
+    Remaining nodes: ? Pending
+    end note
+end
+
+QC -> QC: Create BatchValidationResult {\n  total_nodes: 10,\n  passed_nodes: 1,\n  failed_validation: 0,\n  errors: [\n    NodeValidationError {\n      node_id: "node-2",\n      error: "LLM timeout"\n    }\n  ],\n  partial_results: true\n}
+
+QC -> QC: **Create CallToolResult**\nwith is_error = false\n(partial results available)
+
+QC -> QC: **Wrap in envelope**
+
+QC -> NATS: publish response
+deactivate QC
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Batch Validation Partial**
+✓ is_error = false
+✓ Some nodes validated
+✗ Some nodes failed (errors listed)
+Orchestrator can retry failed nodes
+end note
+
+@enduml

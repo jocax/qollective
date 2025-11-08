@@ -1,0 +1,349 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **TaleTrail Desktop Flow**
+
+actor "User" as User #FF9800
+participant "Desktop UI\n(Nuxt 4 + Tauri 2)" as Desktop #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Orchestrator\n(MCP Server)" as Orchestrator #AA96DA
+
+note over Desktop
+**Desktop Application**
+Tauri 2 + Nuxt 4 Frontend
+Rust Backend with NATS Client
+
+**Components:**
+- RequestEditor (form)
+- GenerationProgressMonitor
+- LiveMonitor
+- InteractiveStoryViewer
+end note
+
+== Connection Flow ==
+
+User -> Desktop: Launch application
+activate Desktop
+
+Desktop -> Desktop: Initialize Tauri runtime\nLoad Nuxt frontend
+
+Desktop -> Desktop: **NatsClient::new()**\nwith NatsConfig {\n  url: "nats://localhost:5222",\n  ca_cert_path,\n  nkey_file_path\n}
+
+Desktop -> NATS: **connect()** with NKey auth + TLS
+activate NATS
+
+note right of Desktop
+**Authentication:**
+1. Load NKey seed from desktop.nk
+2. Configure TLS with ca.pem
+3. Set request timeout: 180 seconds
+end note
+
+NATS -> NATS: Verify NKey signature
+NATS -> NATS: Validate TLS certificate
+NATS -> Desktop: Connection established ✓
+deactivate NATS
+
+note over Desktop
+**Connection Status:**
+✓ NATS connected
+✓ NKey authenticated
+✓ TLS encrypted
+end note
+
+== Submit Generation Request Flow ==
+
+User -> Desktop: Fill request form\n(theme, age_group, language, etc.)
+
+Desktop -> Desktop: **RequestEditor Component**\nValidate form:\n- tenant_id: "1" (default)\n- age_group: enum validation\n- language: enum validation\n- theme: min 5 chars
+
+User -> Desktop: Click "Submit Request"
+
+Desktop -> Desktop: **submit_generation_request()**\ncommand invoked
+
+Desktop -> Desktop: **GenerationRequest::validate()**\nCheck all constraints
+
+Desktop -> Desktop: **to_shared_type()**\nConvert types:\n- tenant_id: String → i64\n- node_count: u32 → Option<i64>
+
+Desktop -> Desktop: **Create MCP Envelope:**\n1. Build CallToolRequest\n2. Wrap in McpData\n3. Add metadata (tenant, trace_id)\n4. Create Envelope<McpData>
+
+note right of Desktop
+**MCP Tool Call:**
+{
+  "method": "tools/call",
+  "params": {
+    "name": "orchestrate_generation",
+    "arguments": {
+      "generation_request": <shared_type>
+    }
+  }
+}
+
+**Envelope Metadata:**
+- tenant: "1"
+- trace_id: UUID
+- operation_name: "orchestrate_generation"
+end note
+
+Desktop -> Desktop: **NatsEnvelopeCodec::encode()**\nSerialize envelope
+
+Desktop -> NATS: publish(\n  "mcp.orchestrator.request",\n  envelope\n)\n**REQUEST-RESPONSE PATTERN**
+activate NATS
+
+NATS -> Orchestrator: forward request
+activate Orchestrator
+
+Orchestrator -> Orchestrator: **EnvelopeHandler::handle()**\nExtract metadata + tool_call
+
+Orchestrator -> Orchestrator: **orchestrate_generation()**\nStart pipeline
+
+Orchestrator -> NATS: Acknowledge request received
+NATS -> Desktop: Response envelope\n(acknowledgment)
+deactivate NATS
+
+Desktop -> Desktop: **Decode response**\nCheck for errors
+
+Desktop -> Desktop: **Show GenerationProgressMonitor**\nStore request_id
+
+Desktop -> User: Progress modal opens ✓
+deactivate Desktop
+
+note over Desktop
+**UI State:**
+✓ Request submitted
+✓ Progress monitor visible
+✓ Tracking request_id
+end note
+
+== Live Event Subscription Flow ==
+
+Desktop -> Desktop: **GenerationProgressMonitor**\ncomponent mounted
+
+Desktop -> Desktop: **useNatsLiveMonitor()**\ncomposable activated
+
+Desktop -> Desktop: **subscribe_to_generations()**\ncommand invoked
+
+Desktop -> NATS: subscribe(\n  "taletrail.generation.events.*"\n)
+activate NATS
+
+NATS -> Desktop: Subscription confirmed
+deactivate NATS
+
+Desktop -> Desktop: **Spawn background task**\nListen for messages
+
+note right of Desktop
+**Event Listener:**
+- Subject: "taletrail.generation.events.*"
+- Processes all tenant events
+- Filters by request_id in UI
+- Emits to frontend via Tauri events
+end note
+
+== Progress Tracking Flow ==
+
+Orchestrator -> Orchestrator: **Phase: prompt-helper**\n(5% complete)
+
+Orchestrator -> NATS: publish(\n  "taletrail.generation.events.1",\n  DesktopGenerationEvent\n)
+activate NATS
+
+note right of Orchestrator
+**Desktop Event Format:**
+{
+  "event_type": "phase_started",
+  "tenant_id": "1",
+  "request_id": "req-xxx",
+  "service_phase": "prompt-helper",
+  "status": "in_progress",
+  "progress": 0.05,
+  "timestamp": "2025-10-23T..."
+}
+end note
+
+NATS -> Desktop: forward event
+
+Desktop -> Desktop: **NatsClient::parse_event()**\nDeserialize JSON
+
+Desktop -> Desktop: **Filter by request_id**\nMatch with current request
+
+Desktop -> Desktop: **Update UI state**\nevents.push(event)
+
+Desktop -> User: **Phase indicator updates**\n"Prompt Helper: 5%"
+
+Orchestrator -> Orchestrator: **Phase: story-generator**\n(15-50% complete)
+
+Orchestrator -> NATS: publish events\n(multiple progress updates)
+
+NATS -> Desktop: forward events
+Desktop -> User: **Progress bar animates**\n"Story Generator: 35%"
+
+Orchestrator -> Orchestrator: **Phase: quality-control**\n(75% complete)
+
+Orchestrator -> NATS: publish event
+
+NATS -> Desktop: forward event
+Desktop -> User: **Phase indicator updates**\n"Quality Control: 75%"
+
+Orchestrator -> Orchestrator: **Phase: constraint-enforcer**\n(85% complete)
+
+Orchestrator -> NATS: publish event
+
+NATS -> Desktop: forward event
+Desktop -> User: **Phase indicator updates**\n"Constraint Enforcer: 85%"
+
+== Story Retrieval Flow ==
+
+Orchestrator -> Orchestrator: **Generation Complete**\nAll phases finished
+
+Orchestrator -> Orchestrator: **Construct file path:**\n"test-trails/{tenant_id}_{request_id}.json"
+
+Orchestrator -> NATS: publish(\n  "taletrail.generation.events.1",\n  DesktopGenerationEvent {\n    status: "completed",\n    progress: 1.0,\n    file_path: Some(path)\n  }\n)
+
+NATS -> Desktop: forward completion event
+deactivate NATS
+
+Desktop -> Desktop: **Parse completion event**\nExtract file_path
+
+Desktop -> Desktop: **handleGenerationComplete()**\nExtract trail_id from file_path
+
+Desktop -> Desktop: **Close progress monitor**\nShow success for 2 seconds
+
+Desktop -> Desktop: **Navigate to viewer**\nrouter.push(`/viewer/${trail_id}`)
+
+Desktop -> Desktop: **Viewer Page Mounted**\nLoad trail data
+
+Desktop -> Desktop: **getTrailFilePath(id)**\nLookup file path
+
+Desktop -> Desktop: **invoke('load_trail_full')**\nTauri command
+
+Desktop -> Desktop: **Read trail JSON file**\nParse GenerationResponse
+
+Desktop -> User: **InteractiveStoryViewer**\nDisplay story with choices
+
+deactivate Orchestrator
+
+User -> Desktop: Make story choices
+Desktop -> Desktop: Update currentNodeId\nTrack visited nodes
+
+User -> Desktop: Complete story
+Desktop -> User: Show ending\nOffer replay option
+
+note over Desktop, User
+**Story Complete!**
+✓ Interactive navigation
+✓ Choice tracking
+✓ Path history
+✓ Bookmark support
+end note
+
+== Error Flow: Request Validation Failure ==
+
+User -> Desktop: Submit invalid request\n(missing required field)
+activate Desktop
+
+Desktop -> Desktop: **GenerationRequest::validate()**
+
+Desktop -> Desktop: Return Err(\n  ValidationError("theme too short")\n)
+
+Desktop -> User: **Show validation errors**\nHighlight form fields
+deactivate Desktop
+
+note over Desktop
+**Error: Request Not Sent**
+❌ Validation failed
+Form remains editable
+User can correct and retry
+end note
+
+== Error Flow: NATS Connection Failure ==
+
+Desktop -> NATS: connect() attempt
+activate NATS
+
+NATS ->x Desktop: Connection refused\n(NATS server down)
+deactivate NATS
+
+Desktop -> Desktop: Return Err(\n  ConnectionError("Failed to connect")\n)
+
+Desktop -> User: **Show error banner**\n"Cannot connect to NATS server"
+
+note over Desktop
+**Error: No NATS**
+❌ Connection failed
+Request submission disabled
+Live monitor unavailable
+end note
+
+== Error Flow: Orchestrator Timeout ==
+
+Desktop -> NATS: publish request\n(180 second timeout)
+activate NATS
+
+NATS -> Orchestrator: forward request
+activate Orchestrator
+
+Orchestrator -> Orchestrator: **Pipeline hangs**\nLLM provider timeout
+
+note right of Orchestrator
+**Timeout Scenario:**
+- LLM call exceeds timeout
+- Pipeline stuck on phase
+- No response for 180 seconds
+end note
+
+Orchestrator ->x Desktop: **Timeout elapsed**
+deactivate Orchestrator
+
+Desktop -> Desktop: Return Err(\n  NatsError("request timed out")\n)
+
+Desktop -> User: **Show error alert**\n"Generation timed out after 3 minutes"
+deactivate NATS
+
+note over Desktop
+**Error: Timeout**
+❌ Request timed out (180s)
+User can retry request
+Progress monitor closed
+end note
+
+== Error Flow: Generation Failure ==
+
+Orchestrator -> Orchestrator: **Quality control fails**\nContent rejected
+
+Orchestrator -> NATS: publish(\n  DesktopGenerationEvent {\n    status: "failed",\n    error_message: "Quality check failed"\n  }\n)
+activate NATS
+
+NATS -> Desktop: forward failure event
+deactivate NATS
+
+Desktop -> Desktop: **Parse failure event**\nExtract error_message
+
+Desktop -> Desktop: **Update progress monitor**\nShow failure state
+
+Desktop -> User: **Error message displayed**\n"Quality check failed"\n+ Retry button
+
+note over Desktop
+**Error: Generation Failed**
+❌ Pipeline error
+Error details shown
+User can retry with modifications
+end note
+
+@enduml

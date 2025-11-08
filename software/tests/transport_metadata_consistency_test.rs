@@ -35,18 +35,15 @@ async fn test_websocket_metadata_preservation_consistency() {
         permissions: vec!["read".to_string(), "write".to_string()],
         ip_address: Some("192.168.1.100".to_string()),
         user_agent: Some("test-agent/1.0".to_string()),
-        tenant_id: Some("tenant-789".to_string()),
         roles: vec!["admin".to_string(), "user".to_string()],
         token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
     });
 
     // Set on_behalf_of metadata to test preservation
     original_meta.on_behalf_of = Some(qollective::envelope::meta::OnBehalfOfMeta {
-        original_user: Some("delegated-user".to_string()),
-        original_tenant: Some("delegated-tenant".to_string()),
-        delegation_type: Some("admin_delegation".to_string()),
-        delegation_scope: Some(vec!["full_access".to_string()]),
-        expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
+        original_user: "delegated-user".to_string(),
+        delegating_user: "admin-user".to_string(),
+        delegating_tenant: "delegated-tenant".to_string(),
     });
 
     let original_timestamp = chrono::Utc::now();

@@ -56,6 +56,9 @@ fn create_test_mcp_server(config: &McpRoundtripTestConfig) -> Result<McpServer> 
         server_info: Implementation {
             name: "Test MCP Server".to_string(),
             version: "1.0.0".to_string(),
+            title: None,
+            icons: None,
+            website_url: None,
         },
         tools: vec![],
         resources: vec![],

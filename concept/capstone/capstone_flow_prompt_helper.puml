@@ -1,0 +1,347 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **Prompt Helper MCP Server Flow**
+
+participant "Orchestrator" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Prompt Helper\n(MCP Server)" as PromptHelper #AA96DA
+participant "LLM Service\n(Rig Wrapper)" as LLM #FCBAD3
+
+note over PromptHelper
+**PromptHelperHandler**
+Implements EnvelopeHandler<McpData, McpData>
+
+**Available Tools:**
+- generate_story_prompts
+- generate_validation_prompts
+- generate_constraint_prompts
+- get_model_for_language
+end note
+
+== Discovery Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.list_tools.prompt-helper")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "list_tools" }
+activate NATS
+
+NATS -> PromptHelper: forward discovery request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: DiscoveryHandler::handle()\nExtract metadata from envelope
+
+note right of PromptHelper
+**Extract Metadata:**
+tenant_id: meta.tenant
+request_id: meta.request_id
+end note
+
+PromptHelper -> PromptHelper: get_tool_registrations()
+
+note right of PromptHelper
+**Tool Registrations:**
+1. generate_story_prompts
+   - Capabilities: [Caching, Retry]
+   - Version: 0.0.1
+
+2. generate_validation_prompts
+   - Capabilities: [Caching, Retry]
+   - Version: 0.0.1
+
+3. generate_constraint_prompts
+   - Capabilities: [Caching, Retry]
+   - Version: 0.0.1
+
+4. get_model_for_language
+   - Capabilities: [Caching]
+   - Version: 0.0.1
+end note
+
+PromptHelper -> PromptHelper: Get uptime from start_time
+
+PromptHelper -> PromptHelper: Create DiscoveryInfo::healthy(\n  tools,\n  uptime\n)
+
+PromptHelper -> PromptHelper: **Create discovery response:**\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: {\n    server_id: "prompt-helper",\n    tools: [],\n    capabilities: ["Caching", "Retry"],\n    health_status: { is_healthy: true }\n  }\n}
+
+PromptHelper -> PromptHelper: **Wrap in McpData:**\nMcpData {\n  discovery_data: Some(discovery_data)\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+PromptHelper -> NATS: publish response\n**Envelope<McpData>**
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver discovery response
+deactivate NATS
+
+note over Orchestrator
+**Discovery Complete**
+✓ 4 tools discovered
+✓ Capabilities: Caching, Retry
+✓ Service healthy
+end note
+
+== Health Check Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.health.prompt-helper")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "health" }
+activate NATS
+
+NATS -> PromptHelper: forward health request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: HealthHandler::handle()
+
+PromptHelper -> PromptHelper: Get uptime, tool count
+
+PromptHelper -> PromptHelper: **Create health response:**\nHealthStatus {\n  is_healthy: true,\n  last_check: SystemTime::now(),\n  response_time: 0ms,\n  error_count: 0,\n  uptime\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope**\n(preserving metadata)
+
+PromptHelper -> NATS: publish response
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver health response
+deactivate NATS
+
+note over Orchestrator
+**Health Check Complete**
+✓ Service healthy
+✓ Uptime: Xs
+✓ No errors
+end note
+
+== Default Flow: Generate Story Prompts ==
+
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_story_prompts",\n  arguments: {\n    theme, age_group, language,\n    required_elements,\n    node_choice_counts\n  }\n}
+activate NATS
+
+NATS -> PromptHelper: forward tool request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: PromptHelperHandler::handle()\nExtract envelope
+
+note right of PromptHelper
+**Envelope Extraction:**
+let (meta, data) = envelope.extract();
+
+**Metadata Extracted:**
+- tenant: meta.tenant
+- request_id: meta.request_id
+- trace_id: meta.tracing.trace_id
+end note
+
+PromptHelper -> PromptHelper: Extract tool_call from data
+
+PromptHelper -> PromptHelper: **Validate tool_call present**\nok_or_else(|| Error("No tool_call"))
+
+PromptHelper -> PromptHelper: **Log tool execution:**\n"Processing tool: generate_story_prompts"\n(tenant, request_id, trace_id)
+
+PromptHelper -> PromptHelper: execute_tool(tool_call)
+
+PromptHelper -> PromptHelper: **Route by tool name:**\nmatch tool_call.params.name {\n  "generate_story_prompts" => ...\n}
+
+PromptHelper -> PromptHelper: handle_generate_story_prompts(\n  request,\n  llm_service,\n  config\n)
+
+PromptHelper -> PromptHelper: Parse arguments:\n- theme\n- age_group\n- language\n- required_elements\n- node_choice_counts
+
+PromptHelper -> PromptHelper: Create generation request:\nGenerationRequest {\n  theme,\n  age_group,\n  language,\n  required_elements,\n  tenant_id\n}
+
+PromptHelper -> LLM: Generate DAG-aware prompts\nusing rig-core
+activate LLM
+
+LLM -> LLM: Build meta-prompts with:\n- Markdown format instructions\n- Required elements integration\n- Variable choice counts per node
+
+LLM -> LLM: Call LLM provider\n(OpenAI, Ollama, etc.)
+
+LLM -> PromptHelper: Return PromptPackage {\n  system_prompt (with Markdown format),\n  user_prompt,\n  model,\n  language,\n  includes required_elements,\n  includes choice count instructions\n}
+deactivate LLM
+
+PromptHelper -> PromptHelper: **Serialize to JSON string**\nserde_json::to_string(&result)
+
+PromptHelper -> PromptHelper: **Create CallToolResult:**\nCallToolResult {\n  content: [Content::text(json_str)],\n  is_error: Some(false),\n  structured_content: None,\n  meta: None\n}
+
+PromptHelper -> PromptHelper: **Wrap in McpData:**\nMcpData {\n  tool_response: Some(result)\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+PromptHelper -> PromptHelper: **Log completion:**\n"Tool execution complete (is_error: false)"
+
+PromptHelper -> NATS: publish response\n**Envelope<McpData>**
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Tool Execution Complete**
+✓ PromptPackage generated
+✓ Metadata propagated
+✓ No errors
+end note
+
+== Error Flow: Missing tool_call in Envelope ==
+
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\n**Missing tool_call field**
+activate NATS
+
+NATS -> PromptHelper: forward malformed request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: PromptHelperHandler::handle()
+
+PromptHelper -> PromptHelper: let (meta, data) = envelope.extract()
+
+PromptHelper -> PromptHelper: **Validate tool_call:**\ndata.tool_call.ok_or_else(|| ...)
+
+note right of PromptHelper
+**Error Detection:**
+tool_call field is None
+Cannot proceed without tool request
+end note
+
+PromptHelper -> PromptHelper: Return Err(\n  QollectiveError::mcp_tool_execution(\n    "No tool_call in envelope"\n  )\n)
+
+PromptHelper -> NATS: **Error response**\n(handler returns Err)
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver error
+deactivate NATS
+
+note over Orchestrator
+**Error: Missing tool_call**
+Handler returned Err
+No tool execution occurred
+end note
+
+== Error Flow: Unknown Tool Name ==
+
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "unknown_tool"\n}
+activate NATS
+
+NATS -> PromptHelper: forward request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: PromptHelperHandler::handle()
+
+PromptHelper -> PromptHelper: Extract tool_call
+
+PromptHelper -> PromptHelper: execute_tool(tool_call)
+
+PromptHelper -> PromptHelper: **Route by tool name:**\nmatch "unknown_tool" {\n  _ => // Unknown\n}
+
+note right of PromptHelper
+**Error Logged:**
+"Unknown tool requested: unknown_tool"
+end note
+
+PromptHelper -> PromptHelper: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Unknown tool: unknown_tool")\n  ],\n  is_error: Some(true),\n  structured_content: None,\n  meta: None\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope**\n(with is_error = true)
+
+PromptHelper -> NATS: publish error response\n**Envelope<McpData>**
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Unknown Tool**
+✗ is_error = true
+✗ Tool name not recognized
+end note
+
+== Error Flow: LLM Service Failure ==
+
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_story_prompts"\n}
+activate NATS
+
+NATS -> PromptHelper: forward request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: handle_generate_story_prompts()
+
+PromptHelper -> LLM: Generate prompts
+activate LLM
+
+LLM -> LLM: Call LLM provider
+
+LLM ->x LLM: **LLM provider error:**\n- Timeout\n- Network failure\n- Rate limit\n- Invalid API key
+
+LLM -> PromptHelper: Return Err(\n  LlmError::ProviderError\n)
+deactivate LLM
+
+note right of PromptHelper
+**Error Handling:**
+LLM service returned error
+Convert to CallToolResult
+with is_error = true
+end note
+
+PromptHelper -> PromptHelper: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("LLM provider error: ...")\n  ],\n  is_error: Some(true)\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope**
+
+PromptHelper -> NATS: publish error response
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: LLM Failure**
+✗ is_error = true
+✗ LLM provider unavailable
+✗ Orchestrator may retry
+end note
+
+== Error Flow: Invalid Arguments ==
+
+Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**\nCallToolRequest {\n  arguments: { **missing required fields** }\n}
+activate NATS
+
+NATS -> PromptHelper: forward request
+activate PromptHelper
+
+PromptHelper -> PromptHelper: handle_generate_story_prompts()
+
+PromptHelper -> PromptHelper: **Parse arguments:**\nExtract theme, age_group, language
+
+note right of PromptHelper
+**Argument Validation:**
+Missing required field detected
+Cannot proceed with generation
+end note
+
+PromptHelper -> PromptHelper: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Missing required argument: ...")\n  ],\n  is_error: Some(true)\n}
+
+PromptHelper -> PromptHelper: **Wrap in envelope**
+
+PromptHelper -> NATS: publish error response
+deactivate PromptHelper
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Invalid Arguments**
+✗ is_error = true
+✗ Argument validation failed
+end note
+
+@enduml

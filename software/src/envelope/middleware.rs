@@ -776,7 +776,7 @@ mod tests {
         headers.insert("x-tenant".to_string(), "test-tenant".to_string());
         headers.insert(
             "x-on-behalf-of".to_string(),
-            r#"{"originalUser":"user123","originalTenant":"original-tenant"}"#.to_string(),
+            r#"{"originalUser":"user123","delegatingUser":"admin-user","delegatingTenant":"original-tenant"}"#.to_string(),
         );
 
         let adapter = TestHeaderAdapter::new(headers);
@@ -786,9 +786,9 @@ mod tests {
         assert_eq!(meta.tenant.as_ref().unwrap(), "test-tenant");
         assert!(meta.on_behalf_of.is_some());
         let on_behalf_of = meta.on_behalf_of.as_ref().unwrap();
-        assert_eq!(on_behalf_of.original_user.as_ref().unwrap(), "user123");
+        assert_eq!(&on_behalf_of.original_user, "user123");
         assert_eq!(
-            on_behalf_of.original_tenant.as_ref().unwrap(),
+            &on_behalf_of.delegating_tenant,
             "original-tenant"
         );
     }

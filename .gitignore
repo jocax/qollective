@@ -11,6 +11,7 @@
 # AI
 .claude/
 .agent-os/
+agent-os/
 .mcp.json
 CLAUDE.md
 
@@ -18,10 +19,8 @@ CLAUDE.md
 **/target/**
 **/*.rs.bk
 *.pdb
-**/Cargo.lock
+Cargo.lock
 
-# Enc
+# Env
 .env
-
-# Tools
-/software/tools/generated/
+**/http-client.private.env.json

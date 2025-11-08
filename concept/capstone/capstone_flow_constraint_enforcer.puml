@@ -1,0 +1,478 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **Constraint Enforcer MCP Server Flow**
+
+participant "Orchestrator" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Constraint Enforcer\n(MCP Server)" as CE #FFA07A
+participant "LLM Service\n(Rig Wrapper)" as LLM #8FD9A8
+
+note over CE
+**ConstraintEnforcerHandler**
+Implements EnvelopeHandler<McpData, McpData>
+
+**Available Tools:**
+- enforce_constraints (single node)
+
+**Capabilities:**
+- Batching
+- Retry
+
+**Constraint Categories:**
+- Vocabulary Constraints
+- Theme Adherence
+- Required Elements
+- Content Guidelines
+end note
+
+== Discovery Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.list_tools.constraint-enforcer")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "list_tools" }
+activate NATS
+
+NATS -> CE: forward discovery request
+activate CE
+
+CE -> CE: DiscoveryHandler::handle()\nExtract metadata from envelope
+
+CE -> CE: ConstraintEnforcerHandler::get_tool_registrations()
+
+note right of CE
+**Tool Registrations:**
+
+1. enforce_constraints
+   - Schema: { type: "object" }
+   - Service: constraint-enforcer
+   - Version: 0.0.1
+   - Capabilities: [Batching, Retry]
+   - Description: "Enforces constraints on content"
+end note
+
+CE -> CE: Get uptime from start_time
+
+CE -> CE: Create DiscoveryInfo::healthy(\n  tools,\n  uptime\n)
+
+CE -> CE: **Create discovery response:**\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: {\n    server_id: "constraint-enforcer",\n    server_name: "Constraint Enforcer Service",\n    description: "Enforces vocabulary, theme, and required element constraints",\n    health_status: { is_healthy: true }\n  }\n}
+
+CE -> CE: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+CE -> NATS: publish response\n**Envelope<McpData>**
+deactivate CE
+
+NATS -> Orchestrator: deliver discovery response
+deactivate NATS
+
+note over Orchestrator
+**Discovery Complete**
+✓ 1 tool discovered
+✓ Capabilities: Batching, Retry
+✓ Service healthy
+end note
+
+== Health Check Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.health.constraint-enforcer")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "health" }
+activate NATS
+
+NATS -> CE: forward health request
+activate CE
+
+CE -> CE: HealthHandler::handle()
+
+CE -> CE: Get tool registrations, uptime
+
+CE -> CE: **Create health response:**\nHealthStatus {\n  is_healthy: true,\n  last_check: SystemTime::now(),\n  error_count: 0,\n  uptime\n}
+
+CE -> CE: **Wrap in envelope**\n(preserving metadata)
+
+CE -> NATS: publish response
+deactivate CE
+
+NATS -> Orchestrator: deliver health response
+deactivate NATS
+
+note over Orchestrator
+**Health Check Complete**
+✓ Service healthy
+✓ 1 tool available
+end note
+
+== Default Flow: Enforce Constraints ==
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "enforce_constraints",\n  arguments: {\n    content: ContentNode,\n    prompt: PromptPackage,\n    generation_request: GenerationRequest\n  }\n}
+activate NATS
+
+NATS -> CE: forward tool request
+activate CE
+
+CE -> CE: ConstraintEnforcerHandler::handle()\nExtract envelope
+
+note right of CE
+**Envelope Extraction:**
+let (meta, data) = envelope.extract();
+
+**Metadata:**
+- tenant_id
+- request_id
+- trace_id
+end note
+
+CE -> CE: Extract tool_call from data
+
+CE -> CE: **Validate tool_call present**
+
+CE -> CE: **Log tool execution:**\n"Processing tool: enforce_constraints"
+
+CE -> CE: execute_tool(tool_call)
+
+CE -> CE: **Route by tool name:**\nmatch "enforce_constraints" {\n  "enforce_constraints" => ...\n}
+
+CE -> CE: handle_enforce_constraints(\n  request,\n  llm_service,\n  config\n)
+
+CE -> CE: Parse arguments:\n- content: ContentNode\n- prompt: PromptPackage\n- generation_request: GenerationRequest
+
+CE -> CE: Extract constraints:\n- theme: Theme\n- age_group: AgeGroup\n- language: Language\n- required_elements: Vec<String>
+
+note right of CE
+**Constraint Definitions:**
+
+1. Vocabulary Constraints
+   - Age-appropriate word list
+   - Forbidden words
+   - Complexity limits
+
+2. Theme Adherence
+   - Story must follow theme
+   - No theme deviation
+   - Consistent tone
+
+3. Required Elements (HYBRID VALIDATION)
+   - **Validation Strategy:**
+     • Keyword matching (80% threshold default)
+     • LLM semantic fallback if needed
+   - **Process:**
+     1. Extract keywords from element phrase
+     2. Filter stopwords (der, die, und, etc.)
+     3. Check keyword presence in content
+     4. If >= 80% → PASS (keyword match)
+     5. If < 80% → LLM semantic check
+   - **Examples:**
+     • "Industrie und Natur Dilemma"
+       → keywords: [industrie, natur, dilemma]
+     • Matches natural variations in storytelling
+
+4. Content Guidelines
+   - Educational objectives
+   - Moral lessons
+   - Cultural sensitivity
+
+**Configuration:**
+- keyword_match_threshold: 0.8 (80%)
+- enable_llm_fallback: true
+- stopwords: language-specific
+end note
+
+CE -> CE: Build constraint checklist:\n- Vocabulary: age_group word list\n- Theme: "adventure"\n- Required: ["protagonist", "challenge", "resolution"]\n- Guidelines: educational content
+
+CE -> CE: **Hybrid Validation - Phase 1:**\nExtract keywords from required elements\n- Filter stopwords per language\n- Keep words >= 3 chars\n["protagonist", "challenge", "resolution"]
+
+CE -> CE: **Hybrid Validation - Phase 2:**\nCheck keyword presence in content\nCalculate match percentages
+
+alt keyword match >= 80%
+    CE -> CE: **PASS (Keyword Match)**\n✓ No LLM call needed\nRecord match method: KeywordMatch
+else keyword match < 80%
+    CE -> LLM: **Semantic Fallback Check**\nusing rig-core\nPrompt: "Does content convey '{element}'?"
+    activate LLM
+
+    LLM -> LLM: Analyze semantic meaning
+
+    LLM -> CE: Return semantic match: bool\n(yes/no answer)
+    deactivate LLM
+
+    CE -> CE: Record match method: SemanticLLM
+end
+
+CE -> LLM: Check vocabulary & theme constraints\nusing rig-core
+activate LLM
+
+LLM -> LLM: Build constraint validation prompt
+
+LLM -> LLM: Analyze vocabulary and theme
+
+LLM -> CE: Return partial results
+deactivate LLM
+
+CE -> CE: Process constraint results
+
+note right of CE
+**Constraint Analysis:**
+
+Vocabulary Check:
+✓ All words age-appropriate
+✓ No forbidden words
+✓ Complexity within limits
+
+Theme Check:
+✓ Content follows "adventure" theme
+✓ Tone consistent
+✓ No theme deviation
+
+Required Elements (Hybrid Validation):
+✓ "protagonist" - PASS
+  • Method: KeywordMatch(100%)
+  • Found: [protagonist]
+  • Missing: []
+
+✓ "challenge" - PASS
+  • Method: KeywordMatch(100%)
+  • Found: [challenge]
+  • Missing: []
+
+✓ "resolution" - PASS
+  • Method: SemanticLLM (keywords: 67%)
+  • Found: [resolve]
+  • Missing: [resolution]
+  • LLM: YES (concept present)
+
+Guidelines:
+✓ Educational value present
+✓ Moral lesson clear
+
+**Example - German Story:**
+Required: "Industrie und Natur Dilemma"
+Content: "Die Fabrik vergiftet die Natur..."
+✓ Keywords: [industrie, natur, dilemma]
+✓ Found: [industrie→fabrik, natur]
+✓ Missing: [dilemma]
+✓ Match: 67% → LLM fallback → YES
+end note
+
+CE -> CE: Create final ConstraintResult {\n  satisfied: true,\n  constraint_scores: {\n    "vocabulary": 1.0,\n    "theme": 0.95,\n    "required_elements": 1.0,\n    "guidelines": 0.90\n  },\n  element_match_details: [\n    {\n      element: "protagonist",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["protagonist"],\n      keywords_missing: []\n    },\n    {\n      element: "resolution",\n      match_method: SemanticLLM,\n      match_score: 0.67,\n      keywords_found: ["resolve"],\n      keywords_missing: ["resolution"]\n    }\n  ],\n  violations: [],\n  suggestions: [\n    "Consider adding more educational detail"\n  ],\n  overall_compliance: 0.96\n}
+
+CE -> CE: **Serialize to JSON string**\nserde_json::to_string(&result)
+
+CE -> CE: **Create CallToolResult:**\nCallToolResult {\n  content: [Content::text(json_str)],\n  is_error: Some(false)\n}
+
+CE -> CE: **Wrap in McpData:**\nMcpData {\n  tool_response: Some(result)\n}
+
+CE -> CE: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+CE -> NATS: publish response\n**Envelope<McpData>**
+deactivate CE
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Constraint Enforcement Complete**
+✓ All constraints satisfied
+✓ Detailed compliance report
+✓ Suggestions provided
+✓ Metadata propagated
+end note
+
+== Error Flow: Constraint Violations ==
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")
+activate NATS
+
+NATS -> CE: forward request
+activate CE
+
+CE -> CE: handle_enforce_constraints()
+
+CE -> LLM: Check constraints
+activate LLM
+
+LLM -> CE: Return ConstraintResult
+deactivate LLM
+
+note right of CE
+**Violations Detected:**
+
+✗ Vocabulary violation: "complicated" word used
+
+✗ Theme violation: Content deviates from theme
+
+✗ Required Element: "resolution"
+  • Validation Method: Hybrid
+  • Keyword Match: 0% (0/1 keywords)
+  • Keywords Found: []
+  • Keywords Missing: [resolution]
+  • LLM Fallback: NO (concept not present)
+  • Result: FAIL - element truly missing
+end note
+
+CE -> CE: Create ConstraintResult {\n  satisfied: false,\n  constraint_scores: {\n    "vocabulary": 0.60,\n    "theme": 0.45,\n    "required_elements": 0.67,\n    "guidelines": 0.85\n  },\n  element_match_details: [\n    {\n      element: "protagonist",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["protagonist"],\n      keywords_missing: []\n    },\n    {\n      element: "challenge",\n      match_method: KeywordMatch { threshold: 0.8 },\n      match_score: 1.0,\n      keywords_found: ["challenge"],\n      keywords_missing: []\n    },\n    {\n      element: "resolution",\n      match_method: Failed,\n      match_score: 0.0,\n      keywords_found: [],\n      keywords_missing: ["resolution"]\n    }\n  ],\n  violations: [\n    Violation {\n      category: "vocabulary",\n      severity: "medium",\n      description: "Word 'complicated' too advanced",\n      location: "paragraph 2",\n      suggestion: "Use 'hard' or 'difficult' instead"\n    },\n    Violation {\n      category: "theme",\n      severity: "high",\n      description: "Content deviates from adventure theme",\n      location: "scene 3",\n      suggestion: "Refocus on adventure elements"\n    },\n    Violation {\n      category: "required_elements",\n      severity: "high",\n      description: "Missing resolution (0% keyword match, LLM: no)",\n      location: "ending",\n      suggestion: "Add clear story resolution with keywords: [resolution]",\n      match_details: {\n        attempted_methods: ["KeywordMatch", "SemanticLLM"],\n        keyword_score: 0.0,\n        semantic_result: false\n      }\n    }\n  ],\n  overall_compliance: 0.64\n}
+
+CE -> CE: **Create CallToolResult**\nwith is_error = false\n(enforcement completed, constraints violated)
+
+CE -> CE: **Wrap in envelope**
+
+CE -> NATS: publish response
+deactivate CE
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Constraint Violations Detected**
+✓ is_error = false (enforcement completed)
+✗ satisfied = false (violations found)
+Orchestrator can request content regeneration
+end note
+
+== Error Flow: LLM Service Failure ==
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")
+activate NATS
+
+NATS -> CE: forward request
+activate CE
+
+CE -> CE: handle_enforce_constraints()
+
+CE -> LLM: Check constraints
+activate LLM
+
+LLM ->x LLM: **LLM provider error:**\n- Timeout\n- Network failure\n- Rate limit
+
+LLM -> CE: Return Err(LlmError)
+deactivate LLM
+
+note right of CE
+**Error Handling:**
+LLM service unavailable
+Cannot complete constraint checking
+Convert to CallToolResult error
+end note
+
+CE -> CE: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Constraint enforcement failed: LLM error ...")\n  ],\n  is_error: Some(true)\n}
+
+CE -> CE: **Wrap in envelope**
+
+CE -> NATS: publish error response
+deactivate CE
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: LLM Failure**
+✗ is_error = true
+✗ Enforcement could not complete
+✗ Orchestrator may retry
+end note
+
+== Error Flow: Invalid Arguments ==
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")\n**Envelope<McpData>**\nCallToolRequest {\n  arguments: { **missing required fields** }\n}
+activate NATS
+
+NATS -> CE: forward request
+activate CE
+
+CE -> CE: handle_enforce_constraints()
+
+CE -> CE: **Parse arguments**
+
+note right of CE
+**Argument Validation Failed:**
+Missing required field: content
+Cannot proceed with constraint checking
+end note
+
+CE -> CE: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Missing required argument: content")\n  ],\n  is_error: Some(true)\n}
+
+CE -> CE: **Wrap in envelope**
+
+CE -> NATS: publish error response
+deactivate CE
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Invalid Arguments**
+✗ is_error = true
+✗ Argument validation failed
+end note
+
+== Error Flow: Severe Violations (Auto-Reject) ==
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")
+activate NATS
+
+NATS -> CE: forward request
+activate CE
+
+CE -> CE: handle_enforce_constraints()
+
+CE -> LLM: Check constraints
+activate LLM
+
+LLM -> CE: Return ConstraintResult
+deactivate LLM
+
+note right of CE
+**Critical Violations:**
+✗ CRITICAL: Forbidden word detected
+✗ CRITICAL: Unsafe content
+✗ CRITICAL: Age-inappropriate theme
+end note
+
+CE -> CE: **Auto-reject content:**\nConstraintResult {\n  satisfied: false,\n  auto_rejected: true,\n  violations: [\n    Violation {\n      severity: "critical",\n      category: "safety",\n      description: "Unsafe content detected",\n      auto_reject: true\n    }\n  ],\n  overall_compliance: 0.0\n}
+
+CE -> CE: **Create CallToolResult**\nwith is_error = false\n(enforcement completed, auto-rejected)
+
+CE -> CE: **Wrap in envelope**
+
+CE -> NATS: publish response
+deactivate CE
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Content Auto-Rejected**
+✓ is_error = false
+✗ satisfied = false
+✗ auto_rejected = true
+Orchestrator must regenerate content
+Cannot proceed with current content
+end note
+
+== Batch Enforcement Pattern ==
+
+note over Orchestrator, CE
+**Optional: Batch Constraint Enforcement**
+Though not explicitly implemented, the Batching capability
+allows for future batch constraint checking of multiple nodes.
+
+Pattern would follow Quality Control's batch_validate approach:
+1. Receive trail with multiple nodes
+2. Check constraints for each node
+3. Aggregate results with detailed per-node violations
+4. Return batch ConstraintResult
+end note
+
+@enduml

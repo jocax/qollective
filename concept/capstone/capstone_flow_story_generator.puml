@@ -1,0 +1,410 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **Story Generator MCP Server Flow**
+
+participant "Orchestrator" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Story Generator\n(MCP Server)" as StoryGen #8FD9A8
+participant "LLM Service\n(Rig Wrapper)" as LLM #FCBAD3
+
+note over StoryGen
+**StoryGeneratorHandler**
+Implements EnvelopeHandler<McpData, McpData>
+
+**Available Tools:**
+- generate_structure (DAG creation)
+- generate_nodes (content generation)
+- validate_paths (path verification)
+
+**Capabilities:**
+- Batching
+- Retry
+end note
+
+== Discovery Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.list_tools.story-generator")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "list_tools" }
+activate NATS
+
+NATS -> StoryGen: forward discovery request
+activate StoryGen
+
+StoryGen -> StoryGen: DiscoveryHandler::handle()\nExtract metadata from envelope
+
+StoryGen -> StoryGen: StoryGeneratorHandler::get_tool_registrations()
+
+note right of StoryGen
+**Tool Registrations:**
+
+1. generate_structure
+   - Schema: { type: "object" }
+   - Service: story-generator
+   - Version: 0.0.1
+   - Capabilities: [Batching, Retry]
+
+2. generate_nodes
+   - Schema: { type: "object" }
+   - Service: story-generator
+   - Version: 0.0.1
+   - Capabilities: [Batching, Retry]
+
+3. validate_paths
+   - Schema: { type: "object" }
+   - Service: story-generator
+   - Version: 0.0.1
+   - Capabilities: [Retry]
+end note
+
+StoryGen -> StoryGen: Get uptime from start_time
+
+StoryGen -> StoryGen: Create DiscoveryInfo::healthy(\n  tools,\n  uptime\n)
+
+StoryGen -> StoryGen: **Create discovery response:**\nMcpDiscoveryData {\n  query_type: "list_tools_response",\n  server_info: {\n    server_id: "story-generator",\n    server_name: "Story Generator Service",\n    description: "Generates branching narrative DAG structures",\n    health_status: { is_healthy: true }\n  }\n}
+
+StoryGen -> StoryGen: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+StoryGen -> NATS: publish response\n**Envelope<McpData>**
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver discovery response
+deactivate NATS
+
+note over Orchestrator
+**Discovery Complete**
+✓ 3 tools discovered
+✓ Capabilities: Batching, Retry
+✓ Service healthy
+end note
+
+== Health Check Flow ==
+
+Orchestrator -> NATS: publish("mcp.discovery.health.story-generator")\n**Envelope<McpData>**\nMcpDiscoveryData { query_type: "health" }
+activate NATS
+
+NATS -> StoryGen: forward health request
+activate StoryGen
+
+StoryGen -> StoryGen: HealthHandler::handle()
+
+StoryGen -> StoryGen: Get tool registrations, uptime
+
+StoryGen -> StoryGen: **Create health response:**\nHealthStatus {\n  is_healthy: true,\n  last_check: SystemTime::now(),\n  error_count: 0,\n  uptime\n}
+
+StoryGen -> StoryGen: **Wrap in envelope**\n(preserving metadata)
+
+StoryGen -> NATS: publish response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver health response
+deactivate NATS
+
+note over Orchestrator
+**Health Check Complete**
+✓ Service healthy
+✓ 3 tools available
+end note
+
+== Default Flow: Generate Structure ==
+
+Orchestrator -> NATS: publish("mcp.story.generate_structure")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_structure",\n  arguments: {\n    prompt: PromptPackage,\n    generation_request: GenerationRequest\n  }\n}
+activate NATS
+
+NATS -> StoryGen: forward tool request
+activate StoryGen
+
+StoryGen -> StoryGen: StoryGeneratorHandler::handle()\nExtract envelope
+
+note right of StoryGen
+**Envelope Extraction:**
+let (meta, data) = envelope.extract();
+
+**Metadata:**
+- tenant_id
+- request_id
+- trace_id
+end note
+
+StoryGen -> StoryGen: Extract tool_call from data
+
+StoryGen -> StoryGen: **Validate tool_call present**
+
+StoryGen -> StoryGen: **Log tool execution:**\n"Processing tool: generate_structure"
+
+StoryGen -> StoryGen: execute_tool(tool_call)
+
+StoryGen -> StoryGen: **Route by tool name:**\nmatch "generate_structure" {\n  "generate_structure" => ...\n}
+
+StoryGen -> StoryGen: handle_generate_structure(\n  request,\n  llm_service,\n  config\n)
+
+StoryGen -> StoryGen: Parse arguments:\n- prompt: PromptPackage\n- generation_request: GenerationRequest
+
+StoryGen -> StoryGen: Create structure request
+
+StoryGen -> LLM: Generate DAG structure\nusing rig-core
+activate LLM
+
+LLM -> LLM: Build LLM prompt\nfor structure generation
+
+LLM -> LLM: Call LLM provider\nwith structured output
+
+LLM -> StoryGen: Return Trail {\n  nodes: Vec<ContentNode>,\n  edges: DAG connections,\n  convergence_points\n}
+deactivate LLM
+
+StoryGen -> StoryGen: Validate structure:\n- Check DAG validity\n- Verify convergence points\n- Validate node connections
+
+StoryGen -> StoryGen: **Serialize to JSON string**\nserde_json::to_string(&trail)
+
+StoryGen -> StoryGen: **Create CallToolResult:**\nCallToolResult {\n  content: [Content::text(json_str)],\n  is_error: Some(false)\n}
+
+StoryGen -> StoryGen: **Wrap in McpData:**\nMcpData {\n  tool_response: Some(result)\n}
+
+StoryGen -> StoryGen: **Wrap in envelope:**\nEnvelope::new(meta, response_data)\n(preserving metadata)
+
+StoryGen -> NATS: publish response\n**Envelope<McpData>**
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Structure Generation Complete**
+✓ DAG structure created
+✓ Convergence points validated
+✓ Metadata propagated
+end note
+
+== Default Flow: Generate Nodes ==
+
+Orchestrator -> NATS: publish("mcp.story.generate_nodes")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "generate_nodes",\n  arguments: {\n    node_ids: Vec<String>,\n    dag: DAG,\n    prompt: PromptPackage,\n    expected_choice_counts: Vec<usize>\n  }\n}
+activate NATS
+
+NATS -> StoryGen: forward tool request
+activate StoryGen
+
+StoryGen -> StoryGen: StoryGeneratorHandler::handle()
+
+StoryGen -> StoryGen: execute_tool(tool_call)
+
+StoryGen -> StoryGen: handle_generate_nodes(\n  request,\n  llm_service,\n  config\n)
+
+StoryGen -> StoryGen: Parse arguments:\n- node_ids: Vec<String>\n- dag: DAG\n- prompt: PromptPackage\n- expected_choice_counts: Vec<usize>
+
+loop For each node_id with expected_count
+    StoryGen -> LLM: Generate node content
+    activate LLM
+
+    LLM -> LLM: Build prompt for node
+
+    LLM -> LLM: Call LLM provider\n(generates Markdown response)
+
+    LLM -> StoryGen: Return Markdown response:\n## Narrative\n[story text]\n\n## Choices\n1. [choice 1]\n2. [choice 2]\n3. [choice 3]\n\n## Educational Content\n[optional]
+    deactivate LLM
+
+    StoryGen -> StoryGen: Parse Markdown response:\n- Extract ## Narrative\n- Extract ## Choices (numbered list)\n- Extract ## Educational Content\n- Truncate choices to expected_count\n- Create ContentNode
+end
+
+StoryGen -> StoryGen: Assemble complete nodes\nwith matched choice counts
+
+StoryGen -> StoryGen: **Serialize to JSON string**
+
+StoryGen -> StoryGen: **Create CallToolResult:**\nCallToolResult {\n  content: [Content::text(json_str)],\n  is_error: Some(false)\n}
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Node Generation Complete**
+✓ All nodes populated with Markdown parsing
+✓ Choices matched to expected counts (no truncation warnings)
+✓ Narrative, Choices, Educational Content extracted
+✓ DAG complete with content
+end note
+
+== Default Flow: Validate Paths ==
+
+Orchestrator -> NATS: publish("mcp.story.validate_paths")\n**Envelope<McpData>**\nCallToolRequest {\n  name: "validate_paths",\n  arguments: { trail: Trail }\n}
+activate NATS
+
+NATS -> StoryGen: forward tool request
+activate StoryGen
+
+StoryGen -> StoryGen: handle_validate_paths()
+
+StoryGen -> StoryGen: Parse arguments:\n- trail: Trail
+
+StoryGen -> StoryGen: Validate all paths:\n- Check reachability\n- Verify convergence points\n- Detect cycles\n- Validate end nodes
+
+note right of StoryGen
+**Path Validation:**
+✓ All nodes reachable from start
+✓ Convergence points valid
+✓ No unreachable dead ends
+✓ All paths lead to endings
+end note
+
+StoryGen -> StoryGen: Create ValidationResult {\n  valid: true,\n  issues: [],\n  paths_validated: count\n}
+
+StoryGen -> StoryGen: **Serialize to JSON**
+
+StoryGen -> StoryGen: **Create CallToolResult**\nwith is_error = false
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Path Validation Complete**
+✓ All paths validated
+✓ DAG integrity confirmed
+end note
+
+== Error Flow: Tool Execution Failure ==
+
+Orchestrator -> NATS: publish("mcp.story.generate_structure")
+activate NATS
+
+NATS -> StoryGen: forward request
+activate StoryGen
+
+StoryGen -> StoryGen: handle_generate_structure()
+
+StoryGen -> LLM: Generate structure
+activate LLM
+
+LLM ->x LLM: **LLM provider error:**\n- Timeout\n- Invalid response\n- Rate limit
+
+LLM -> StoryGen: Return Err(LlmError)
+deactivate LLM
+
+note right of StoryGen
+**Error Handling:**
+Convert LLM error to CallToolResult
+Set is_error = true
+Include error details
+end note
+
+StoryGen -> StoryGen: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Structure generation failed: ...")\n  ],\n  is_error: Some(true)\n}
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish error response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Generation Failed**
+✗ is_error = true
+✗ LLM provider error
+✗ Orchestrator may retry
+end note
+
+== Error Flow: Invalid DAG Structure ==
+
+Orchestrator -> NATS: publish("mcp.story.generate_structure")
+activate NATS
+
+NATS -> StoryGen: forward request
+activate StoryGen
+
+StoryGen -> StoryGen: handle_generate_structure()
+
+StoryGen -> LLM: Generate structure
+activate LLM
+
+LLM -> StoryGen: Return Trail
+deactivate LLM
+
+StoryGen -> StoryGen: **Validate structure**
+
+note right of StoryGen
+**Validation Errors Detected:**
+✗ Cycle detected in DAG
+✗ Orphaned nodes
+✗ Invalid convergence point
+end note
+
+StoryGen -> StoryGen: **Create error response:**\nCallToolResult {\n  content: [\n    Content::text("Invalid DAG structure: ...")\n  ],\n  is_error: Some(true)\n}
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish error response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver error response
+deactivate NATS
+
+note over Orchestrator
+**Error: Invalid Structure**
+✗ is_error = true
+✗ DAG validation failed
+end note
+
+== Error Flow: Path Validation Failure ==
+
+Orchestrator -> NATS: publish("mcp.story.validate_paths")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> StoryGen: forward request
+activate StoryGen
+
+StoryGen -> StoryGen: handle_validate_paths()
+
+StoryGen -> StoryGen: Validate all paths
+
+note right of StoryGen
+**Path Issues Detected:**
+✗ Unreachable nodes found
+✗ Dead end detected
+✗ Invalid convergence
+end note
+
+StoryGen -> StoryGen: Create ValidationResult {\n  valid: false,\n  issues: [\n    "Node 5 unreachable",\n    "Dead end at node 12"\n  ]\n}
+
+StoryGen -> StoryGen: **Create CallToolResult**\nwith is_error = false\n(validation result, not error)
+
+StoryGen -> StoryGen: **Wrap in envelope**
+
+StoryGen -> NATS: publish response
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver response
+deactivate NATS
+
+note over Orchestrator
+**Path Validation Failed**
+✓ is_error = false (validation completed)
+✗ valid = false (paths invalid)
+Orchestrator can retry structure generation
+end note
+
+@enduml

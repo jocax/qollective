@@ -1,0 +1,305 @@
+@startuml
+!theme black-knight
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #e0e0e0
+skinparam sequence {
+    ArrowColor #4CAF50
+    ArrowFontColor #B0BEC5
+    LifeLineBorderColor #757575
+    LifeLineBackgroundColor #2d2d2d
+    ParticipantBorderColor #4CAF50
+    ParticipantBackgroundColor #263238
+    ParticipantFontColor #FFFFFF
+    ActorBorderColor #FF9800
+    ActorBackgroundColor #37474F
+    ActorFontColor #FFFFFF
+    BoxBorderColor #546E7A
+    BoxBackgroundColor #1e1e1e
+    GroupBorderColor #546E7A
+    GroupBackgroundColor #212121
+}
+
+title **TaleTrail Envelope-First MCP Flow (5-Phase Pipeline)**
+
+actor "Client\n(HTTPS)" as Client #FF6B6B
+participant "Gateway\n(Qollective REST\nHTTPS/TLS)" as Gateway #4ECDC4
+participant "Orchestrator\n(McpEnvelopeClient)" as Orchestrator #95E1D3
+participant "NATS\n(TLS + NKey)" as NATS #F38181
+participant "Prompt Helper\n(MCP Server)" as PromptHelper #AA96DA
+participant "Story Generator\n(MCP Server)" as StoryGen #8FD9A8
+participant "Quality Control\n(MCP Server)" as QualityControl #FCBAD3
+participant "Constraint Enforcer\n(MCP Server)" as ConstraintEnforcer #FFA07A
+
+note over Gateway, ConstraintEnforcer
+**Envelope-First Architecture**
+All communication wrapped in: Envelope<McpData>
+
+**Envelope Structure:**
+{
+  meta: Meta {
+    tenant: "tenant-{tenant_id}",
+    request_id: UUID,
+    tracing: TracingMeta { trace_id, span_id, ... }
+  },
+  payload: McpData {
+    tool_call: CallToolRequest,
+    tool_response: CallToolResult,
+    tool_registration: ResourceRegistration,
+    discovery_data: DiscoveryInfo
+  }
+}
+end note
+
+== Phase 0: Client Request ==
+
+Client -> Gateway: POST /generate\nGenerationRequest\n(theme, age_group, language, tenant_id)
+activate Gateway
+
+Gateway -> Gateway: Validate request\nExtract tenant context
+Gateway -> Gateway: Create request_id: UUID
+
+== Phase 1: Structure Generation ==
+
+Gateway -> Orchestrator: generate_story(request)
+activate Orchestrator
+
+Orchestrator -> Orchestrator: Create metadata:\ntenant="tenant-{tenant_id}"\nrequest_id=UUID\ntrace_id=UUID
+
+note right of Orchestrator
+**Metadata Creation:**
+Meta {
+  tenant: "tenant-12345",
+  request_id: "550e8400-e29b-41d4-a716-446655440000",
+  tracing: { trace_id: "550e8400...", ... }
+}
+end note
+
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_structure(\n    generation_request\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.story.generate_structure")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> StoryGen: forward\n**Envelope<McpData>**
+activate StoryGen
+
+StoryGen -> StoryGen: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id, trace_id\n- Process tool_call
+
+StoryGen -> StoryGen: generate_structure(request)\n→ DAG
+
+StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: DAG\n})
+
+StoryGen -> NATS: publish response\n**Envelope<McpData>**
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver\n**Envelope<McpData>**
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ DAG
+
+note right of Orchestrator
+**Phase 1 Complete**
+DAG Structure: { nodes, edges, convergence_points }
+Progress: 10%
+end note
+
+== Phase 1.5: Prompt Generation (DAG-Aware) ==
+
+Orchestrator -> Orchestrator: Extract DAG info:\n- Node count\n- Edge counts per node\n- Required elements from request
+
+group Parallel Prompt Generation [tokio::join!]
+    Orchestrator -> Orchestrator: **Wrap in Envelope<McpData>:**\nEnvelope::new(meta.clone(), McpData {\n  tool_call: generate_story_prompts(\n    theme, age_group, language,\n    required_elements,\n    node_choice_counts from DAG\n  )\n})
+
+    Orchestrator -> NATS: publish("mcp.prompt.generate_story")\n**Envelope<McpData>**
+    activate NATS
+
+    note over NATS
+    **NATS Transport:**
+    - TLS encrypted
+    - NKey authentication
+    - Auto encode/decode
+    - Subject-based routing
+    end note
+
+    NATS -> PromptHelper: forward to subscriber\n**Envelope<McpData>**
+    activate PromptHelper
+
+    PromptHelper -> PromptHelper: **EnvelopeHandler::handle_request()**\n- Unwrap envelope\n- Extract tenant_id from meta\n- Process tool_call with DAG info
+
+    PromptHelper -> PromptHelper: generate_story_prompts(\n  theme, age_group, language,\n  required_elements,\n  node_choice_counts\n)\n→ PromptPackage with:\n  - Markdown format instructions\n  - Required elements integration\n  - Variable choice counts per node
+
+    PromptHelper -> PromptHelper: **Wrap response in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_response: PromptPackage\n})
+
+    PromptHelper -> NATS: publish response\n**Envelope<McpData>**
+    deactivate PromptHelper
+
+    NATS -> Orchestrator: deliver response\n**Envelope<McpData>**
+    deactivate NATS
+
+    Orchestrator -> Orchestrator: **Unwrap envelope:**\nenvelope.payload.tool_response\n→ PromptPackage
+
+    |||
+
+    Orchestrator -> Orchestrator: **Wrap validation request:**\nEnvelope::new(meta.clone(), McpData {\n  tool_call: generate_validation_prompts\n})
+
+    Orchestrator -> NATS: publish("mcp.prompt.generate_validation")\n**Envelope<McpData>**
+    activate NATS
+    NATS -> PromptHelper: forward\n**Envelope<McpData>**
+    activate PromptHelper
+    PromptHelper -> PromptHelper: **EnvelopeHandler::handle_request()**
+    PromptHelper -> PromptHelper: generate_validation_prompts()
+    PromptHelper -> NATS: **Envelope<McpData>** response
+    deactivate PromptHelper
+    NATS -> Orchestrator: **Envelope<McpData>**
+    deactivate NATS
+    Orchestrator -> Orchestrator: Unwrap → PromptPackage
+
+    |||
+
+    Orchestrator -> Orchestrator: **Wrap constraint request:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_constraint_prompts(\n    required_elements\n  )\n})
+
+    Orchestrator -> NATS: publish("mcp.prompt.generate_constraint")\n**Envelope<McpData>**
+    activate NATS
+    NATS -> PromptHelper: forward\n**Envelope<McpData>**
+    activate PromptHelper
+    PromptHelper -> PromptHelper: **EnvelopeHandler::handle_request()**
+    PromptHelper -> PromptHelper: generate_constraint_prompts()
+    PromptHelper -> NATS: **Envelope<McpData>** response
+    deactivate PromptHelper
+    NATS -> Orchestrator: **Envelope<McpData>**
+    deactivate NATS
+    Orchestrator -> Orchestrator: Unwrap → PromptPackage
+end
+
+Orchestrator -> Orchestrator: Collect all prompts\nHashMap<MCPServiceType, PromptPackage>
+
+note right of Orchestrator
+**Prompt Generation Complete**
+- Story prompts: ✓ (DAG-aware with choice counts)
+- Validation prompts: ✓ (best-effort)
+- Constraint prompts: ✓ (with required_elements)
+- Markdown format instructions: ✓
+Progress: 20%
+end note
+
+== Phase 2: Content Generation ==
+
+Orchestrator -> Orchestrator: Extract expected_choice_counts from DAG:\n- Count outgoing edges per node\n- Create Vec<usize> for batch
+
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: generate_nodes(\n    node_ids, DAG, prompts[StoryGenerator],\n    expected_choice_counts\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.story.generate_nodes")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> StoryGen: forward\n**Envelope<McpData>**
+activate StoryGen
+
+StoryGen -> StoryGen: **EnvelopeHandler::handle_request()**
+
+StoryGen -> StoryGen: generate_nodes(\n  node_ids, DAG, prompt,\n  expected_choice_counts\n)\n→ Vec<ContentNode>\nwith Markdown parsing:\n- ## Narrative\n- ## Choices (1. 2. 3.)\n- ## Educational Content
+
+StoryGen -> StoryGen: **Validate/truncate choices:**\nMatch actual vs expected_choice_counts\n(eliminates "wrong choice count" warnings)
+
+StoryGen -> StoryGen: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: Vec<ContentNode>\n})
+
+StoryGen -> NATS: publish response\n**Envelope<McpData>**
+deactivate StoryGen
+
+NATS -> Orchestrator: deliver\n**Envelope<McpData>**
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ Vec<ContentNode>
+
+note right of Orchestrator
+**Phase 2 Complete**
+Nodes: { narrative, choices[], educational_content }
+Markdown format: ✓
+Choice counts matched: ✓
+tenant_id: {tenant_id}
+trace_id: {trace_id}
+end note
+
+== Phase 3: Validation ==
+
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: validate_content(\n    content, prompts[QualityControl]\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.quality.validate")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> QualityControl: forward\n**Envelope<McpData>**
+activate QualityControl
+
+QualityControl -> QualityControl: **EnvelopeHandler::handle_request()**
+
+QualityControl -> QualityControl: validate_content(\n  content, prompt\n)\n→ ValidationResult
+
+QualityControl -> QualityControl: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: ValidationResult\n})
+
+QualityControl -> NATS: publish response\n**Envelope<McpData>**
+deactivate QualityControl
+
+NATS -> Orchestrator: deliver\n**Envelope<McpData>**
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ ValidationResult
+
+note right of Orchestrator
+**Phase 3 Complete**
+Validation: { passed: true, issues: [] }
+tenant_id: {tenant_id}
+trace_id: {trace_id}
+end note
+
+== Phase 4: Constraint Enforcement ==
+
+Orchestrator -> Orchestrator: **Wrap in Envelope:**\nEnvelope::new(meta, McpData {\n  tool_call: enforce_constraints(\n    content, prompts[ConstraintEnforcer]\n  )\n})
+
+Orchestrator -> NATS: publish("mcp.constraint.enforce")\n**Envelope<McpData>**
+activate NATS
+
+NATS -> ConstraintEnforcer: forward\n**Envelope<McpData>**
+activate ConstraintEnforcer
+
+ConstraintEnforcer -> ConstraintEnforcer: **EnvelopeHandler::handle_request()**
+
+ConstraintEnforcer -> ConstraintEnforcer: enforce_constraints(\n  content, prompt\n)\n→ ConstraintResult
+
+ConstraintEnforcer -> ConstraintEnforcer: **Wrap response:**\nEnvelope::new(meta, McpData {\n  tool_response: ConstraintResult\n})
+
+ConstraintEnforcer -> NATS: publish response\n**Envelope<McpData>**
+deactivate ConstraintEnforcer
+
+NATS -> Orchestrator: deliver\n**Envelope<McpData>**
+deactivate NATS
+
+Orchestrator -> Orchestrator: **Unwrap:**\nenvelope.payload.tool_response\n→ ConstraintResult
+
+note right of Orchestrator
+**Phase 4 Complete**
+Constraints: { satisfied: true }
+tenant_id: {tenant_id}
+trace_id: {trace_id}
+end note
+
+== Phase 5: Assembly ==
+
+Orchestrator -> Orchestrator: Assemble final story:\n- structure\n- content\n- validation_result\n- constraint_result
+
+Orchestrator -> Gateway: Return GeneratedStory
+deactivate Orchestrator
+
+Gateway -> Client: 200 OK\nGeneratedStory JSON
+deactivate Gateway
+
+note over Client, ConstraintEnforcer
+**Envelope-First Architecture Benefits:**
+✓ Consistent metadata propagation (tenant_id, trace_id)
+✓ Multi-tenant isolation at envelope level
+✓ Unified observability across all services
+✓ Type-safe envelope wrapping/unwrapping
+✓ EnvelopeHandler trait for standardized processing
+✓ NATS automatic encode/decode of Envelope<McpData>
+✓ Security (TLS, NKey auth) at transport layer
+✓ Request tracking across all 5 phases
+end note
+
+@enduml
