@@ -208,6 +208,28 @@ impl RustCodeGenerator {
             attributes.push("#[serde(skip_serializing_if = \"Option::is_none\")]".to_string());
         }
 
+        // Add schemars range attribute for numeric types with min/max constraints
+        if self.config.custom_derives.contains(&"JsonSchema".to_string()) {
+            if matches!(schema.schema_type, SchemaType::Number | SchemaType::Integer) {
+                let has_min = schema.minimum.is_some();
+                let has_max = schema.maximum.is_some();
+
+                if has_min || has_max {
+                    let mut range_parts = Vec::new();
+
+                    if let Some(min) = schema.minimum {
+                        range_parts.push(format!("min = {}", min));
+                    }
+
+                    if let Some(max) = schema.maximum {
+                        range_parts.push(format!("max = {}", max));
+                    }
+
+                    attributes.push(format!("#[schemars(range({}))]", range_parts.join(", ")));
+                }
+            }
+        }
+
         Ok(RustField {
             name: field_name,
             field_type,
@@ -1203,6 +1225,17 @@ mod tests {
 
         schema.required = vec!["name".to_string()];
 
+        // Add User to definitions so it gets generated
+        schema.definitions.insert("User".to_string(), Schema::new(SchemaType::Object));
+        schema.definitions.get_mut("User").unwrap().description = Some("A user object".to_string());
+        schema.definitions.get_mut("User").unwrap().properties.insert("name".to_string(), Schema::new(SchemaType::String));
+        schema.definitions.get_mut("User").unwrap().properties.get_mut("name").unwrap().description = Some("The user's name".to_string());
+
+        let mut age_def = Schema::new(SchemaType::Integer);
+        age_def.minimum = Some(0.0);
+        schema.definitions.get_mut("User").unwrap().properties.insert("age".to_string(), age_def);
+        schema.definitions.get_mut("User").unwrap().required = vec!["name".to_string()];
+
         let result = generator.generate(&schema).unwrap();
         let rendered = render_rust_code(&result).unwrap();
 
@@ -1244,5 +1277,56 @@ mod tests {
             )),
             "HashMap<String, i32>"
         );
+    }
+
+    #[test]
+    fn test_schemars_range_attribute() {
+        let mut config = RustCodegenConfig::default();
+        config.custom_derives.push("JsonSchema".to_string());
+        let mut generator = RustCodeGenerator::with_config(config);
+
+        let mut schema = Schema::new(SchemaType::Object);
+
+        // Add a number field with both min and max
+        let mut score_schema = Schema::new(SchemaType::Number);
+        score_schema.minimum = Some(0.0);
+        score_schema.maximum = Some(1.0);
+        score_schema.description = Some("Theme consistency score".to_string());
+
+        // Add an integer field with only min
+        let mut count_schema = Schema::new(SchemaType::Integer);
+        count_schema.minimum = Some(0.0);
+
+        // Add an integer field with only max
+        let mut limited_schema = Schema::new(SchemaType::Integer);
+        limited_schema.maximum = Some(100.0);
+
+        // Add to definitions
+        schema.definitions.insert("TestStruct".to_string(), Schema::new(SchemaType::Object));
+        schema.definitions.get_mut("TestStruct").unwrap().properties.insert("theme_consistency_score".to_string(), score_schema);
+        schema.definitions.get_mut("TestStruct").unwrap().properties.insert("count".to_string(), count_schema);
+        schema.definitions.get_mut("TestStruct").unwrap().properties.insert("limited".to_string(), limited_schema);
+        schema.definitions.get_mut("TestStruct").unwrap().required = vec!["theme_consistency_score".to_string()];
+
+        let result = generator.generate(&schema).unwrap();
+        let rendered = render_rust_code(&result).unwrap();
+
+        println!("Generated Rust code with schemars:\n{}", rendered);
+
+        // Check that schemars import is present
+        assert!(rendered.contains("use schemars::JsonSchema;"));
+
+        // Check that JsonSchema is in derives
+        assert!(rendered.contains("JsonSchema"));
+
+        // Check that range attribute is generated for field with both min and max
+        assert!(rendered.contains("#[schemars(range(min = 0, max = 1))]") ||
+                rendered.contains("#[schemars(range(min = 0.0, max = 1.0))]"));
+
+        // Check that range attribute is generated for field with only min
+        assert!(rendered.contains("#[schemars(range(min = 0))]"));
+
+        // Check that range attribute is generated for field with only max
+        assert!(rendered.contains("#[schemars(range(max = 100))]"));
     }
 }
