@@ -1604,6 +1604,8 @@ mod tests {
                     name: "test_client".to_string(),
                     title: None,
                     version: "1.0.0".to_string(),
+                    icons: None,
+                    website_url: None,
                 },
             },
             extensions: rmcp::model::Extensions::default(),
