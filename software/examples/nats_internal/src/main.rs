@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
 
     // Get NATS URL from environment or use default
     let nats_url = std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+        .unwrap_or_else(|_| "nats://localhost:10222".to_string());
 
     tracing::info!("Connecting to NATS at {}", nats_url);
 

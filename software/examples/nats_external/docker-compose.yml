@@ -10,12 +10,3 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-
-  example:
-    build: .
-    depends_on:
-      nats:
-        condition: service_healthy
-    environment:
-      - NATS_URL=nats://nats:4222
-      - RUST_LOG=info

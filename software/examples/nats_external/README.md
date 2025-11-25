@@ -29,10 +29,20 @@ Demonstrates the new shared connection pattern using `NatsServer::from_client()`
 ## Running
 
 ```bash
-# Start NATS and run example
-docker-compose up --build
+# Start NATS server in Docker (runs on localhost:10222)
+docker-compose up -d
 
-# Or run locally (requires NATS on localhost:4222)
+# Run the example on your host machine
+cargo run
+
+# Stop NATS when done
+docker-compose down
+```
+
+## Configuration
+
+The example connects to `nats://localhost:10222` by default. You can override with:
+```bash
 NATS_URL=nats://localhost:4222 cargo run
 ```
 
