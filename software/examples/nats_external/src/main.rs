@@ -11,16 +11,18 @@ use qollective::server::EnvelopeHandler;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Request payload for MCP layer
+/// Request payload for MCP layer with multiple fields to demonstrate envelope structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EchoRequest {
     message: String,
+    priority: String,
 }
 
-/// Response payload for MCP layer
+/// Response payload for MCP layer with multiple fields
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EchoResponse {
     echo: String,
+    server_id: String,
 }
 
 /// Handler that echoes back the message
@@ -29,12 +31,15 @@ struct EchoHandler;
 
 impl EnvelopeHandler<EchoRequest, EchoResponse> for EchoHandler {
     async fn handle(&self, envelope: Envelope<EchoRequest>) -> Result<Envelope<EchoResponse>> {
-        tracing::info!("[MCP Layer] Handler received: {}", envelope.payload.message);
+        tracing::info!("[MCP Layer] Handler received envelope");
+        tracing::info!("Received Envelope (pretty):\n{}",
+            serde_json::to_string_pretty(&envelope).unwrap_or_default());
 
         Ok(Envelope {
             meta: Meta::preserve_for_response(Some(&envelope.meta)),
             payload: EchoResponse {
                 echo: format!("Echo: {}", envelope.payload.message),
+                server_id: "nats-external-server".to_string(),
             },
             error: None,
         })
@@ -111,13 +116,25 @@ async fn main() -> Result<()> {
     // === MCP LAYER: Envelope request via same connection ===
     tracing::info!("[MCP Layer] Sending envelope request via same connection...");
 
-    // Use the shared client for request-reply
-    let request_payload = serde_json::to_vec(&Envelope::new(
-        Meta::default(),
+    // Create metadata with request tracking
+    let mut meta = Meta::default();
+    meta.request_id = Some(uuid::Uuid::new_v4());
+    meta.timestamp = Some(chrono::Utc::now());
+
+    let request_envelope = Envelope::new(
+        meta,
         EchoRequest {
             message: "Hello from shared connection!".to_string(),
+            priority: "high".to_string(),
         },
-    )).map_err(|e| qollective::error::QollectiveError::serialization(e.to_string()))?;
+    );
+
+    tracing::info!("Request Envelope (pretty):\n{}",
+        serde_json::to_string_pretty(&request_envelope).unwrap_or_default());
+
+    // Use the shared client for request-reply
+    let request_payload = serde_json::to_vec(&request_envelope)
+        .map_err(|e| qollective::error::QollectiveError::serialization(e.to_string()))?;
 
     let response = client
         .request(mcp_subject.to_string(), request_payload.into())
@@ -127,7 +144,8 @@ async fn main() -> Result<()> {
     let response_envelope: Envelope<EchoResponse> = serde_json::from_slice(&response.payload)
         .map_err(|e| qollective::error::QollectiveError::deserialization(e.to_string()))?;
 
-    tracing::info!("[MCP Layer] Received response: {}", response_envelope.payload.echo);
+    tracing::info!("[MCP Layer] Response Envelope (pretty):\n{}",
+        serde_json::to_string_pretty(&response_envelope).unwrap_or_default());
 
     // === SUMMARY ===
     tracing::info!("=== Summary ===");

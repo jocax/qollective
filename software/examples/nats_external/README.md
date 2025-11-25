@@ -48,12 +48,42 @@ NATS_URL=nats://localhost:4222 cargo run
 
 ## Expected Output
 
+The example showcases:
+- **Shared Connection**: One NATS connection for both MCP envelopes and raw pub/sub
+- **Rich Metadata**: request_id and timestamp for distributed tracing
+- **Pretty-printed Envelopes**: Full visibility into the envelope structure
+
 ```
+[INFO] === NATS External (Shared Connection) Example ===
 [INFO] Creating shared NATS connection...
 [INFO] Creating NatsServer from existing client...
 [INFO] Server listening on subject: example.echo
-[INFO] Publishing app log via server.client()...
-[INFO] Sending envelope request via same connection...
-[INFO] Received response: Echo: Hello from shared connection!
+[INFO] [App Layer] Publishing log via server.client()...
+[INFO] [App Layer] Received log: Service started successfully
+[INFO] [MCP Layer] Sending envelope request via same connection...
+[INFO] Request Envelope (pretty):
+{
+  "meta": {
+    "timestamp": "2025-11-25T10:30:45.123Z",
+    "request_id": "650e8400-e29b-41d4-a716-446655440000"
+  },
+  "payload": {
+    "message": "Hello from shared connection!",
+    "priority": "high"
+  }
+}
+[INFO] [MCP Layer] Handler received envelope
+[INFO] [MCP Layer] Response Envelope (pretty):
+{
+  "meta": {
+    "timestamp": "2025-11-25T10:30:45.123Z",
+    "request_id": "650e8400-e29b-41d4-a716-446655440000"
+  },
+  "payload": {
+    "echo": "Echo: Hello from shared connection!",
+    "server_id": "nats-external-server"
+  }
+}
+[INFO] === Summary ===
 [INFO] Connection count: 1 (vs 2 with separate connections)
 ```

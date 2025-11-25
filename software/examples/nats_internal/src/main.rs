@@ -12,16 +12,18 @@ use qollective::client::nats::NatsClient;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Request payload
+/// Request payload with multiple fields to demonstrate envelope structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EchoRequest {
     message: String,
+    sender_id: String,
 }
 
-/// Response payload
+/// Response payload with multiple fields
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EchoResponse {
     echo: String,
+    processed_at: String,
 }
 
 /// Handler that echoes back the message
@@ -30,12 +32,15 @@ struct EchoHandler;
 
 impl EnvelopeHandler<EchoRequest, EchoResponse> for EchoHandler {
     async fn handle(&self, envelope: Envelope<EchoRequest>) -> Result<Envelope<EchoResponse>> {
-        tracing::info!("Handler received: {}", envelope.payload.message);
+        tracing::info!("=== Server Handler Received Envelope ===");
+        tracing::info!("Envelope (pretty):\n{}",
+            serde_json::to_string_pretty(&envelope).unwrap_or_default());
 
         Ok(Envelope {
             meta: Meta::preserve_for_response(Some(&envelope.meta)),
             payload: EchoResponse {
                 echo: format!("Echo: {}", envelope.payload.message),
+                processed_at: chrono::Utc::now().to_rfc3339(),
             },
             error: None,
         })
@@ -84,20 +89,31 @@ async fn main() -> Result<()> {
     let client = NatsClient::new(config.into()).await?;
 
     // === SEND REQUEST ===
-    tracing::info!("Sending envelope request...");
+    tracing::info!("=== Sending Envelope Request ===");
+
+    // Create metadata with request tracking
+    let mut meta = Meta::default();
+    meta.request_id = Some(uuid::Uuid::new_v4());
+    meta.timestamp = Some(chrono::Utc::now());
 
     let request = Envelope::new(
-        Meta::default(),
+        meta,
         EchoRequest {
             message: "Hello from internal client!".to_string(),
+            sender_id: "example-client-001".to_string(),
         },
     );
+
+    tracing::info!("Request Envelope (pretty):\n{}",
+        serde_json::to_string_pretty(&request).unwrap_or_default());
 
     let response: Envelope<EchoResponse> = client
         .send_envelope(subject, request)
         .await?;
 
-    tracing::info!("Received response: {}", response.payload.echo);
+    tracing::info!("=== Received Response Envelope ===");
+    tracing::info!("Response Envelope (pretty):\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default());
 
     // Cleanup
     server.shutdown().await?;
