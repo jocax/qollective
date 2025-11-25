@@ -1,0 +1,17 @@
+[package]
+name = "nats_external"
+version = "0.1.0"
+edition = "2021"
+description = "Example: Shared NATS connection using client() accessor and from_client()"
+
+[[bin]]
+name = "nats_external"
+path = "src/main.rs"
+
+[dependencies]
+qollective = { path = "../..", features = ["nats"] }
+tokio = { version = "1", features = ["full"] }
+async-nats = "0.38"
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
