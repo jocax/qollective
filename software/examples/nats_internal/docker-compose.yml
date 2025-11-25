@@ -1,0 +1,21 @@
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "10222:4222"
+      - "11222:8222"
+    command: ["--jetstream", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  example:
+    build: .
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      - NATS_URL=nats://nats:4222
+      - RUST_LOG=info
