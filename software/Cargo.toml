@@ -192,8 +192,8 @@ url = { version = "2.5", optional = true }
 jsonrpsee = { version = "0.26", features = ["server", "client", "ws-client", "http-client", "wasm-client", "macros"], optional = true }
 
 # MCP dependencies - Official rmcp SDK with 0.8.0 features
-rmcp = { version = "0.8", features = ["server", "client", "transport-child-process"], optional = true }
-rmcp-macros = { version = "0.8", optional = true }
+rmcp = { version = "0.9", features = ["server", "client", "transport-child-process"], optional = true }
+rmcp-macros = { version = "0.9", optional = true }
 
 # A2A dependencies - Standard protocol implementation
 a2a-rs = { version = "0.1.0", features = ["http-client"], optional = true }
@@ -233,7 +233,7 @@ jsonschema = { version = "0", optional = true }
 async-trait = { version = "0.1" }
 
 # JWT parsing (for tenant extraction)
-jsonwebtoken = { version = "9.3", default-features = false, optional = true }
+jsonwebtoken = { version = "10", default-features = false, optional = true }
 base64 = { version = "0.22", optional = true }
 
 # gRPC health and reflection services
